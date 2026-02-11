@@ -3,8 +3,13 @@ import type { ReactNode } from "react";
 
 import { AppShell } from "@/components/app-shell";
 import { createClient } from "@/lib/supabase/server";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 
 export default async function AdminLayout({ children }: { children: ReactNode }) {
+  if (!isSupabaseConfigured()) {
+    redirect("/login?error=supabase_env");
+  }
+
   const supabase = createClient();
   const {
     data: { user }

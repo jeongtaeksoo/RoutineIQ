@@ -1,8 +1,15 @@
+import { redirect } from "next/navigation";
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BillingActions } from "@/components/billing-actions";
+import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
 
 export default async function BillingPage() {
+  if (!isSupabaseConfigured()) {
+    redirect("/login?error=supabase_env");
+  }
+
   const supabase = createClient();
   const {
     data: { user }
