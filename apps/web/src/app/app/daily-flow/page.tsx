@@ -1,30 +1,23 @@
 "use client";
 
 import * as React from "react";
-import { Plus, Copy, Save, ChevronLeft, ChevronRight, Sparkles, X, Clock, NotebookPen } from "lucide-react";
+import { Plus, Copy, Save, ChevronLeft, ChevronRight, Sparkles, Clock, NotebookPen } from "lucide-react";
 import { useRouter, useSearchParams } from "next/navigation";
+import useSWR, { useSWRConfig } from "swr";
 
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { DAILY_FLOW_TEMPLATES, type DailyFlowEntry, DEFAULT_TEMPLATE_NAME } from "@/lib/daily-flow-templates";
 import { createClient } from "@/lib/supabase/client";
+import { DailyEntryRow, DailyEntrySkeleton } from "./entry-row";
 
-type Entry = {
-  start: string;
-  end: string;
-  activity: string;
-  energy?: number | null;
-  focus?: number | null;
-  tags?: string[];
-  note?: string | null;
-};
+/* ─── Types and Helpers ─── */
+type Entry = DailyFlowEntry;
 
-/* ─── Helpers ─── */
 function localYYYYMMDD(d = new Date()) {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
@@ -92,52 +85,11 @@ function nowRoundedHHMM(stepMinutes = 5): string {
   return minutesToHHMM(rounded);
 }
 
-/* ─── Level Bar Component ─── */
-function LevelBar({
-  label,
-  lowLabel,
-  highLabel,
-  value,
-  onChange,
-  colorClass
-}: {
-  label: string;
-  lowLabel: string;
-  highLabel: string;
-  value: number | null | undefined;
-  onChange: (v: number) => void;
-  colorClass: string; // tailwind bg class for filled state
-}) {
-  return (
-    <div className="flex items-center gap-2">
-      <span className="w-14 shrink-0 text-[11px] font-medium text-mutedFg">{label}</span>
-      <span className="text-[10px] text-mutedFg">{lowLabel}</span>
-      <div className="flex items-center gap-1">
-        {[1, 2, 3, 4, 5].map((n) => {
-          const filled = value != null && n <= value;
-          return (
-            <button
-              key={n}
-              type="button"
-              onClick={() => onChange(n)}
-              className={`h-5 w-5 rounded-full border-2 transition-all duration-150 ${filled
-                ? `${colorClass} border-transparent scale-110`
-                : "border-gray-300 bg-transparent hover:border-gray-400 hover:scale-110"
-                }`}
-              aria-label={`${label} ${n}`}
-            />
-          );
-        })}
-      </div>
-      <span className="text-[10px] text-mutedFg">{highLabel}</span>
-    </div>
-  );
-}
-
 /* ─── Main Component ─── */
 export default function DailyFlowPage() {
   const locale = useLocale();
   const isKo = locale === "ko";
+  const { mutate } = useSWRConfig();
 
   const t = React.useMemo(() => {
     if (isKo) {
@@ -238,13 +190,31 @@ export default function DailyFlowPage() {
   const [entries, setEntries] = React.useState<Entry[]>([]);
   const [note, setNote] = React.useState<string>("");
   const [recentActivities, setRecentActivities] = React.useState<string[]>([]);
-  const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [message, setMessage] = React.useState<string | null>(null);
   const [expandedIdx, setExpandedIdx] = React.useState<number | null>(null);
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
+
+  /* ─── SWR Data Fetching ─── */
+  const { data: serverData, isLoading } = useSWR<{ date: string; entries: Entry[]; note: string | null }>(
+    `/logs?date=${date}`,
+    apiFetch,
+    {
+      revalidateOnFocus: true,
+      onSuccess: (data) => {
+        if (data && !saving) { // Don't overwrite if currently saving
+          setEntries(Array.isArray(data.entries) ? data.entries : []);
+          setNote(data.note || "");
+        }
+      },
+      onError: (err) => {
+        const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
+        setError(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
+      }
+    }
+  );
 
   /* ─── Validation ─── */
   function validateEntries(list: Entry[]): string | null {
@@ -295,35 +265,28 @@ export default function DailyFlowPage() {
     }
   }
 
-  async function loadDay(target: string) {
-    setError(null);
-    setMessage(null);
-    setLoading(true);
+  const useYesterday = React.useCallback(async () => {
+    setSaving(true);
     try {
-      const res = await apiFetch<{ date: string; entries: Entry[]; note: string | null }>(`/logs?date=${target}`);
-      setEntries(Array.isArray(res.entries) ? res.entries : []);
-      setNote(res.note || "");
+      const y = addDays(date, -1);
+      const res = await apiFetch<{ entries: Entry[]; note: string | null }>(`/logs?date=${y}`);
+      if (res.entries) setEntries(res.entries);
+      if (res.note) setNote(res.note);
     } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setError(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
+      setError(t.failedLoad);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
-  }
+  }, [date, t.failedLoad]);
 
-  async function useYesterday() {
-    // Load yesterday's entries into today's form (date stays as today)
-    const y = addDays(date, -1);
-    await loadDay(y);
-  }
-
-  function applyTemplate(name: string) {
+  const applyTemplate = React.useCallback((name: string) => {
     const tmpl = TEMPLATES[name];
     if (!tmpl) return;
     setEntries(tmpl.map((e) => ({ ...e })));
-  }
+  }, []);
 
-  function addEntry() {
+  /* ─── Callbacks for EntryRow (Memoized) ─── */
+  const addEntry = React.useCallback(() => {
     setEntries((prev) => {
       const last = prev[prev.length - 1];
       const start = last?.end && toMinutes(last.end) != null ? last.end : nowRoundedHHMM(5);
@@ -331,19 +294,22 @@ export default function DailyFlowPage() {
       const end = minutesToHHMM(Math.min(startM + 60, 23 * 60 + 59));
       return [...prev, { start, end, activity: t.newBlock, energy: null, focus: null, note: null, tags: [] }];
     });
-  }
+  }, [t.newBlock]);
 
-  function updateEntry(idx: number, patch: Partial<Entry>) {
+  const updateEntry = React.useCallback((idx: number, patch: Partial<Entry>) => {
     setEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
-  }
+  }, []);
 
-  function removeEntry(idx: number) {
+  const removeEntry = React.useCallback((idx: number) => {
     setEntries((prev) => prev.filter((_, i) => i !== idx));
-    if (expandedIdx === idx) setExpandedIdx(null);
-    else if (expandedIdx !== null && expandedIdx > idx) setExpandedIdx(expandedIdx - 1);
-  }
+    setExpandedIdx((prev) => {
+      if (prev === idx) return null;
+      if (prev !== null && prev > idx) return prev - 1;
+      return prev;
+    });
+  }, []);
 
-  function setEntryRating(idx: number, field: "energy" | "focus", value: number) {
+  const setEntryRating = React.useCallback((idx: number, field: "energy" | "focus", value: number) => {
     setEntries((prev) =>
       prev.map((e, i) => {
         if (i !== idx) return e;
@@ -351,22 +317,24 @@ export default function DailyFlowPage() {
         return { ...e, [field]: current === value ? null : value };
       })
     );
-  }
+  }, []);
 
-  function setEntryNow(idx: number, field: "start" | "end") {
-    updateEntry(idx, { [field]: nowRoundedHHMM(5) } as any);
-  }
+  const setEntryNow = React.useCallback((idx: number, field: "start" | "end") => {
+    setEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, [field]: nowRoundedHHMM(5) } : e)));
+  }, []);
 
+  const toggleExpand = React.useCallback((idx: number) => {
+    setExpandedIdx((prev) => (prev === idx ? null : idx));
+  }, []);
+
+  /* ─── Navigation ─── */
   function navigateDate(delta: number) {
     const next = addDays(date, delta);
     setDate(next);
-    void loadDay(next);
   }
 
   function goToday() {
-    const td = localYYYYMMDD();
-    setDate(td);
-    void loadDay(td);
+    setDate(localYYYYMMDD());
   }
 
   /* ─── Save / Analyze ─── */
@@ -376,11 +344,18 @@ export default function DailyFlowPage() {
     const v = validateEntries(entries);
     if (v) { setError(v); return; }
     setSaving(true);
+
+    // Optimistically update SWR cache
+    const newData = { date, entries, note: note || null };
+    await mutate(`/logs?date=${date}`, newData, false);
+
     try {
-      await apiFetch(`/logs`, { method: "POST", body: JSON.stringify({ date, entries, note: note || null }) });
+      await apiFetch(`/logs`, { method: "POST", body: JSON.stringify(newData) });
       setMessage(t.savedPrompt);
       const labels = entries.map((e) => e.activity.trim()).filter(Boolean);
       await saveRecent(Array.from(new Set([...labels.reverse(), ...recentActivities])).slice(0, 12));
+      // Revalidate to be sure
+      await mutate(`/logs?date=${date}`);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setError(err instanceof Error ? `${err.message}${hint}` : t.saveFailed);
@@ -394,9 +369,11 @@ export default function DailyFlowPage() {
     if (v) { setError(v); return; }
     setSaving(true);
     try {
-      await apiFetch(`/logs`, { method: "POST", body: JSON.stringify({ date, entries, note: note || null }) });
+      const newData = { date, entries, note: note || null };
+      await apiFetch(`/logs`, { method: "POST", body: JSON.stringify(newData) });
       const labels = entries.map((e) => e.activity.trim()).filter(Boolean);
       await saveRecent(Array.from(new Set([...labels.reverse(), ...recentActivities])).slice(0, 12));
+      await mutate(`/logs?date=${date}`);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setError(err instanceof Error ? `${err.message}${hint}` : t.saveFailed);
@@ -412,6 +389,7 @@ export default function DailyFlowPage() {
     } finally { setAnalyzing(false); }
   }
 
+  /* ─── AI Features ─── */
   async function suggestActivity(idx: number) {
     if (analyzing) return;
     setAnalyzing(true);
@@ -465,25 +443,18 @@ export default function DailyFlowPage() {
   }
 
   /* ─── Effects ─── */
-  React.useEffect(() => { void loadRecent(); void loadDay(date); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, []);
+  React.useEffect(() => { void loadRecent(); }, []);
 
+  // Sync templates/query params
   React.useEffect(() => {
     const tmpl = searchParams.get("template");
     const quickstart = searchParams.get("quickstart") === "1";
     if (!tmpl || !quickstart) return;
     applyTemplate(tmpl in TEMPLATES ? tmpl : DEFAULT_TEMPLATE_NAME);
     setNote(isKo ? "퀵스타트 템플릿" : "Quickstart template");
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [searchParams]);
+  }, [searchParams, isKo, applyTemplate]);
 
-  /* ─── Computed ─── */
-  function entryBarColor(e: Entry): string {
-    const avg = ((e.energy ?? 3) + (e.focus ?? 3)) / 2;
-    if (avg >= 4) return "bg-emerald-400";
-    if (avg >= 3) return "bg-amber-400";
-    return "bg-red-400";
-  }
-
+  /* ─── Render ─── */
   const hasAnything = entries.length > 0 || Boolean(note.trim());
   const isBusy = saving || analyzing;
 
@@ -533,7 +504,7 @@ export default function DailyFlowPage() {
 
         {/* Quick Actions */}
         <div className="flex items-center gap-2">
-          <Button variant="ghost" size="sm" onClick={useYesterday} disabled={loading} className="text-xs">
+          <Button variant="ghost" size="sm" onClick={useYesterday} disabled={isLoading} className="text-xs">
             <Copy className="mr-1 h-3.5 w-3.5" />
             {t.useYesterday}
           </Button>
@@ -573,10 +544,11 @@ export default function DailyFlowPage() {
 
       {/* ─── Timeline ─── */}
       <div className="space-y-3">
-        {loading ? (
-          <div className="flex items-center justify-center py-12">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-brand border-t-transparent" />
-            <span className="ml-3 text-sm text-mutedFg">{t.loading}</span>
+        {isLoading ? (
+          <div className="space-y-2">
+            <DailyEntrySkeleton />
+            <DailyEntrySkeleton />
+            <DailyEntrySkeleton />
           </div>
         ) : entries.length > 0 ? (
           <>
@@ -603,107 +575,22 @@ export default function DailyFlowPage() {
 
             {/* Entry Cards */}
             <div className="space-y-2">
-              {entries.map((e, idx) => {
-                const isExpanded = expandedIdx === idx;
-                return (
-                  <div key={idx} className="entry-animate rounded-xl border bg-white/70 shadow-sm backdrop-blur transition-shadow hover:shadow-md">
-                    <div className="flex gap-3 p-3">
-                      {/* Color bar */}
-                      <div className={`timeline-bar ${entryBarColor(e)} shrink-0`} />
-
-                      {/* Content */}
-                      <div className="min-w-0 flex-1 space-y-2.5">
-                        {/* Row 1: Time + Activity + Delete */}
-                        <div className="flex items-start gap-2">
-                          <div className="flex shrink-0 flex-col gap-0.5">
-                            <div className="flex items-center gap-1">
-                              <Input
-                                type="time" step={1800} value={e.start}
-                                onChange={(ev) => updateEntry(idx, { start: ev.target.value })}
-                                className="h-7 w-[88px] px-1.5 text-xs"
-                              />
-                              <span className="text-xs text-mutedFg">–</span>
-                              <Input
-                                type="time" step={1800} value={e.end}
-                                onChange={(ev) => updateEntry(idx, { end: ev.target.value })}
-                                className="h-7 w-[88px] px-1.5 text-xs"
-                              />
-                            </div>
-                            <div className="flex gap-1">
-                              <button className="rounded px-1 py-0.5 text-[10px] text-mutedFg hover:bg-muted hover:text-fg" onClick={() => setEntryNow(idx, "start")}>{t.now} ↓</button>
-                              <button className="rounded px-1 py-0.5 text-[10px] text-mutedFg hover:bg-muted hover:text-fg" onClick={() => setEntryNow(idx, "end")}>{t.now} ↓</button>
-                            </div>
-                          </div>
-                          <div className="min-w-0 flex-1 relative">
-                            <Input
-                              value={e.activity} list="activity-suggestions"
-                              onChange={(ev) => updateEntry(idx, { activity: ev.target.value })}
-                              className="h-7 text-sm font-medium pr-8" placeholder={t.activity}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => suggestActivity(idx)}
-                              disabled={analyzing}
-                              className="absolute right-2 top-1/2 -translate-y-1/2 text-mutedFg hover:text-brand disabled:opacity-30 disabled:cursor-not-allowed"
-                              title={t.suggest_activity}
-                            >
-                              <Sparkles className={`h-3.5 w-3.5 ${analyzing ? "animate-pulse" : ""}`} />
-                            </button>
-                          </div>
-                          <button
-                            onClick={() => removeEntry(idx)}
-                            className="shrink-0 rounded-lg p-1 text-mutedFg hover:bg-red-50 hover:text-red-500"
-                            aria-label={t.remove}
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-
-                        {/* Row 2: Energy + Focus level bars */}
-                        <div className="flex flex-col gap-1.5">
-                          <LevelBar
-                            label={t.energy}
-                            lowLabel={t.low}
-                            highLabel={t.high}
-                            value={e.energy}
-                            onChange={(v) => setEntryRating(idx, "energy", v)}
-                            colorClass="bg-emerald-500"
-                          />
-                          <LevelBar
-                            label={t.focus}
-                            lowLabel={t.low}
-                            highLabel={t.high}
-                            value={e.focus}
-                            onChange={(v) => setEntryRating(idx, "focus", v)}
-                            colorClass="bg-blue-500"
-                          />
-                        </div>
-
-                        {/* Row 3: Expandable details */}
-                        <button
-                          onClick={() => setExpandedIdx(isExpanded ? null : idx)}
-                          className="text-[11px] text-mutedFg hover:text-fg"
-                        >
-                          {isExpanded ? "▲" : "▼"} {t.moreDetail}
-                        </button>
-                        {isExpanded && (
-                          <div className="entry-animate space-y-2 border-t pt-2">
-                            <Input
-                              value={e.note ?? ""} onChange={(ev) => updateEntry(idx, { note: ev.target.value })}
-                              placeholder={t.note} className="h-7 text-xs"
-                            />
-                            <Input
-                              value={Array.isArray(e.tags) ? e.tags.join(", ") : ""}
-                              onChange={(ev) => updateEntry(idx, { tags: ev.target.value.split(",").map((s) => s.trim()).filter(Boolean).slice(0, 12) })}
-                              placeholder={t.tagsPlaceholder} className="h-7 text-xs"
-                            />
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              {entries.map((e, idx) => (
+                <DailyEntryRow
+                  key={idx}
+                  entry={e}
+                  idx={idx}
+                  isExpanded={expandedIdx === idx}
+                  analyzing={analyzing}
+                  onUpdate={updateEntry}
+                  onRemove={removeEntry}
+                  onToggleExpand={toggleExpand}
+                  onSuggest={suggestActivity}
+                  onSetNow={setEntryNow}
+                  onSetRating={setEntryRating}
+                  t={t}
+                />
+              ))}
             </div>
 
             {/* Add block */}
@@ -755,7 +642,7 @@ export default function DailyFlowPage() {
         )}
 
         {/* ─── Day Note ─── */}
-        {!loading && (
+        {!isLoading && (
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <Label className="text-xs text-mutedFg">{t.dayNote}</Label>

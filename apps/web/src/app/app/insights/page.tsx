@@ -4,6 +4,7 @@ import * as React from "react";
 import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import { Skeleton } from "@/components/ui/skeleton";
 
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
@@ -416,7 +417,15 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent>
             {reportLoading ? (
-              <p className="text-sm text-mutedFg">{t.loading}</p>
+              <div className="space-y-3">
+                <Skeleton className="h-8 w-3/4" />
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-2/3" />
+                <div className="flex gap-2 pt-2">
+                  <Skeleton className="h-9 w-24 rounded-md" />
+                  <Skeleton className="h-9 w-24 rounded-md" />
+                </div>
+              </div>
             ) : report ? (
               <div className="space-y-3">
                 <p className="title-serif text-2xl leading-snug">{report.coach_one_liner}</p>
@@ -522,7 +531,11 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent>
             {reportLoading ? (
-              <p className="text-sm text-mutedFg">{t.loading}</p>
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full rounded-lg" />
+                <Skeleton className="h-12 w-full rounded-lg" />
+                <Skeleton className="h-12 w-full rounded-lg" />
+              </div>
             ) : report?.tomorrow_routine?.length ? (
               <div className="space-y-3">
                 {report.tomorrow_routine.slice(0, 6).map((it, idx) => (
@@ -557,7 +570,10 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent>
             {reportLoading ? (
-              <p className="text-sm text-mutedFg">{t.loading}</p>
+              <div className="space-y-3">
+                <Skeleton className="h-14 w-full rounded-lg" />
+                <Skeleton className="h-14 w-full rounded-lg" />
+              </div>
             ) : report?.productivity_peaks?.length ? (
               <div className="space-y-3">
                 {report.productivity_peaks.slice(0, 4).map((p, idx) => (
@@ -584,7 +600,9 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent>
             {reportLoading ? (
-              <p className="text-sm text-mutedFg">{t.loading}</p>
+              <div className="space-y-3">
+                <Skeleton className="h-20 w-full rounded-lg" />
+              </div>
             ) : report?.failure_patterns?.length ? (
               <div className="space-y-3">
                 {report.failure_patterns.slice(0, 3).map((f, idx) => (
