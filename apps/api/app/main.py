@@ -42,6 +42,9 @@ app.add_middleware(
     allow_origins=sorted(
         {
             _origin(str(settings.frontend_url)),
+            # Production domains for this deployment.
+            "https://rutineiq.com",
+            "https://www.rutineiq.com",
             "http://localhost:3000",
             "http://127.0.0.1:3000",
         }
