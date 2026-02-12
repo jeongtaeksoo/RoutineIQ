@@ -101,7 +101,7 @@ _GENERIC_COACH_HINTS = {
     "zh": ("短暂休息", "拉伸", "加油"),
     "es": ("descanso corto", "estiramiento", "animo"),
 }
-_REQUIRED_PROFILE_FIELDS = ("age_group", "gender", "job_family", "work_mode", "chronotype")
+_REQUIRED_PROFILE_FIELDS = ("age_group", "gender", "job_family", "work_mode")
 _DEVIATION_LABELS = {
     "ko": {
         "NO_PREVIOUS_PLAN": "전일 계획 데이터가 없어 비교 기준이 없습니다.",
@@ -838,7 +838,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             "profiles",
             bearer_token=auth.access_token,
             params={
-                "select": "age_group,gender,job_family,work_mode,chronotype",
+                "select": "age_group,gender,job_family,work_mode",
                 "id": f"eq.{auth.user_id}",
                 "limit": 1,
             },
@@ -846,11 +846,11 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         missing_fields = _missing_required_profile_fields(profile_rows[0] if profile_rows else None)
         if missing_fields:
             if target_locale == "ko":
-                message = "첫 AI 분석 전에 개인 설정 5개 항목을 먼저 완료해 주세요."
-                hint = "설정에서 연령대/성별/직군/근무 형태/활동 시간대를 저장하면 바로 분석할 수 있습니다. 성별은 '응답 안함' 선택이 가능합니다."
+                message = "첫 AI 분석 전에 개인 설정 4개 항목을 먼저 완료해 주세요."
+                hint = "설정에서 연령대/성별/직군/근무 형태를 저장하면 바로 분석할 수 있습니다. 성별은 '응답 안함' 선택이 가능합니다."
             else:
                 message = "Please complete your profile fields before your first AI analysis."
-                hint = "Go to Preferences and save age group, gender, job family, work mode, and chronotype. Gender supports 'Prefer not to say'."
+                hint = "Go to Preferences and save age group, gender, job family, and work mode. Gender supports 'Prefer not to say'."
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={

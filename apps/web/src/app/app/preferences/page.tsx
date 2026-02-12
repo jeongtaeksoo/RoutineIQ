@@ -191,9 +191,9 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
 
 type CompareDimension = "age_group" | "gender" | "job_family" | "work_mode" | "chronotype";
 type ProfilePreferences = {
-  age_group: "18_24" | "25_34" | "35_44" | "45_plus" | "unknown";
+  age_group: "0_17" | "18_24" | "25_34" | "35_44" | "45_plus" | "unknown";
   gender: "female" | "male" | "nonbinary" | "prefer_not_to_say" | "unknown";
-  job_family: "engineering" | "design" | "marketing" | "sales" | "operations" | "student" | "creator" | "other" | "unknown";
+  job_family: "engineering" | "professional" | "design" | "marketing" | "sales" | "operations" | "student" | "creator" | "other" | "unknown";
   work_mode: "fixed" | "flex" | "shift" | "freelance" | "other" | "unknown";
   chronotype: "morning" | "midday" | "evening" | "mixed" | "unknown";
   trend_opt_in: boolean;
@@ -215,6 +215,7 @@ const DEFAULT_PROFILE: ProfilePreferences = {
 };
 
 const AGE_OPTIONS = [
+  { value: "0_17", ko: "0-17세", en: "0-17" },
   { value: "18_24", ko: "18-24세", en: "18-24" },
   { value: "25_34", ko: "25-34세", en: "25-34" },
   { value: "35_44", ko: "35-44세", en: "35-44" },
@@ -232,6 +233,7 @@ const GENDER_OPTIONS = [
 
 const JOB_OPTIONS = [
   { value: "engineering", ko: "개발/엔지니어링", en: "Engineering" },
+  { value: "professional", ko: "전문직", en: "Professional" },
   { value: "design", ko: "디자인", en: "Design" },
   { value: "marketing", ko: "마케팅", en: "Marketing" },
   { value: "sales", ko: "영업", en: "Sales" },
@@ -248,14 +250,6 @@ const WORK_MODE_OPTIONS = [
   { value: "shift", ko: "교대근무", en: "Shift work" },
   { value: "freelance", ko: "프리랜서", en: "Freelance" },
   { value: "other", ko: "기타", en: "Other" },
-  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
-] as const;
-
-const CHRONOTYPE_OPTIONS = [
-  { value: "morning", ko: "아침형", en: "Morning" },
-  { value: "midday", ko: "중간형", en: "Midday" },
-  { value: "evening", ko: "저녁형", en: "Evening" },
-  { value: "mixed", ko: "혼합형", en: "Mixed" },
   { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
 
@@ -400,17 +394,11 @@ export default function PreferencesPage() {
     setError(null);
     setMessage(null);
     try {
-      const normalizedKeyword = profile.goal_keyword?.trim() || null;
-      const normalizedMinutes = profile.goal_minutes_per_day == null || Number.isNaN(Number(profile.goal_minutes_per_day))
-        ? null
-        : Number(profile.goal_minutes_per_day);
-
       if (
         profile.age_group === "unknown" ||
         profile.gender === "unknown" ||
         profile.job_family === "unknown" ||
-        profile.work_mode === "unknown" ||
-        profile.chronotype === "unknown"
+        profile.work_mode === "unknown"
       ) {
         throw new Error(
           isKo
@@ -421,10 +409,8 @@ export default function PreferencesPage() {
 
       const payload: ProfilePreferences = {
         ...profile,
-        goal_keyword: normalizedKeyword,
-        goal_minutes_per_day: normalizedMinutes,
         trend_opt_in: true,
-        trend_compare_by: ["age_group", "job_family", "work_mode", "chronotype"],
+        trend_compare_by: ["age_group", "job_family", "work_mode"],
       };
 
       const saved = await apiFetch<ProfilePreferences>("/preferences/profile", {
@@ -438,19 +424,6 @@ export default function PreferencesPage() {
           Array.isArray(saved.trend_compare_by) && saved.trend_compare_by.length
             ? saved.trend_compare_by
             : DEFAULT_PROFILE.trend_compare_by,
-      });
-
-      // Keep legacy goal metadata in sync for backward compatibility with existing clients.
-      const supabase = createClient();
-      await supabase.auth.updateUser({
-        data: {
-          routineiq_goal_v1: normalizedKeyword
-            ? {
-                keyword: normalizedKeyword,
-                minutesPerDay: normalizedMinutes ?? 90,
-              }
-            : null,
-        },
       });
 
       setMessage(isKo ? "개인 설정을 저장했습니다." : "Profile settings saved.");
@@ -533,7 +506,7 @@ export default function PreferencesPage() {
         </Card>
 
         {/* Reminders */}
-        <Card>
+        <Card className="order-2">
           <CardHeader>
             <CardTitle>{t.notif_title}</CardTitle>
             <CardDescription>{t.notif_desc}</CardDescription>
@@ -591,13 +564,13 @@ export default function PreferencesPage() {
         </Card>
 
         {/* Personal profile + goals */}
-        <Card>
+        <Card className="order-1">
           <CardHeader>
             <CardTitle>{isKo ? "개인 설정" : "Personal Profile"}</CardTitle>
             <CardDescription>
               {isKo
-                ? "첫 AI 분석 전에 필요한 기본 정보입니다. 추천 정확도를 높이기 위한 용도이며 성별은 '응답 안함' 선택이 가능합니다."
-                : "These fields are required before your first AI analysis to improve recommendation quality. Gender supports 'Prefer not to say'."}
+                ? "첫 AI 분석 전에 필요한 기본 정보입니다. 맞춤 루틴 정확도 향상 용도로만 사용되며 성별은 '응답 안함' 선택이 가능합니다."
+                : "These fields are required before your first AI analysis. They are used only to improve recommendation quality. Gender supports 'Prefer not to say'."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -658,48 +631,6 @@ export default function PreferencesPage() {
                   ))}
                 </select>
               </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-medium text-mutedFg">{isKo ? "활동 시간대" : "Chronotype"}</label>
-                <select
-                  value={profile.chronotype}
-                  onChange={(e) => setProfile((prev) => ({ ...prev, chronotype: e.target.value as ProfilePreferences["chronotype"] }))}
-                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
-                >
-                  {CHRONOTYPE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {isKo ? opt.ko : opt.en}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-mutedFg">{isKo ? "루틴 목표 키워드" : "Goal keyword"}</label>
-                <Input
-                  value={profile.goal_keyword ?? ""}
-                  onChange={(e) => setProfile((prev) => ({ ...prev, goal_keyword: e.target.value }))}
-                  placeholder={isKo ? "예: deep work, 운동, 글쓰기" : "e.g. deep work, training, writing"}
-                  className="bg-white/60"
-                />
-              </div>
-              <div className="space-y-1.5">
-                <label className="text-xs font-medium text-mutedFg">{isKo ? "하루 목표(분)" : "Goal minutes/day"}</label>
-                <Input
-                  type="number"
-                  min={10}
-                  max={600}
-                  value={profile.goal_minutes_per_day ?? ""}
-                  onChange={(e) =>
-                    setProfile((prev) => ({
-                      ...prev,
-                      goal_minutes_per_day: e.target.value ? Number(e.target.value) : null,
-                    }))
-                  }
-                  className="bg-white/60"
-                />
-              </div>
             </div>
 
             <div className="flex justify-end">
@@ -711,7 +642,7 @@ export default function PreferencesPage() {
         </Card>
 
         {/* Privacy & Data */}
-        <Card>
+        <Card className="order-3">
           <CardHeader>
             <CardTitle>{t.privacy_title}</CardTitle>
             <CardDescription>{t.privacy_desc}</CardDescription>

@@ -59,7 +59,7 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'profiles_age_group_chk') then
     alter table public.profiles
       add constraint profiles_age_group_chk
-      check (age_group in ('18_24', '25_34', '35_44', '45_plus', 'unknown'));
+      check (age_group in ('0_17', '18_24', '25_34', '35_44', '45_plus', 'unknown'));
   end if;
   if not exists (select 1 from pg_constraint where conname = 'profiles_gender_chk') then
     alter table public.profiles
@@ -69,7 +69,7 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'profiles_job_family_chk') then
     alter table public.profiles
       add constraint profiles_job_family_chk
-      check (job_family in ('engineering', 'design', 'marketing', 'sales', 'operations', 'student', 'creator', 'other', 'unknown'));
+      check (job_family in ('engineering', 'professional', 'design', 'marketing', 'sales', 'operations', 'student', 'creator', 'other', 'unknown'));
   end if;
   if not exists (select 1 from pg_constraint where conname = 'profiles_work_mode_chk') then
     alter table public.profiles

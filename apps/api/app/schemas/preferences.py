@@ -5,9 +5,9 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 
-AgeGroup = Literal["18_24", "25_34", "35_44", "45_plus", "unknown"]
+AgeGroup = Literal["0_17", "18_24", "25_34", "35_44", "45_plus", "unknown"]
 Gender = Literal["female", "male", "nonbinary", "prefer_not_to_say", "unknown"]
-JobFamily = Literal["engineering", "design", "marketing", "sales", "operations", "student", "creator", "other", "unknown"]
+JobFamily = Literal["engineering", "professional", "design", "marketing", "sales", "operations", "student", "creator", "other", "unknown"]
 WorkMode = Literal["fixed", "flex", "shift", "freelance", "other", "unknown"]
 Chronotype = Literal["morning", "midday", "evening", "mixed", "unknown"]
 CompareDimension = Literal["age_group", "gender", "job_family", "work_mode", "chronotype"]
