@@ -24,32 +24,51 @@ function getApiOrigin(): string {
   const fallback = "http://localhost:8000";
   const raw = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
   const runtimeFallback = getRuntimeApiFallback();
-  if (!raw) return runtimeFallback || fallback;
+  const browserHost = getBrowserHost();
+  const browserOnLocal = isBrowserLocalhost(browserHost);
+  const nonLocalDefault = "https://api.rutineiq.com";
+  if (!raw) {
+    if (!browserOnLocal) return runtimeFallback || nonLocalDefault;
+    return fallback;
+  }
 
   // Guardrail: if someone sets `/api` (relative) we would accidentally call Next's own `/api/*` routes.
   // For local dev we always expect an absolute backend URL.
-  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw)) return runtimeFallback || fallback;
+  if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(raw)) {
+    if (!browserOnLocal) return runtimeFallback || nonLocalDefault;
+    return fallback;
+  }
 
   try {
     const u = new URL(raw);
     const origin = u.origin; // strip any accidental `/api` suffix or path
-    if (runtimeFallback && isLocalOrigin(origin)) {
-      // Prevent production users from calling localhost when env is misconfigured.
-      return runtimeFallback;
+    if (isLocalOrigin(origin) && !browserOnLocal) {
+      // Never allow non-local browser sessions to hit localhost.
+      return runtimeFallback || nonLocalDefault;
     }
     return origin;
   } catch {
-    return runtimeFallback || fallback;
+    if (!browserOnLocal) return runtimeFallback || nonLocalDefault;
+    return fallback;
   }
 }
 
 function getRuntimeApiFallback(): string | null {
   if (typeof window === "undefined") return null;
   const host = window.location.hostname.toLowerCase();
-  if (host === "rutineiq.com" || host === "www.rutineiq.com") {
+  if (host === "rutineiq.com" || host === "www.rutineiq.com" || host.endsWith(".rutineiq.com")) {
     return "https://api.rutineiq.com";
   }
   return null;
+}
+
+function getBrowserHost(): string {
+  if (typeof window === "undefined") return "";
+  return window.location.hostname.toLowerCase();
+}
+
+function isBrowserLocalhost(host: string): boolean {
+  return host === "localhost" || host === "127.0.0.1";
 }
 
 function isLocalOrigin(origin: string): boolean {
