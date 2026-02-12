@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     pro_daily_analyze_limit: int = Field(default=10, alias="PRO_DAILY_ANALYZE_LIMIT")
     free_report_retention_days: int = Field(default=3, alias="FREE_REPORT_RETENTION_DAYS")
     pro_report_retention_days: int = Field(default=30, alias="PRO_REPORT_RETENTION_DAYS")
+    analyze_per_minute_limit: int = Field(default=6, alias="ANALYZE_PER_MINUTE_LIMIT")
 
     def is_stripe_configured(self) -> bool:
         return bool(

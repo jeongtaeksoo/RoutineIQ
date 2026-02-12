@@ -22,7 +22,7 @@ def _get_bearer_token(request: Request) -> str:
     if not auth.lower().startswith("bearer "):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
     token = auth.split(" ", 1)[1].strip()
-    if not token:
+    if (not token) or (" " in token) or (len(token) < 20):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing token")
     return token
 
@@ -60,4 +60,8 @@ async def get_auth_context(request: Request) -> AuthContext:
     )
 
 
-AuthDep = Annotated[AuthContext, Depends(get_auth_context)]
+async def verify_token(request: Request) -> AuthContext:
+    return await get_auth_context(request)
+
+
+AuthDep = Annotated[AuthContext, Depends(verify_token)]

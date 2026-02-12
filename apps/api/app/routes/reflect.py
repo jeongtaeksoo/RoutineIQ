@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.security import AuthDep
 from app.services.error_log import log_system_error
 from app.services.openai_service import call_openai_structured
+from app.services.privacy import sanitize_for_llm
 from app.services.usage import count_daily_analyze_calls, estimate_cost_usd, insert_usage_event
 
 router = APIRouter()
@@ -45,6 +46,7 @@ async def reflect_on_day(body: ReflectRequest, auth: AuthDep) -> dict:
     used = await count_daily_analyze_calls(
         user_id=auth.user_id,
         event_date=call_day,
+        event_type="reflect",
         access_token=auth.access_token,
     )
     if used >= _DAILY_LIGHT_AI_LIMIT:
@@ -61,7 +63,9 @@ async def reflect_on_day(body: ReflectRequest, auth: AuthDep) -> dict:
         "Output valid JSON only."
     )
     
-    user_prompt = f"Date: {body.date}. Entries: {json.dumps(body.entries)}. Note: {body.note or 'None'}."
+    sanitized_entries = sanitize_for_llm(body.entries)
+    sanitized_note = sanitize_for_llm(body.note or "None")
+    user_prompt = f"Date: {body.date}. Entries: {json.dumps(sanitized_entries, ensure_ascii=False)}. Note: {sanitized_note}."
 
     try:
         obj, usage = await call_openai_structured(
@@ -79,6 +83,7 @@ async def reflect_on_day(body: ReflectRequest, auth: AuthDep) -> dict:
         await insert_usage_event(
             user_id=auth.user_id,
             event_date=call_day,
+            event_type="reflect",
             model=settings.openai_model,
             tokens_prompt=usage.get("input_tokens"),
             tokens_completion=usage.get("output_tokens"),

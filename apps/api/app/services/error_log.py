@@ -4,6 +4,7 @@ import traceback
 from typing import Any
 
 from app.core.config import settings
+from app.services.privacy import redact_secrets_text, sanitize_for_log
 from app.services.supabase_rest import SupabaseRest
 
 
@@ -19,17 +20,17 @@ async def log_system_error(
     try:
         stack = None
         if err is not None:
-            stack = "".join(traceback.format_exception(type(err), err, err.__traceback__))[:8000]
+            raw_stack = "".join(traceback.format_exception(type(err), err, err.__traceback__))[:8000]
+            stack = redact_secrets_text(raw_stack)
 
         row: dict[str, Any] = {
-            "route": route,
-            "message": message[:1000],
+            "route": sanitize_for_log(route),
+            "message": sanitize_for_log(message),
             "stack": stack,
             "user_id": user_id,
-            "meta": meta or {},
+            "meta": sanitize_for_log(meta or {}),
         }
         sb = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
         await sb.insert_one("system_errors", bearer_token=settings.supabase_service_role_key, row=row)
     except Exception:
         return
-

@@ -12,6 +12,7 @@ from app.core.config import settings
 from app.core.security import AuthDep
 from app.services.error_log import log_system_error
 from app.services.openai_service import call_openai_structured
+from app.services.privacy import sanitize_for_llm
 from app.services.usage import count_daily_analyze_calls, estimate_cost_usd, insert_usage_event
 
 router = APIRouter()
@@ -46,6 +47,7 @@ async def suggest_activity(body: SuggestRequest, auth: AuthDep) -> dict:
     used = await count_daily_analyze_calls(
         user_id=auth.user_id,
         event_date=call_day,
+        event_type="suggest",
         access_token=auth.access_token,
     )
     if used >= _DAILY_LIGHT_AI_LIMIT:
@@ -64,7 +66,7 @@ async def suggest_activity(body: SuggestRequest, auth: AuthDep) -> dict:
     
     user_prompt = f"Current time: {body.current_time}. "
     if body.context:
-        user_prompt += f"Context: {body.context}."
+        user_prompt += f"Context: {sanitize_for_llm(body.context)}."
     else:
         user_prompt += "No specific context provided."
 
@@ -84,6 +86,7 @@ async def suggest_activity(body: SuggestRequest, auth: AuthDep) -> dict:
         await insert_usage_event(
             user_id=auth.user_id,
             event_date=call_day,
+            event_type="suggest",
             model=settings.openai_model,
             tokens_prompt=usage.get("input_tokens"),
             tokens_completion=usage.get("output_tokens"),

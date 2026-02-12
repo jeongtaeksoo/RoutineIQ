@@ -155,6 +155,7 @@ create table if not exists public.usage_events (
   user_id uuid not null references public.profiles(id) on delete cascade,
   event_type text not null default 'analyze',
   event_date date not null,
+  request_id text,
   model text,
   tokens_prompt int,
   tokens_completion int,
@@ -302,6 +303,9 @@ on public.ai_reports (user_id, date desc);
 
 create index if not exists usage_events_user_event_idx
 on public.usage_events (user_id, event_date, event_type);
+
+create unique index if not exists usage_events_user_event_date_request_uidx
+on public.usage_events (user_id, event_type, event_date, request_id);
 
 create index if not exists usage_events_created_at_idx
 on public.usage_events (created_at desc);

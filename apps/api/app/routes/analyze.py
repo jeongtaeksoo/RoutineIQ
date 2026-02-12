@@ -1,20 +1,29 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import re
 from datetime import date as Date, datetime, timedelta, timezone
 from typing import Any
 
 import httpx
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, HTTPException, Request, status
 from pydantic import ValidationError
 
 from app.core.config import settings
+from app.core.idempotency import (
+    claim_idempotency_key,
+    clear_idempotency_key,
+    mark_idempotency_done,
+)
+from app.core.rate_limit import consume
 from app.core.security import AuthDep
 from app.schemas.ai_report import AIReport
 from app.schemas.analyze import AnalyzeRequest
 from app.services.error_log import log_system_error
 from app.services.openai_service import call_openai_structured
 from app.services.plan import analyze_limit_for_plan, get_subscription_info, retention_days_for_plan
+from app.services.privacy import sanitize_for_llm
 from app.services.retention import cleanup_expired_reports
 from app.services.supabase_rest import SupabaseRest, SupabaseRestError
 from app.services.usage import count_daily_analyze_calls, estimate_cost_usd, insert_usage_event
@@ -26,6 +35,20 @@ router = APIRouter()
 def _is_service_key_failure(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
     return exc.status_code in (401, 403) or exc.code == "42501" or "row-level security policy" in msg
+
+
+_IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:\-]{8,128}$")
+
+
+def _normalize_idempotency_key(value: str | None) -> str | None:
+    if not value:
+        return None
+    key = value.strip()
+    if not key:
+        return None
+    if not _IDEMPOTENCY_KEY_RE.fullmatch(key):
+        return None
+    return key
 
 
 def _build_system_prompt(*, plan: str) -> str:
@@ -82,7 +105,13 @@ def _build_user_prompt(
 
 
 @router.post("/analyze")
-async def analyze_day(body: AnalyzeRequest, auth: AuthDep) -> dict:
+async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> dict:
+    await consume(
+        key=f"analyze:user:{auth.user_id}",
+        limit=max(int(settings.analyze_per_minute_limit), 1),
+        window_seconds=60,
+    )
+
     sb_rls = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
     sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
 
@@ -134,6 +163,7 @@ async def analyze_day(body: AnalyzeRequest, auth: AuthDep) -> dict:
         },
     )
     activity_log = logs[0] if logs else {"date": body.date.isoformat(), "entries": [], "note": None}
+    sanitized_activity_log = sanitize_for_llm(activity_log)
 
     # Load yesterday's report to compare "plan vs actual"
     yesterday = body.date - timedelta(days=1)
@@ -150,9 +180,57 @@ async def analyze_day(body: AnalyzeRequest, auth: AuthDep) -> dict:
     yesterday_plan = None
     if y_rows and isinstance(y_rows[0].get("report"), dict):
         yesterday_plan = y_rows[0]["report"].get("tomorrow_routine")
+    sanitized_yesterday_plan = sanitize_for_llm(yesterday_plan or [])
+
+    request_key = _normalize_idempotency_key(request.headers.get("Idempotency-Key"))
+    if request_key:
+        idempotency_key = f"analyze:{auth.user_id}:{request_key}"
+    else:
+        fingerprint_source = json.dumps(
+            {
+                "date": body.date.isoformat(),
+                "force": body.force,
+                "activity_log": sanitized_activity_log,
+            },
+            sort_keys=True,
+            ensure_ascii=False,
+        )
+        fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:24]
+        idempotency_key = f"analyze:{auth.user_id}:{body.date.isoformat()}:{fingerprint}"
+
+    idem_state = await claim_idempotency_key(key=idempotency_key, processing_ttl_seconds=150)
+    if idem_state != "acquired":
+        # If a same-key request already completed/in-flight, return current report when possible.
+        retry_rows = await sb_rls.select(
+            "ai_reports",
+            bearer_token=auth.access_token,
+            params={
+                "select": "date,report,model,updated_at",
+                "user_id": f"eq.{auth.user_id}",
+                "date": f"eq.{body.date.isoformat()}",
+                "limit": 1,
+            },
+        )
+        if retry_rows:
+            row = retry_rows[0]
+            return {"date": row.get("date"), "report": row.get("report"), "model": row.get("model"), "cached": True}
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Analyze request is already processing.",
+                "hint": "Retry in a few seconds.",
+                "code": "ANALYZE_IN_PROGRESS",
+            },
+        )
+
+    completed = False
 
     system_prompt = _build_system_prompt(plan=plan)
-    user_prompt = _build_user_prompt(target_date=body.date, activity_log=activity_log, yesterday_plan=yesterday_plan)
+    user_prompt = _build_user_prompt(
+        target_date=body.date,
+        activity_log=sanitized_activity_log,
+        yesterday_plan=sanitized_yesterday_plan,
+    )
 
     # OpenAI call + schema validation (retry once on validation error)
     try:
@@ -188,54 +266,62 @@ async def analyze_day(body: AnalyzeRequest, auth: AuthDep) -> dict:
                 detail="AI analysis failed. Please try again in a moment.",
             )
 
-    # Persist report. Primary path uses service-role; fallback uses user-scoped RLS path.
-    report_dict = report.model_dump(by_alias=True)
-    report_row = {
-        "user_id": auth.user_id,
-        "date": body.date.isoformat(),
-        "report": report_dict,
-        "model": settings.openai_model,
-    }
     try:
-        await sb_service.upsert_one(
-            "ai_reports",
-            bearer_token=settings.supabase_service_role_key,
-            on_conflict="user_id,date",
-            row=report_row,
+        # Persist report. Primary path uses service-role; fallback uses user-scoped RLS path.
+        report_dict = report.model_dump(by_alias=True)
+        report_row = {
+            "user_id": auth.user_id,
+            "date": body.date.isoformat(),
+            "report": report_dict,
+            "model": settings.openai_model,
+        }
+        try:
+            await sb_service.upsert_one(
+                "ai_reports",
+                bearer_token=settings.supabase_service_role_key,
+                on_conflict="user_id,date",
+                row=report_row,
+            )
+        except SupabaseRestError as exc:
+            if not _is_service_key_failure(exc):
+                raise
+            await sb_rls.upsert_one(
+                "ai_reports",
+                bearer_token=auth.access_token,
+                on_conflict="user_id,date",
+                row=report_row,
+            )
+
+        # Record usage event (idempotent via request_id).
+        cost = estimate_cost_usd(
+            input_tokens=usage.get("input_tokens"),
+            output_tokens=usage.get("output_tokens"),
         )
-    except SupabaseRestError as exc:
-        if not _is_service_key_failure(exc):
-            raise
-        await sb_rls.upsert_one(
-            "ai_reports",
-            bearer_token=auth.access_token,
-            on_conflict="user_id,date",
-            row=report_row,
+        usage_request_id = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:32]
+        await insert_usage_event(
+            user_id=auth.user_id,
+            event_date=call_day,
+            event_type="analyze",
+            model=settings.openai_model,
+            tokens_prompt=usage.get("input_tokens"),
+            tokens_completion=usage.get("output_tokens"),
+            tokens_total=usage.get("total_tokens"),
+            cost_usd=cost,
+            request_id=usage_request_id,
+            meta={"target_date": body.date.isoformat(), "plan": plan, "forced": body.force},
+            access_token=auth.access_token,
         )
 
-    # Record usage event (service role)
-    cost = estimate_cost_usd(
-        input_tokens=usage.get("input_tokens"),
-        output_tokens=usage.get("output_tokens"),
-    )
-    await insert_usage_event(
-        user_id=auth.user_id,
-        event_date=call_day,
-        model=settings.openai_model,
-        tokens_prompt=usage.get("input_tokens"),
-        tokens_completion=usage.get("output_tokens"),
-        tokens_total=usage.get("total_tokens"),
-        cost_usd=cost,
-        meta={"target_date": body.date.isoformat(), "plan": plan, "forced": body.force},
-        access_token=auth.access_token,
-    )
-
-    # Retention cleanup
-    await cleanup_expired_reports(
-        user_id=auth.user_id,
-        retention_days=retention_days_for_plan(plan),
-        today=call_day,
-        access_token=auth.access_token,
-    )
-
-    return {"date": body.date.isoformat(), "report": report_dict, "model": settings.openai_model, "cached": False}
+        # Retention cleanup
+        await cleanup_expired_reports(
+            user_id=auth.user_id,
+            retention_days=retention_days_for_plan(plan),
+            today=call_day,
+            access_token=auth.access_token,
+        )
+        completed = True
+        await mark_idempotency_done(key=idempotency_key, done_ttl_seconds=600)
+        return {"date": body.date.isoformat(), "report": report_dict, "model": settings.openai_model, "cached": False}
+    finally:
+        if not completed:
+            await clear_idempotency_key(key=idempotency_key)
