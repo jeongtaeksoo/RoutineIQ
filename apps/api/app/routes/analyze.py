@@ -101,6 +101,7 @@ _GENERIC_COACH_HINTS = {
     "zh": ("短暂休息", "拉伸", "加油"),
     "es": ("descanso corto", "estiramiento", "animo"),
 }
+_REQUIRED_PROFILE_FIELDS = ("age_group", "gender", "job_family", "work_mode", "chronotype")
 _DEVIATION_LABELS = {
     "ko": {
         "NO_PREVIOUS_PLAN": "전일 계획 데이터가 없어 비교 기준이 없습니다.",
@@ -303,6 +304,21 @@ def _is_report_stale(*, report_updated_at: Any, log_updated_at: Any) -> bool:
 def _deviation_label(locale: str, code: str) -> str:
     table = _DEVIATION_LABELS.get(locale, _DEVIATION_LABELS["en"])
     return table.get(code, code)
+
+
+def _missing_required_profile_fields(row: dict[str, Any] | None) -> list[str]:
+    if not isinstance(row, dict):
+        return list(_REQUIRED_PROFILE_FIELDS)
+    missing: list[str] = []
+    for field in _REQUIRED_PROFILE_FIELDS:
+        value = row.get(field)
+        if not isinstance(value, str):
+            missing.append(field)
+            continue
+        normalized = value.strip().lower()
+        if not normalized or normalized == "unknown":
+            missing.append(field)
+    return missing
 
 
 def _normalize_yesterday_plan_vs_actual(
@@ -805,6 +821,45 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
 
     sb_rls = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
     sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+
+    # Require personal profile fields before the first-ever analysis.
+    previous_report = await sb_rls.select(
+        "ai_reports",
+        bearer_token=auth.access_token,
+        params={
+            "select": "date",
+            "user_id": f"eq.{auth.user_id}",
+            "limit": 1,
+            "order": "date.desc",
+        },
+    )
+    if not previous_report:
+        profile_rows = await sb_rls.select(
+            "profiles",
+            bearer_token=auth.access_token,
+            params={
+                "select": "age_group,gender,job_family,work_mode,chronotype",
+                "id": f"eq.{auth.user_id}",
+                "limit": 1,
+            },
+        )
+        missing_fields = _missing_required_profile_fields(profile_rows[0] if profile_rows else None)
+        if missing_fields:
+            if target_locale == "ko":
+                message = "첫 AI 분석 전에 개인 설정 5개 항목을 먼저 완료해 주세요."
+                hint = "설정에서 연령대/성별/직군/근무 형태/활동 시간대를 저장하면 바로 분석할 수 있습니다. 성별은 '응답 안함' 선택이 가능합니다."
+            else:
+                message = "Please complete your profile fields before your first AI analysis."
+                hint = "Go to Preferences and save age group, gender, job family, work mode, and chronotype. Gender supports 'Prefer not to say'."
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={
+                    "message": message,
+                    "hint": hint,
+                    "code": "PROFILE_SETUP_REQUIRED",
+                    "missing_fields": missing_fields,
+                },
+            )
 
     # Cache: if report already exists and not forcing, return it without consuming usage.
     existing = await sb_rls.select(

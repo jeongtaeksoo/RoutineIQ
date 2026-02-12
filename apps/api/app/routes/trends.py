@@ -89,7 +89,11 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
             compare_by=compare_by,
             filters={},
             metrics=CohortTrendMetrics(),
-            message="Enable cohort comparison in Preferences to see similar-user trends.",
+            message=(
+                "개인 설정을 저장하면 유사 사용자 트렌드가 표시됩니다."
+                if auth.locale == "ko"
+                else "Save your profile in Preferences to unlock similar-user trends."
+            ),
         )
 
     profile_values = {

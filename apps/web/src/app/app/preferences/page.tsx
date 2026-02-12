@@ -219,7 +219,7 @@ const AGE_OPTIONS = [
   { value: "25_34", ko: "25-34세", en: "25-34" },
   { value: "35_44", ko: "35-44세", en: "35-44" },
   { value: "45_plus", ko: "45세+", en: "45+" },
-  { value: "unknown", ko: "응답 안함", en: "Prefer not to say" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
 
 const GENDER_OPTIONS = [
@@ -227,7 +227,7 @@ const GENDER_OPTIONS = [
   { value: "male", ko: "남성", en: "Male" },
   { value: "nonbinary", ko: "논바이너리", en: "Non-binary" },
   { value: "prefer_not_to_say", ko: "응답 안함", en: "Prefer not to say" },
-  { value: "unknown", ko: "미설정", en: "Unknown" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
 
 const JOB_OPTIONS = [
@@ -239,7 +239,7 @@ const JOB_OPTIONS = [
   { value: "student", ko: "학생", en: "Student" },
   { value: "creator", ko: "크리에이터", en: "Creator" },
   { value: "other", ko: "기타", en: "Other" },
-  { value: "unknown", ko: "미설정", en: "Unknown" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
 
 const WORK_MODE_OPTIONS = [
@@ -248,7 +248,7 @@ const WORK_MODE_OPTIONS = [
   { value: "shift", ko: "교대근무", en: "Shift work" },
   { value: "freelance", ko: "프리랜서", en: "Freelance" },
   { value: "other", ko: "기타", en: "Other" },
-  { value: "unknown", ko: "미설정", en: "Unknown" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
 
 const CHRONOTYPE_OPTIONS = [
@@ -256,16 +256,8 @@ const CHRONOTYPE_OPTIONS = [
   { value: "midday", ko: "중간형", en: "Midday" },
   { value: "evening", ko: "저녁형", en: "Evening" },
   { value: "mixed", ko: "혼합형", en: "Mixed" },
-  { value: "unknown", ko: "미설정", en: "Unknown" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
-
-const COMPARE_OPTIONS: { value: CompareDimension; ko: string; en: string }[] = [
-  { value: "age_group", ko: "연령대", en: "Age group" },
-  { value: "gender", ko: "성별", en: "Gender" },
-  { value: "job_family", ko: "직군", en: "Job family" },
-  { value: "work_mode", ko: "근무 형태", en: "Work mode" },
-  { value: "chronotype", ko: "활동 시간대", en: "Chronotype" },
-];
 
 export default function PreferencesPage() {
   const [busy, setBusy] = React.useState(false);
@@ -294,8 +286,6 @@ export default function PreferencesPage() {
     if (notificationPermission === "denied") return { label: t.perm_off, variant: "destructive" as const };
     return { label: t.perm_needed, variant: "secondary" as const };
   }, [notificationPermission, t]);
-
-  const compareBySet = React.useMemo(() => new Set(profile.trend_compare_by), [profile.trend_compare_by]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -405,17 +395,6 @@ export default function PreferencesPage() {
     }
   }
 
-  function toggleCompareDimension(dim: CompareDimension) {
-    setProfile((prev) => {
-      const exists = prev.trend_compare_by.includes(dim);
-      if (exists) {
-        const next = prev.trend_compare_by.filter((x) => x !== dim);
-        return { ...prev, trend_compare_by: next.length ? next : prev.trend_compare_by };
-      }
-      return { ...prev, trend_compare_by: [...prev.trend_compare_by, dim] };
-    });
-  }
-
   async function saveProfileSettings() {
     setBusy(true);
     setError(null);
@@ -426,11 +405,26 @@ export default function PreferencesPage() {
         ? null
         : Number(profile.goal_minutes_per_day);
 
+      if (
+        profile.age_group === "unknown" ||
+        profile.gender === "unknown" ||
+        profile.job_family === "unknown" ||
+        profile.work_mode === "unknown" ||
+        profile.chronotype === "unknown"
+      ) {
+        throw new Error(
+          isKo
+            ? "개인 설정 항목은 모두 필수입니다. 성별은 '응답 안함'을 선택할 수 있습니다."
+            : "All profile fields are required. You can choose 'Prefer not to say' for gender."
+        );
+      }
+
       const payload: ProfilePreferences = {
         ...profile,
         goal_keyword: normalizedKeyword,
         goal_minutes_per_day: normalizedMinutes,
-        trend_compare_by: profile.trend_compare_by.length ? profile.trend_compare_by : DEFAULT_PROFILE.trend_compare_by,
+        trend_opt_in: true,
+        trend_compare_by: ["age_group", "job_family", "work_mode", "chronotype"],
       };
 
       const saved = await apiFetch<ProfilePreferences>("/preferences/profile", {
@@ -459,7 +453,7 @@ export default function PreferencesPage() {
         },
       });
 
-      setMessage(isKo ? "개인 설정과 코호트 비교 설정을 저장했습니다." : "Profile and cohort settings saved.");
+      setMessage(isKo ? "개인 설정을 저장했습니다." : "Profile settings saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : t.save_failed);
     } finally {
@@ -602,8 +596,8 @@ export default function PreferencesPage() {
             <CardTitle>{isKo ? "개인 설정" : "Personal Profile"}</CardTitle>
             <CardDescription>
               {isKo
-                ? "연령대/직군/근무 형태/활동 시간대를 설정하면 더 정확한 맞춤 루틴과 비교 트렌드를 제공합니다."
-                : "Set your profile to improve personalized routine recommendations and cohort comparisons."}
+                ? "첫 AI 분석 전에 필요한 기본 정보입니다. 추천 정확도를 높이기 위한 용도이며 성별은 '응답 안함' 선택이 가능합니다."
+                : "These fields are required before your first AI analysis to improve recommendation quality. Gender supports 'Prefer not to say'."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -707,65 +701,10 @@ export default function PreferencesPage() {
                 />
               </div>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Cohort trend settings */}
-        <Card>
-          <CardHeader>
-            <CardTitle>{isKo ? "유사 사용자 트렌드 비교" : "Similar Users Trend"}</CardTitle>
-            <CardDescription>
-              {isKo
-                ? "동의한 사용자의 익명 집계 데이터와 비교해 긍정적인 자극을 받습니다. (원본 로그는 공유되지 않습니다)"
-                : "Compare with anonymized aggregate trends from opted-in users. (No raw logs are shared.)"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex items-center justify-between rounded-xl border bg-white/50 p-4">
-              <div>
-                <p className="text-sm font-semibold">{isKo ? "코호트 트렌드 비교 사용" : "Enable cohort comparison"}</p>
-                <p className="mt-1 text-xs text-mutedFg">
-                  {isKo
-                    ? "동의 후에만 코호트 지표가 표시됩니다."
-                    : "Cohort metrics are shown only when you opt in."}
-                </p>
-              </div>
-              <input
-                type="checkbox"
-                checked={profile.trend_opt_in}
-                onChange={(e) => setProfile((prev) => ({ ...prev, trend_opt_in: e.target.checked }))}
-                className="h-5 w-5 accent-brand rounded border-gray-300"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <p className="text-xs font-medium text-mutedFg">{isKo ? "비교 기준 선택" : "Comparison dimensions"}</p>
-              <div className="flex flex-wrap gap-2">
-                {COMPARE_OPTIONS.map((opt) => (
-                  <button
-                    key={opt.value}
-                    type="button"
-                    onClick={() => toggleCompareDimension(opt.value)}
-                    className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
-                      compareBySet.has(opt.value)
-                        ? "border-brand bg-brand/10 text-brand"
-                        : "border-border bg-white/60 text-mutedFg hover:border-brand/50"
-                    }`}
-                  >
-                    {isKo ? opt.ko : opt.en}
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-mutedFg">
-                {isKo
-                  ? "권장: 2~3개 기준을 선택하면 표본 수와 유사도가 균형을 이룹니다."
-                  : "Recommended: choose 2-3 dimensions to balance sample size and relevance."}
-              </p>
-            </div>
-
-            <div className="pt-1">
+            <div className="flex justify-end">
               <Button onClick={saveProfileSettings} disabled={busy}>
-                {isKo ? "개인 설정 저장" : "Save profile settings"}
+                {t.save}
               </Button>
             </div>
           </CardContent>
