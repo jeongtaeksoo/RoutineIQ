@@ -11,10 +11,12 @@ from app.core.config import settings
 from app.routes.admin import router as admin_router
 from app.routes.analyze import router as analyze_router
 from app.routes.logs import router as logs_router
+from app.routes.preferences import router as preferences_router
 from app.routes.reports import router as reports_router
 from app.routes.suggest import router as suggest_router
 from app.routes.reflect import router as reflect_router
 from app.routes.stripe_routes import router as stripe_router
+from app.routes.trends import router as trends_router
 from app.services.error_log import log_system_error
 from app.services.supabase_auth import get_current_user
 from app.services.supabase_rest import SupabaseRestError, close_http
@@ -135,3 +137,5 @@ app.include_router(suggest_router, prefix="/api")
 app.include_router(reflect_router, prefix="/api")
 app.include_router(stripe_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
+app.include_router(preferences_router, prefix="/api")
+app.include_router(trends_router, prefix="/api")

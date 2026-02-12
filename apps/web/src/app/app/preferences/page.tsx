@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { apiFetch } from "@/lib/api-client";
 import { createClient } from "@/lib/supabase/client";
 import type { Locale } from "@/lib/i18n";
 
@@ -188,6 +189,84 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
   }
 };
 
+type CompareDimension = "age_group" | "gender" | "job_family" | "work_mode" | "chronotype";
+type ProfilePreferences = {
+  age_group: "18_24" | "25_34" | "35_44" | "45_plus" | "unknown";
+  gender: "female" | "male" | "nonbinary" | "prefer_not_to_say" | "unknown";
+  job_family: "engineering" | "design" | "marketing" | "sales" | "operations" | "student" | "creator" | "other" | "unknown";
+  work_mode: "fixed" | "flex" | "shift" | "freelance" | "other" | "unknown";
+  chronotype: "morning" | "midday" | "evening" | "mixed" | "unknown";
+  trend_opt_in: boolean;
+  trend_compare_by: CompareDimension[];
+  goal_keyword: string | null;
+  goal_minutes_per_day: number | null;
+};
+
+const DEFAULT_PROFILE: ProfilePreferences = {
+  age_group: "unknown",
+  gender: "unknown",
+  job_family: "unknown",
+  work_mode: "unknown",
+  chronotype: "unknown",
+  trend_opt_in: false,
+  trend_compare_by: ["age_group", "job_family", "work_mode"],
+  goal_keyword: null,
+  goal_minutes_per_day: 90,
+};
+
+const AGE_OPTIONS = [
+  { value: "18_24", ko: "18-24세", en: "18-24" },
+  { value: "25_34", ko: "25-34세", en: "25-34" },
+  { value: "35_44", ko: "35-44세", en: "35-44" },
+  { value: "45_plus", ko: "45세+", en: "45+" },
+  { value: "unknown", ko: "응답 안함", en: "Prefer not to say" },
+] as const;
+
+const GENDER_OPTIONS = [
+  { value: "female", ko: "여성", en: "Female" },
+  { value: "male", ko: "남성", en: "Male" },
+  { value: "nonbinary", ko: "논바이너리", en: "Non-binary" },
+  { value: "prefer_not_to_say", ko: "응답 안함", en: "Prefer not to say" },
+  { value: "unknown", ko: "미설정", en: "Unknown" },
+] as const;
+
+const JOB_OPTIONS = [
+  { value: "engineering", ko: "개발/엔지니어링", en: "Engineering" },
+  { value: "design", ko: "디자인", en: "Design" },
+  { value: "marketing", ko: "마케팅", en: "Marketing" },
+  { value: "sales", ko: "영업", en: "Sales" },
+  { value: "operations", ko: "운영", en: "Operations" },
+  { value: "student", ko: "학생", en: "Student" },
+  { value: "creator", ko: "크리에이터", en: "Creator" },
+  { value: "other", ko: "기타", en: "Other" },
+  { value: "unknown", ko: "미설정", en: "Unknown" },
+] as const;
+
+const WORK_MODE_OPTIONS = [
+  { value: "fixed", ko: "고정근무", en: "Fixed schedule" },
+  { value: "flex", ko: "유연근무", en: "Flexible schedule" },
+  { value: "shift", ko: "교대근무", en: "Shift work" },
+  { value: "freelance", ko: "프리랜서", en: "Freelance" },
+  { value: "other", ko: "기타", en: "Other" },
+  { value: "unknown", ko: "미설정", en: "Unknown" },
+] as const;
+
+const CHRONOTYPE_OPTIONS = [
+  { value: "morning", ko: "아침형", en: "Morning" },
+  { value: "midday", ko: "중간형", en: "Midday" },
+  { value: "evening", ko: "저녁형", en: "Evening" },
+  { value: "mixed", ko: "혼합형", en: "Mixed" },
+  { value: "unknown", ko: "미설정", en: "Unknown" },
+] as const;
+
+const COMPARE_OPTIONS: { value: CompareDimension; ko: string; en: string }[] = [
+  { value: "age_group", ko: "연령대", en: "Age group" },
+  { value: "gender", ko: "성별", en: "Gender" },
+  { value: "job_family", ko: "직군", en: "Job family" },
+  { value: "work_mode", ko: "근무 형태", en: "Work mode" },
+  { value: "chronotype", ko: "활동 시간대", en: "Chronotype" },
+];
+
 export default function PreferencesPage() {
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -195,10 +274,12 @@ export default function PreferencesPage() {
 
   const [locale, setLocale] = React.useState<Locale>("ko");
   const t = MESSAGES[locale];
+  const isKo = locale === "ko";
 
   const [remindersEnabled, setRemindersEnabled] = React.useState(false);
   const [reminderLogTime, setReminderLogTime] = React.useState("21:30");
   const [reminderPlanTime, setReminderPlanTime] = React.useState("08:30");
+  const [profile, setProfile] = React.useState<ProfilePreferences>(DEFAULT_PROFILE);
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission | "unsupported">(
     "unsupported"
   );
@@ -213,6 +294,8 @@ export default function PreferencesPage() {
     if (notificationPermission === "denied") return { label: t.perm_off, variant: "destructive" as const };
     return { label: t.perm_needed, variant: "secondary" as const };
   }, [notificationPermission, t]);
+
+  const compareBySet = React.useMemo(() => new Set(profile.trend_compare_by), [profile.trend_compare_by]);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -239,6 +322,22 @@ export default function PreferencesPage() {
           setRemindersEnabled(Boolean((r as any).enabled));
           if (typeof (r as any).logTime === "string") setReminderLogTime(String((r as any).logTime));
           if (typeof (r as any).planTime === "string") setReminderPlanTime(String((r as any).planTime));
+        }
+
+        try {
+          const prefs = await apiFetch<ProfilePreferences>("/preferences/profile");
+          if (!cancelled) {
+            setProfile({
+              ...DEFAULT_PROFILE,
+              ...prefs,
+              trend_compare_by:
+                Array.isArray(prefs.trend_compare_by) && prefs.trend_compare_by.length
+                  ? prefs.trend_compare_by
+                  : DEFAULT_PROFILE.trend_compare_by,
+            });
+          }
+        } catch {
+          // ignore
         }
       } catch {
         // ignore
@@ -299,6 +398,68 @@ export default function PreferencesPage() {
       });
       if (error) throw error;
       setMessage(t.saved_reminders);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.save_failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function toggleCompareDimension(dim: CompareDimension) {
+    setProfile((prev) => {
+      const exists = prev.trend_compare_by.includes(dim);
+      if (exists) {
+        const next = prev.trend_compare_by.filter((x) => x !== dim);
+        return { ...prev, trend_compare_by: next.length ? next : prev.trend_compare_by };
+      }
+      return { ...prev, trend_compare_by: [...prev.trend_compare_by, dim] };
+    });
+  }
+
+  async function saveProfileSettings() {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const normalizedKeyword = profile.goal_keyword?.trim() || null;
+      const normalizedMinutes = profile.goal_minutes_per_day == null || Number.isNaN(Number(profile.goal_minutes_per_day))
+        ? null
+        : Number(profile.goal_minutes_per_day);
+
+      const payload: ProfilePreferences = {
+        ...profile,
+        goal_keyword: normalizedKeyword,
+        goal_minutes_per_day: normalizedMinutes,
+        trend_compare_by: profile.trend_compare_by.length ? profile.trend_compare_by : DEFAULT_PROFILE.trend_compare_by,
+      };
+
+      const saved = await apiFetch<ProfilePreferences>("/preferences/profile", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setProfile({
+        ...DEFAULT_PROFILE,
+        ...saved,
+        trend_compare_by:
+          Array.isArray(saved.trend_compare_by) && saved.trend_compare_by.length
+            ? saved.trend_compare_by
+            : DEFAULT_PROFILE.trend_compare_by,
+      });
+
+      // Keep legacy goal metadata in sync for backward compatibility with existing clients.
+      const supabase = createClient();
+      await supabase.auth.updateUser({
+        data: {
+          routineiq_goal_v1: normalizedKeyword
+            ? {
+                keyword: normalizedKeyword,
+                minutesPerDay: normalizedMinutes ?? 90,
+              }
+            : null,
+        },
+      });
+
+      setMessage(isKo ? "개인 설정과 코호트 비교 설정을 저장했습니다." : "Profile and cohort settings saved.");
     } catch (err) {
       setError(err instanceof Error ? err.message : t.save_failed);
     } finally {
@@ -431,6 +592,181 @@ export default function PreferencesPage() {
                   {permissionBadge.label}
                 </Badge>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Personal profile + goals */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{isKo ? "개인 설정" : "Personal Profile"}</CardTitle>
+            <CardDescription>
+              {isKo
+                ? "연령대/직군/근무 형태/활동 시간대를 설정하면 더 정확한 맞춤 루틴과 비교 트렌드를 제공합니다."
+                : "Set your profile to improve personalized routine recommendations and cohort comparisons."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "연령대" : "Age group"}</label>
+                <select
+                  value={profile.age_group}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, age_group: e.target.value as ProfilePreferences["age_group"] }))}
+                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                >
+                  {AGE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {isKo ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "성별" : "Gender"}</label>
+                <select
+                  value={profile.gender}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, gender: e.target.value as ProfilePreferences["gender"] }))}
+                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                >
+                  {GENDER_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {isKo ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "직군" : "Job family"}</label>
+                <select
+                  value={profile.job_family}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, job_family: e.target.value as ProfilePreferences["job_family"] }))}
+                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                >
+                  {JOB_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {isKo ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "근무 형태" : "Work mode"}</label>
+                <select
+                  value={profile.work_mode}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, work_mode: e.target.value as ProfilePreferences["work_mode"] }))}
+                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                >
+                  {WORK_MODE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {isKo ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "활동 시간대" : "Chronotype"}</label>
+                <select
+                  value={profile.chronotype}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, chronotype: e.target.value as ProfilePreferences["chronotype"] }))}
+                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                >
+                  {CHRONOTYPE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {isKo ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-[1fr_180px]">
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "루틴 목표 키워드" : "Goal keyword"}</label>
+                <Input
+                  value={profile.goal_keyword ?? ""}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, goal_keyword: e.target.value }))}
+                  placeholder={isKo ? "예: deep work, 운동, 글쓰기" : "e.g. deep work, training, writing"}
+                  className="bg-white/60"
+                />
+              </div>
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "하루 목표(분)" : "Goal minutes/day"}</label>
+                <Input
+                  type="number"
+                  min={10}
+                  max={600}
+                  value={profile.goal_minutes_per_day ?? ""}
+                  onChange={(e) =>
+                    setProfile((prev) => ({
+                      ...prev,
+                      goal_minutes_per_day: e.target.value ? Number(e.target.value) : null,
+                    }))
+                  }
+                  className="bg-white/60"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Cohort trend settings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>{isKo ? "유사 사용자 트렌드 비교" : "Similar Users Trend"}</CardTitle>
+            <CardDescription>
+              {isKo
+                ? "동의한 사용자의 익명 집계 데이터와 비교해 긍정적인 자극을 받습니다. (원본 로그는 공유되지 않습니다)"
+                : "Compare with anonymized aggregate trends from opted-in users. (No raw logs are shared.)"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between rounded-xl border bg-white/50 p-4">
+              <div>
+                <p className="text-sm font-semibold">{isKo ? "코호트 트렌드 비교 사용" : "Enable cohort comparison"}</p>
+                <p className="mt-1 text-xs text-mutedFg">
+                  {isKo
+                    ? "동의 후에만 코호트 지표가 표시됩니다."
+                    : "Cohort metrics are shown only when you opt in."}
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={profile.trend_opt_in}
+                onChange={(e) => setProfile((prev) => ({ ...prev, trend_opt_in: e.target.checked }))}
+                className="h-5 w-5 accent-brand rounded border-gray-300"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-xs font-medium text-mutedFg">{isKo ? "비교 기준 선택" : "Comparison dimensions"}</p>
+              <div className="flex flex-wrap gap-2">
+                {COMPARE_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => toggleCompareDimension(opt.value)}
+                    className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                      compareBySet.has(opt.value)
+                        ? "border-brand bg-brand/10 text-brand"
+                        : "border-border bg-white/60 text-mutedFg hover:border-brand/50"
+                    }`}
+                  >
+                    {isKo ? opt.ko : opt.en}
+                  </button>
+                ))}
+              </div>
+              <p className="text-xs text-mutedFg">
+                {isKo
+                  ? "권장: 2~3개 기준을 선택하면 표본 수와 유사도가 균형을 이룹니다."
+                  : "Recommended: choose 2-3 dimensions to balance sample size and relevance."}
+              </p>
+            </div>
+
+            <div className="pt-1">
+              <Button onClick={saveProfileSettings} disabled={busy}>
+                {isKo ? "개인 설정 저장" : "Save profile settings"}
+              </Button>
             </div>
           </CardContent>
         </Card>

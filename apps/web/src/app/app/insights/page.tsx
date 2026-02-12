@@ -29,6 +29,34 @@ type GoalPrefs = {
   minutesPerDay: number;
 };
 
+type ProfilePrefs = {
+  goal_keyword: string | null;
+  goal_minutes_per_day: number | null;
+};
+
+type CohortTrend = {
+  enabled: boolean;
+  insufficient_sample: boolean;
+  min_sample_size: number;
+  cohort_size: number;
+  active_users: number;
+  window_days: number;
+  compare_by: string[];
+  filters: Record<string, string>;
+  metrics: {
+    focus_window_rate: number | null;
+    rebound_rate: number | null;
+    recovery_buffer_day_rate: number | null;
+    focus_window_numerator: number;
+    focus_window_denominator: number;
+    rebound_numerator: number;
+    rebound_denominator: number;
+    recovery_day_numerator: number;
+    recovery_day_denominator: number;
+  };
+  message: string;
+};
+
 function localYYYYMMDD(d = new Date()) {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
@@ -172,6 +200,8 @@ export default function InsightsPage() {
     deepMinutes: number;
     goal: GoalPrefs | null;
   }>({ daysLogged: 0, daysTotal: 0, totalBlocks: 0, deepMinutes: 0, goal: null });
+  const [cohortTrend, setCohortTrend] = React.useState<CohortTrend | null>(null);
+  const [cohortLoading, setCohortLoading] = React.useState(true);
 
   async function loadTodayLog() {
     try {
@@ -260,20 +290,34 @@ export default function InsightsPage() {
     // Preferences from user metadata (cross-device; avoids localStorage).
     let goal: GoalPrefs | null = null;
     try {
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      const meta = (user?.user_metadata as any) || {};
-      const g = meta["routineiq_goal_v1"];
-      if (g && typeof g === "object") {
-        const kw = typeof (g as any).keyword === "string" ? String((g as any).keyword) : "";
-        const mpd = Number((g as any).minutesPerDay);
-        if (kw.trim() && Number.isFinite(mpd) && mpd > 0) {
-          goal = { keyword: kw.trim(), minutesPerDay: Math.round(mpd) };
-        }
+      const prefs = await apiFetch<ProfilePrefs>("/preferences/profile");
+      if (prefs.goal_keyword && prefs.goal_keyword.trim() && Number.isFinite(Number(prefs.goal_minutes_per_day))) {
+        goal = {
+          keyword: prefs.goal_keyword.trim(),
+          minutesPerDay: Math.round(Number(prefs.goal_minutes_per_day)),
+        };
       }
     } catch {
-      // ignore
+      // ignore and fallback to metadata.
+    }
+
+    if (!goal) {
+      try {
+        const {
+          data: { user }
+        } = await supabase.auth.getUser();
+        const meta = (user?.user_metadata as any) || {};
+        const g = meta["routineiq_goal_v1"];
+        if (g && typeof g === "object") {
+          const kw = typeof (g as any).keyword === "string" ? String((g as any).keyword) : "";
+          const mpd = Number((g as any).minutesPerDay);
+          if (kw.trim() && Number.isFinite(mpd) && mpd > 0) {
+            goal = { keyword: kw.trim(), minutesPerDay: Math.round(mpd) };
+          }
+        }
+      } catch {
+        // ignore
+      }
     }
 
     // Cumulative consistency (so first day can be 100%).
@@ -385,8 +429,20 @@ export default function InsightsPage() {
     });
   }
 
+  async function loadCohortTrend() {
+    setCohortLoading(true);
+    try {
+      const res = await apiFetch<CohortTrend>("/trends/cohort");
+      setCohortTrend(res);
+    } catch {
+      setCohortTrend(null);
+    } finally {
+      setCohortLoading(false);
+    }
+  }
+
   React.useEffect(() => {
-    void Promise.all([loadReport(), loadConsistency(), loadTodayLog()]);
+    void Promise.all([loadReport(), loadConsistency(), loadTodayLog(), loadCohortTrend()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -558,6 +614,88 @@ export default function InsightsPage() {
               <div className="rounded-lg border bg-white/55 p-4">
                 <p className="text-sm font-semibold">{t.scheduleEmptyTitle}</p>
                 <p className="mt-1 text-sm text-mutedFg">{t.scheduleEmptyBody}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-12">
+          <CardHeader>
+            <CardTitle>{isKo ? "나와 유사한 사용자 트렌드" : "Similar Users Trend"}</CardTitle>
+            <CardDescription>
+              {isKo
+                ? "옵트인한 사용자의 익명 집계입니다. 비교 기준은 설정에서 조정할 수 있습니다."
+                : "Anonymized aggregate from opted-in users. You can tune comparison dimensions in Preferences."}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {cohortLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-12 w-full rounded-lg" />
+                <Skeleton className="h-24 w-full rounded-lg" />
+              </div>
+            ) : !cohortTrend ? (
+              <div className="rounded-lg border bg-white/55 p-4">
+                <p className="text-sm">
+                  {isKo ? "코호트 트렌드를 불러오지 못했습니다." : "Failed to load cohort trend."}
+                </p>
+              </div>
+            ) : !cohortTrend.enabled ? (
+              <div className="rounded-lg border bg-white/55 p-4">
+                <p className="text-sm">{cohortTrend.message}</p>
+                <Button asChild variant="outline" size="sm" className="mt-3">
+                  <Link href="/app/preferences">{isKo ? "설정 열기" : "Open Preferences"}</Link>
+                </Button>
+              </div>
+            ) : cohortTrend.insufficient_sample ? (
+              <div className="rounded-lg border bg-white/55 p-4">
+                <p className="text-sm">{cohortTrend.message}</p>
+                <p className="mt-1 text-xs text-mutedFg">
+                  {isKo
+                    ? `현재 표본 ${cohortTrend.cohort_size}명 / 최소 ${cohortTrend.min_sample_size}명`
+                    : `Current sample ${cohortTrend.cohort_size} / minimum ${cohortTrend.min_sample_size}`}
+                </p>
+                <Button asChild variant="outline" size="sm" className="mt-3">
+                  <Link href="/app/preferences">{isKo ? "비교 기준 조정" : "Adjust filters"}</Link>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="text-sm">{cohortTrend.message}</p>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <div className="rounded-lg border bg-white/50 p-3">
+                    <p className="text-xs text-mutedFg">{isKo ? "집중 블록 유지율" : "Focus-window consistency"}</p>
+                    <p className="title-serif mt-1 text-2xl">{cohortTrend.metrics.focus_window_rate ?? 0}%</p>
+                    <p className="mt-1 text-[11px] text-mutedFg">
+                      n={cohortTrend.metrics.focus_window_numerator}/{cohortTrend.metrics.focus_window_denominator}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-white/50 p-3">
+                    <p className="text-xs text-mutedFg">{isKo ? "집중 붕괴 후 복귀율" : "Rebound rate after drop"}</p>
+                    <p className="title-serif mt-1 text-2xl">{cohortTrend.metrics.rebound_rate ?? 0}%</p>
+                    <p className="mt-1 text-[11px] text-mutedFg">
+                      n={cohortTrend.metrics.rebound_numerator}/{cohortTrend.metrics.rebound_denominator}
+                    </p>
+                  </div>
+                  <div className="rounded-lg border bg-white/50 p-3">
+                    <p className="text-xs text-mutedFg">{isKo ? "회복 버퍼 사용일 비율" : "Recovery-buffer day rate"}</p>
+                    <p className="title-serif mt-1 text-2xl">{cohortTrend.metrics.recovery_buffer_day_rate ?? 0}%</p>
+                    <p className="mt-1 text-[11px] text-mutedFg">
+                      n={cohortTrend.metrics.recovery_day_numerator}/{cohortTrend.metrics.recovery_day_denominator}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
+                    {isKo ? `코호트 ${cohortTrend.cohort_size}명` : `${cohortTrend.cohort_size} users`}
+                  </span>
+                  <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
+                    {isKo ? `${cohortTrend.window_days}일 기준` : `${cohortTrend.window_days}-day window`}
+                  </span>
+                  <Button asChild variant="outline" size="sm">
+                    <Link href="/app/preferences">{isKo ? "비교 기준 변경" : "Change dimensions"}</Link>
+                  </Button>
+                </div>
               </div>
             )}
           </CardContent>

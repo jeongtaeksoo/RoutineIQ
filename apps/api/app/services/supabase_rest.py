@@ -150,3 +150,20 @@ class SupabaseRest:
         url = f"{self._rest_base}/{table}"
         resp = await get_http().delete(url, headers=self._headers(bearer_token), params=params)
         self._raise_for_error(resp)
+
+    async def rpc(
+        self,
+        fn_name: str,
+        *,
+        bearer_token: str,
+        params: dict[str, Any] | None = None,
+    ) -> list[dict[str, Any]]:
+        url = f"{self._rest_base}/rpc/{fn_name}"
+        resp = await get_http().post(url, headers=self._headers(bearer_token), json=params or {})
+        self._raise_for_error(resp)
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        if isinstance(data, dict):
+            return [data]
+        return []

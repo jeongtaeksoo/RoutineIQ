@@ -52,6 +52,8 @@ class Settings(BaseSettings):
     free_report_retention_days: int = Field(default=3, alias="FREE_REPORT_RETENTION_DAYS")
     pro_report_retention_days: int = Field(default=30, alias="PRO_REPORT_RETENTION_DAYS")
     analyze_per_minute_limit: int = Field(default=6, alias="ANALYZE_PER_MINUTE_LIMIT")
+    cohort_window_days: int = Field(default=14, alias="COHORT_WINDOW_DAYS")
+    cohort_min_sample_size: int = Field(default=50, alias="COHORT_MIN_SAMPLE_SIZE")
 
     def is_stripe_configured(self) -> bool:
         return bool(
