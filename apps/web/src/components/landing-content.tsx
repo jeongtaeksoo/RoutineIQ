@@ -73,6 +73,8 @@ const COPY: Record<LangKey, {
     closingTitle: string;
     closingSub: string;
     closingCta: string;
+    sponsored: string;
+    adSlot: string;
     privacy: string;
 }> = {
     ko: {
@@ -98,6 +100,8 @@ const COPY: Record<LangKey, {
         closingTitle: "지금, 조용히 시작해보세요",
         closingSub: "가입도 기록도 부담 없이.\n편할 때 돌아오시면 됩니다.",
         closingCta: "무료로 시작하기",
+        sponsored: "스폰서",
+        adSlot: "기업 광고 배너 영역",
         privacy: "개인정보는 루틴 분석에만 사용됩니다. 광고·판매 목적 사용 없음.",
     },
     en: {
@@ -123,6 +127,8 @@ const COPY: Record<LangKey, {
         closingTitle: "Start quietly, today",
         closingSub: "No pressure to sign up or log.\nCome back whenever it feels right.",
         closingCta: "Start for free",
+        sponsored: "Sponsored",
+        adSlot: "Corporate Ad Banner Slot",
         privacy: "Your data is used only for routine analysis. No ads, no selling.",
     },
     ja: {
@@ -148,6 +154,8 @@ const COPY: Record<LangKey, {
         closingTitle: "今日、静かに始めてみてください",
         closingSub: "登録も記録もプレッシャーなく。\n心地よい時に戻ってきてください。",
         closingCta: "無料で始める",
+        sponsored: "スポンサー",
+        adSlot: "企業広告バナー枠",
         privacy: "個人情報はルーティン分析のみに使用します。広告・販売目的での使用はありません。",
     },
     zh: {
@@ -173,6 +181,8 @@ const COPY: Record<LangKey, {
         closingTitle: "今天，安静地开始吧",
         closingSub: "注册和记录都不必有压力。\n感觉对了再回来就好。",
         closingCta: "免费开始",
+        sponsored: "赞助",
+        adSlot: "企业广告位",
         privacy: "个人信息仅用于习惯分析。无广告，不出售数据。",
     },
     es: {
@@ -198,6 +208,8 @@ const COPY: Record<LangKey, {
         closingTitle: "Empieza tranquilamente, hoy",
         closingSub: "Sin presión para registrarte o escribir.\nVuelve cuando te sientas listo.",
         closingCta: "Empezar gratis",
+        sponsored: "Patrocinado",
+        adSlot: "Espacio de Banner Publicitario",
         privacy: "Tus datos se usan solo para analizar rutinas. Sin publicidad ni ventas.",
     },
 };
@@ -208,6 +220,10 @@ export function LandingContent() {
     const [langOpen, setLangOpen] = React.useState(false);
     const [mounted, setMounted] = React.useState(false);
     const t = COPY[lang];
+    const sponsorSlots = React.useMemo(
+        () => [1, 2, 3],
+        []
+    );
 
     React.useEffect(() => {
         setMounted(true);
@@ -220,7 +236,7 @@ export function LandingContent() {
     };
 
     return (
-        <main className="min-h-screen" style={{ background: "linear-gradient(180deg, #fdf9f4 0%, #faf6f0 40%, #f7f3ed 100%)" }}>
+        <main className="min-h-screen pb-32 md:pb-24" style={{ background: "linear-gradient(180deg, #fdf9f4 0%, #faf6f0 40%, #f7f3ed 100%)" }}>
             {/* ─── Nav ─── */}
             <nav className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 md:px-10" style={{ background: "rgba(253,249,244,0.85)", backdropFilter: "blur(12px)" }}>
                 <Link
@@ -437,10 +453,43 @@ export function LandingContent() {
                 </FadeUp>
             </section>
 
-            {/* ─── Footer ─── */}
-            <footer className="px-6 py-8 text-center" style={{ borderTop: "1px solid #ede6dc" }}>
-                <p className="text-xs" style={{ color: "#b0a798" }}>{t.privacy}</p>
-                <p className="mt-2 text-xs" style={{ color: "#cdc4b8" }}>© 2026 RoutineIQ</p>
+            {/* ─── Fixed Footer ─── */}
+            <footer
+                className="fixed bottom-0 left-0 right-0 z-40 border-t px-4 py-3 md:px-6"
+                style={{
+                    borderColor: "#e9dfd2",
+                    background: "rgba(253,249,244,0.94)",
+                    backdropFilter: "blur(10px)",
+                }}
+            >
+                <div className="mx-auto flex max-w-6xl flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <span
+                            className="inline-flex rounded-full px-2 py-1 text-[10px] font-medium uppercase tracking-wide"
+                            style={{ color: "#8d806f", background: "#f4ece1", border: "1px solid #e2d6c8" }}
+                        >
+                            {t.sponsored}
+                        </span>
+                        {sponsorSlots.map((idx) => (
+                            <div
+                                key={idx}
+                                className="inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold"
+                                style={{
+                                    color: "#6f6559",
+                                    border: "1px solid #ddcfbe",
+                                    background: "linear-gradient(180deg, #fffdfa 0%, #f8efe4 100%)",
+                                }}
+                            >
+                                {t.adSlot} {idx}
+                            </div>
+                        ))}
+                    </div>
+
+                    <div className="text-left md:text-right">
+                        <p className="text-[11px]" style={{ color: "#a89f92" }}>{t.privacy}</p>
+                        <p className="mt-0.5 text-[11px]" style={{ color: "#c3b9ab" }}>© 2026 RoutineIQ</p>
+                    </div>
+                </div>
             </footer>
 
             {/* ─── Global animation keyframes ─── */}
