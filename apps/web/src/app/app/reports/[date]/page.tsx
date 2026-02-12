@@ -198,7 +198,7 @@ export default function ReportPage() {
     try {
       const res = await apiFetch<{ date: string; report: AIReport }>(`/analyze`, {
         method: "POST",
-        body: JSON.stringify({ date })
+        body: JSON.stringify({ date, force: true })
       });
       setReport(res.report);
     } catch (err) {

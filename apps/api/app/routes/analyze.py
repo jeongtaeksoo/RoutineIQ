@@ -50,6 +50,94 @@ _LANG_NAME = {
     "zh": "Chinese",
     "es": "Spanish",
 }
+_ROUTINE_LABEL_LIBRARY: dict[str, list[dict[str, str]]] = {
+    "ko": [
+        {"label": "핵심 집중 블록", "duration": "45-90", "use": "중요 결과물 생성"},
+        {"label": "실행 블록", "duration": "30-60", "use": "우선순위 실행"},
+        {"label": "조정/커뮤니케이션 블록", "duration": "20-45", "use": "협업/응답 처리"},
+        {"label": "회복 버퍼", "duration": "5-15", "use": "집중 회복"},
+        {"label": "마무리 블록", "duration": "15-30", "use": "정리 및 다음 준비"},
+    ],
+    "en": [
+        {"label": "Focus Window", "duration": "45-90", "use": "deep output work"},
+        {"label": "Execution Window", "duration": "30-60", "use": "priority execution"},
+        {"label": "Coordination Window", "duration": "20-45", "use": "communication/collab"},
+        {"label": "Recovery Buffer", "duration": "5-15", "use": "cognitive reset"},
+        {"label": "Wrap-up Window", "duration": "15-30", "use": "close and prepare"},
+    ],
+    "ja": [
+        {"label": "集中ウィンドウ", "duration": "45-90", "use": "重要アウトプット"},
+        {"label": "実行ウィンドウ", "duration": "30-60", "use": "優先実行"},
+        {"label": "調整/コミュニケーション枠", "duration": "20-45", "use": "連絡と調整"},
+        {"label": "回復バッファ", "duration": "5-15", "use": "集中回復"},
+        {"label": "締めウィンドウ", "duration": "15-30", "use": "整理と準備"},
+    ],
+    "zh": [
+        {"label": "专注窗口", "duration": "45-90", "use": "核心产出"},
+        {"label": "执行窗口", "duration": "30-60", "use": "优先执行"},
+        {"label": "协调沟通窗口", "duration": "20-45", "use": "协作与沟通"},
+        {"label": "恢复缓冲", "duration": "5-15", "use": "恢复专注"},
+        {"label": "收尾窗口", "duration": "15-30", "use": "整理与准备"},
+    ],
+    "es": [
+        {"label": "Ventana de Enfoque", "duration": "45-90", "use": "trabajo profundo"},
+        {"label": "Ventana de Ejecucion", "duration": "30-60", "use": "ejecucion prioritaria"},
+        {"label": "Ventana de Coordinacion", "duration": "20-45", "use": "comunicacion/colaboracion"},
+        {"label": "Buffer de Recuperacion", "duration": "5-15", "use": "reinicio cognitivo"},
+        {"label": "Ventana de Cierre", "duration": "15-30", "use": "cerrar y preparar"},
+    ],
+}
+_GENERIC_GOAL_BY_LOCALE = {
+    "ko": "블록 시작 시 가장 중요한 1가지를 고르고, 종료 시 확인 가능한 결과물 1개를 남기세요.",
+    "en": "Pick one highest-impact task at block start, and finish with one observable output.",
+    "ja": "開始時に最重要タスクを1つ選び、終了時に確認できる成果を1つ残してください。",
+    "zh": "开始时只选1个最高优先任务，并在结束时留下1个可确认的产出。",
+    "es": "Al iniciar, elige una sola tarea de mayor impacto y cierra con un resultado observable.",
+}
+_GENERIC_COACH_HINTS = {
+    "ko": ("짧은 휴식", "스트레칭", "에너지를 회복", "힘내", "화이팅"),
+    "en": ("take a short break", "stretch", "you can do this", "keep going"),
+    "ja": ("短い休憩", "ストレッチ", "頑張って"),
+    "zh": ("短暂休息", "拉伸", "加油"),
+    "es": ("descanso corto", "estiramiento", "animo"),
+}
+_DEVIATION_LABELS = {
+    "ko": {
+        "NO_PREVIOUS_PLAN": "전일 계획 데이터가 없어 비교 기준이 없습니다.",
+        "NO_EXECUTION_MATCH": "계획과 실제 실행이 거의 겹치지 않았습니다.",
+        "LOW_ADHERENCE": "계획 대비 실행 일치율이 낮았습니다.",
+        "LARGE_TIME_SHIFT": "시작 시간이 계획보다 크게 밀렸습니다.",
+        "MINOR_DRIFT": "작은 시간 이동은 있었지만 전반 흐름은 유지됐습니다.",
+    },
+    "en": {
+        "NO_PREVIOUS_PLAN": "No previous plan data to compare.",
+        "NO_EXECUTION_MATCH": "Actual execution barely overlapped with the plan.",
+        "LOW_ADHERENCE": "Plan adherence was low.",
+        "LARGE_TIME_SHIFT": "Start times shifted far from the plan.",
+        "MINOR_DRIFT": "Minor timing drift, overall structure remained.",
+    },
+    "ja": {
+        "NO_PREVIOUS_PLAN": "前日の計画データがないため比較できません。",
+        "NO_EXECUTION_MATCH": "計画と実行の重なりがほとんどありませんでした。",
+        "LOW_ADHERENCE": "計画に対する実行一致率が低かったです。",
+        "LARGE_TIME_SHIFT": "開始時刻が計画より大きくずれました。",
+        "MINOR_DRIFT": "小さな時間ずれはあるが全体の流れは維持されました。",
+    },
+    "zh": {
+        "NO_PREVIOUS_PLAN": "没有前一天计划数据可供比较。",
+        "NO_EXECUTION_MATCH": "实际执行与计划几乎没有重叠。",
+        "LOW_ADHERENCE": "计划执行一致率偏低。",
+        "LARGE_TIME_SHIFT": "开始时间与计划相比偏移较大。",
+        "MINOR_DRIFT": "存在轻微时间漂移，但整体结构保持。",
+    },
+    "es": {
+        "NO_PREVIOUS_PLAN": "No hay plan previo para comparar.",
+        "NO_EXECUTION_MATCH": "La ejecucion real casi no coincidio con el plan.",
+        "LOW_ADHERENCE": "La adherencia al plan fue baja.",
+        "LARGE_TIME_SHIFT": "Los inicios se desplazaron mucho frente al plan.",
+        "MINOR_DRIFT": "Hubo pequenas variaciones, pero la estructura general se mantuvo.",
+    },
+}
 
 
 def _normalize_idempotency_key(value: str | None) -> str | None:
@@ -80,6 +168,262 @@ def _public_model_name(value: Any) -> str | None:
     if not isinstance(value, str) or not value.strip():
         return None
     return _MODEL_LOCALE_RE.sub("", value.strip())
+
+
+def _label_library(locale: str) -> list[dict[str, str]]:
+    return _ROUTINE_LABEL_LIBRARY.get(locale, _ROUTINE_LABEL_LIBRARY["en"])
+
+
+def _activity_blacklist(activity_log: dict[str, Any] | None) -> list[str]:
+    raw_entries = activity_log.get("entries") if isinstance(activity_log, dict) else None
+    entries = raw_entries if isinstance(raw_entries, list) else []
+    phrases: list[str] = []
+    seen: set[str] = set()
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        act = entry.get("activity")
+        if not isinstance(act, str):
+            continue
+        norm = re.sub(r"\s+", " ", act.strip()).lower()
+        if len(norm) < 2:
+            continue
+        if norm in seen:
+            continue
+        seen.add(norm)
+        phrases.append(norm)
+        if len(phrases) >= 24:
+            break
+    return phrases
+
+
+def _pick_label(
+    *,
+    locale: str,
+    labels: list[str],
+    idx: int,
+    start: Any,
+    end: Any,
+) -> str:
+    if not labels:
+        return "Focus Window"
+    dur = _duration_minutes(start, end)
+    if dur <= 20:
+        for x in labels:
+            lx = x.lower()
+            if any(k in lx for k in ("buffer", "회복", "バッファ", "缓冲", "recuper")):
+                return x
+    if idx == 0:
+        for x in labels:
+            lx = x.lower()
+            if any(k in lx for k in ("focus", "집중", "集中", "专注", "enfoque")):
+                return x
+    if idx >= 1 and dur >= 40:
+        for x in labels:
+            lx = x.lower()
+            if any(k in lx for k in ("execution", "실행", "実行", "执行", "ejecucion")):
+                return x
+    if idx >= 1:
+        for x in labels:
+            lx = x.lower()
+            if any(k in lx for k in ("coord", "커뮤니케이션", "コミュ", "协调", "coordin")):
+                return x
+    for x in labels:
+        lx = x.lower()
+        if any(k in lx for k in ("wrap", "마무리", "締め", "收尾", "cierre")):
+            return x
+    return labels[min(idx, len(labels) - 1)]
+
+
+def _normalize_tomorrow_routine(
+    *,
+    report_dict: dict[str, Any],
+    locale: str,
+    activity_blacklist: list[str],
+) -> dict[str, Any]:
+    routine = report_dict.get("tomorrow_routine")
+    if not isinstance(routine, list):
+        return report_dict
+
+    library = _label_library(locale)
+    allowed_labels = [x.get("label", "") for x in library if isinstance(x, dict) and isinstance(x.get("label"), str)]
+    allowed_set = {x.strip().lower() for x in allowed_labels if x.strip()}
+    bl = {x.strip().lower() for x in activity_blacklist if isinstance(x, str)}
+    generic_goal = _GENERIC_GOAL_BY_LOCALE.get(locale, _GENERIC_GOAL_BY_LOCALE["en"])
+
+    normalized: list[dict[str, Any]] = []
+    for idx, item in enumerate(routine):
+        if not isinstance(item, dict):
+            continue
+        row = dict(item)
+        act = str(row.get("activity") or "").strip()
+        act_norm = re.sub(r"\s+", " ", act.lower())
+        contains_blacklisted = any(b and b in act_norm for b in bl)
+        if (not act) or (act_norm not in allowed_set) or contains_blacklisted:
+            row["activity"] = _pick_label(
+                locale=locale,
+                labels=allowed_labels,
+                idx=idx,
+                start=row.get("start"),
+                end=row.get("end"),
+            )
+        goal = str(row.get("goal") or "").strip()
+        goal_norm = re.sub(r"\s+", " ", goal.lower())
+        goal_has_blacklisted = any(b and b in goal_norm for b in bl)
+        if (not goal) or goal_has_blacklisted:
+            row["goal"] = generic_goal
+        normalized.append(row)
+
+    report_dict["tomorrow_routine"] = normalized
+    return report_dict
+
+
+def _parse_ts(value: Any) -> datetime | None:
+    if not isinstance(value, str):
+        return None
+    raw = value.strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+
+
+def _is_report_stale(*, report_updated_at: Any, log_updated_at: Any) -> bool:
+    r_ts = _parse_ts(report_updated_at)
+    l_ts = _parse_ts(log_updated_at)
+    if l_ts is None:
+        return False
+    if r_ts is None:
+        return True
+    return l_ts > r_ts
+
+
+def _deviation_label(locale: str, code: str) -> str:
+    table = _DEVIATION_LABELS.get(locale, _DEVIATION_LABELS["en"])
+    return table.get(code, code)
+
+
+def _normalize_yesterday_plan_vs_actual(
+    *,
+    report_dict: dict[str, Any],
+    locale: str,
+    computed_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    raw = report_dict.get("yesterday_plan_vs_actual")
+    obj = raw if isinstance(raw, dict) else {}
+    comparison_note = str(obj.get("comparison_note") or "").strip()
+    top_deviation = str(obj.get("top_deviation") or "").strip()
+
+    adherence = computed_metrics.get("plan_adherence") if isinstance(computed_metrics, dict) else None
+    adherence_obj = adherence if isinstance(adherence, dict) else {}
+    adherence_pct = adherence_obj.get("adherence_pct")
+    avg_shift = adherence_obj.get("avg_start_shift_minutes")
+    code = str(adherence_obj.get("top_deviation_code") or "").strip()
+
+    if not comparison_note:
+        if isinstance(adherence_pct, (int, float)):
+            if locale == "ko":
+                note = f"전일 계획 대비 실행 일치율 {float(adherence_pct):.1f}%."
+                if isinstance(avg_shift, (int, float)):
+                    note += f" 시작 시간 평균 편차 {float(avg_shift):.0f}분."
+                comparison_note = note
+            else:
+                note = f"Plan adherence was {float(adherence_pct):.1f}%."
+                if isinstance(avg_shift, (int, float)):
+                    note += f" Average start-time shift: {float(avg_shift):.0f} min."
+                comparison_note = note
+        else:
+            comparison_note = _deviation_label(locale, code or "NO_PREVIOUS_PLAN")
+
+    if (not top_deviation) or re.fullmatch(r"[A-Z0-9_]+", top_deviation):
+        top_deviation = _deviation_label(locale, code or top_deviation or "NO_PREVIOUS_PLAN")
+
+    report_dict["yesterday_plan_vs_actual"] = {
+        "comparison_note": comparison_note,
+        "top_deviation": top_deviation,
+    }
+    return report_dict
+
+
+def _is_generic_coach_one_liner(*, text: str, locale: str) -> bool:
+    norm = re.sub(r"\s+", " ", text.strip()).lower()
+    if len(norm) < 12:
+        return True
+    hints = _GENERIC_COACH_HINTS.get(locale, _GENERIC_COACH_HINTS["en"])
+    return any(h.lower() in norm for h in hints)
+
+
+def _fallback_coach_one_liner(*, locale: str, computed_metrics: dict[str, Any]) -> str:
+    flags = computed_metrics.get("flags") if isinstance(computed_metrics, dict) else {}
+    flags_obj = flags if isinstance(flags, dict) else {}
+    peaks = computed_metrics.get("peak_candidates") if isinstance(computed_metrics, dict) else []
+    peak_rows = peaks if isinstance(peaks, list) else []
+
+    peak_start = ""
+    peak_end = ""
+    if peak_rows and isinstance(peak_rows[0], dict):
+        peak_start = str(peak_rows[0].get("start") or "").strip()
+        peak_end = str(peak_rows[0].get("end") or "").strip()
+
+    if locale == "ko":
+        if peak_start and peak_end and flags_obj.get("high_switching_risk"):
+            return f"내일 {peak_start}-{peak_end} 블록은 한 가지 일만 하고, 전환 전 5분 리셋으로 흐름을 지키세요."
+        if peak_start and peak_end and flags_obj.get("weak_focus_day"):
+            return f"내일 {peak_start}-{peak_end}에 핵심 집중 블록 1개(45~60분)를 먼저 확보하고, 직후 10분 회복 버퍼를 넣어보세요."
+        if peak_start and peak_end:
+            return f"내일 {peak_start}-{peak_end} 피크 시간을 먼저 보호하고, 시작 전에 '이번 블록에서 끝낼 결과 1개'를 정하세요."
+        return "내일 첫 60분을 핵심 집중 블록으로 고정하고, 집중이 끊기면 5분 리셋 후 다시 시작하세요."
+
+    if peak_start and peak_end and flags_obj.get("high_switching_risk"):
+        return f"Protect {peak_start}-{peak_end} for one task only, and add a 5-min reset before each context switch."
+    if peak_start and peak_end and flags_obj.get("weak_focus_day"):
+        return f"Lock one 45-60 min focus block at {peak_start}-{peak_end}, then add a 10-min recovery buffer right after."
+    if peak_start and peak_end:
+        return f"Protect your {peak_start}-{peak_end} peak window first, and define one observable output before you start."
+    return "Anchor your first 60 minutes tomorrow as one focus block, and use a 5-minute reset when your flow breaks."
+
+
+def _normalize_coach_one_liner(
+    *,
+    report_dict: dict[str, Any],
+    locale: str,
+    computed_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    current = str(report_dict.get("coach_one_liner") or "").strip()
+    if (not current) or _is_generic_coach_one_liner(text=current, locale=locale):
+        report_dict["coach_one_liner"] = _fallback_coach_one_liner(
+            locale=locale,
+            computed_metrics=computed_metrics,
+        )
+    return report_dict
+
+
+def _postprocess_report(
+    *,
+    report_dict: dict[str, Any],
+    locale: str,
+    activity_blacklist: list[str],
+    computed_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    out = dict(report_dict)
+    out = _normalize_tomorrow_routine(
+        report_dict=out,
+        locale=locale,
+        activity_blacklist=activity_blacklist,
+    )
+    out = _normalize_yesterday_plan_vs_actual(
+        report_dict=out,
+        locale=locale,
+        computed_metrics=computed_metrics,
+    )
+    out = _normalize_coach_one_liner(
+        report_dict=out,
+        locale=locale,
+        computed_metrics=computed_metrics,
+    )
+    return out
 
 
 def _parse_hhmm(value: Any) -> int | None:
@@ -387,13 +731,18 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- If PlanAdherence < 60, mention a concrete deviation cause in yesterday_plan_vs_actual.\n"
         "- Tomorrow routine must include realistic block sizes (30-120 minutes) and at least one buffer (5-15 minutes) near known break triggers.\n"
         "- Tomorrow routine must be feasible: no overlapping blocks, no impossible schedules, and no more than one major change from today's pattern at a time.\n"
-        "- In tomorrow_routine.activity, use block-type labels (e.g., Focus Window, Coordination Window, Recovery Buffer, Wrap-up), not guessed project/task names.\n"
+        "- In tomorrow_routine.activity, use only abstract block-type labels from the provided allowed label catalog; never output concrete project/task names.\n"
         "- In tomorrow_routine.goal, tell the user how to choose/execute the real task inside the block (decision rule), not a fixed predicted task.\n"
         "- start/end in tomorrow_routine are guidance windows anchored to observed rhythm and triggers, not certainty claims about tomorrow.\n"
         "- Do not fabricate tomorrow-specific meetings/deadlines unless explicitly provided in user data.\n"
         "- Every failure_patterns.fix and if_then_rules.then must be directly executable within 5-20 minutes.\n"
         "- Build if_then_rules as implementation intentions (cue -> response): IF must name a concrete cue/time/state, THEN must name one observable action.\n"
+        "- If switch risk is high, include at least one explicit transition-reset action (2-5 minutes) to reduce attentional residue before the next block.\n"
+        "- If low_focus_windows exist, include at least one micro-recovery action (5-10 minutes) before resuming work.\n"
+        "- coach_one_liner must be one specific next action tied to evidence (time window/trigger/metric), never generic encouragement.\n"
+        "- yesterday_plan_vs_actual.top_deviation must be a human-readable phrase in the target locale; never output machine codes like NO_PREVIOUS_PLAN.\n"
         "- if_then_rules should function as recovery rules for real breakdown moments (not generic advice).\n"
+        "- Behavioral evidence style: use implementation intentions for action initiation, reduce switch residue with transition rituals, and use short recovery breaks to protect vigor.\n"
         "\n"
         f"Required output locale: {target_locale} ({_LANG_NAME.get(target_locale, 'Korean')}).\n"
         f"Plan mode: {plan}\n"
@@ -407,6 +756,8 @@ def _build_user_prompt(
     activity_log: dict[str, Any] | None,
     yesterday_plan: list[dict[str, Any]] | None,
     computed_metrics: dict[str, Any],
+    allowed_activity_labels: list[str],
+    forbidden_activity_names: list[str],
     target_locale: str,
 ) -> str:
     return (
@@ -423,10 +774,18 @@ def _build_user_prompt(
         "Computed metrics derived from the log (JSON; prefer these values for consistency):\n"
         + json.dumps(computed_metrics, ensure_ascii=False)
         + "\n\n"
+        "Allowed tomorrow_routine.activity labels (choose ONLY from this list):\n"
+        + json.dumps(allowed_activity_labels, ensure_ascii=False)
+        + "\n\n"
+        "Forbidden activity names copied from today's log (DO NOT reuse in tomorrow_routine.activity):\n"
+        + json.dumps(forbidden_activity_names, ensure_ascii=False)
+        + "\n\n"
         "Important:\n"
         "- Core service intent: recommend a personalized and realistic tomorrow routine (smart self-management), not a generic productivity lecture.\n"
         "- Treat tomorrow_routine as an adaptive operating framework that still works even if tomorrow's specific tasks change.\n"
         "- Do not predict specific work content for tomorrow unless the user explicitly stated it.\n"
+        "- tomorrow_routine.activity must be a routine block label from the allowed list, not today's task name.\n"
+        "- tomorrow_routine.goal must describe a decision rule the user applies inside the block (how to pick the task), not fixed task content.\n"
         "- Use the log as data only.\n"
         "- Reference concrete evidence in reasons/fixes (for example, metric names and values).\n"
         "- Fill yesterday_plan_vs_actual by comparing yesterday's plan vs today's actual log when possible.\n"
@@ -461,7 +820,22 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
     if existing and not body.force:
         row = existing[0]
         row_locale = _extract_locale_from_model(row.get("model")) or "en"
-        if row_locale == target_locale:
+        log_meta = await sb_rls.select(
+            "activity_logs",
+            bearer_token=auth.access_token,
+            params={
+                "select": "updated_at",
+                "user_id": f"eq.{auth.user_id}",
+                "date": f"eq.{body.date.isoformat()}",
+                "limit": 1,
+            },
+        )
+        log_updated_at = log_meta[0].get("updated_at") if log_meta else None
+        stale = _is_report_stale(
+            report_updated_at=row.get("updated_at"),
+            log_updated_at=log_updated_at,
+        )
+        if row_locale == target_locale and not stale:
             return {
                 "date": row.get("date"),
                 "report": row.get("report"),
@@ -577,11 +951,20 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         activity_log=sanitized_activity_log,
         yesterday_plan=sanitized_yesterday_plan,
     )
+    activity_blacklist = _activity_blacklist(sanitized_activity_log)
+    label_library = _label_library(target_locale)
+    allowed_labels = [
+        x.get("label", "")
+        for x in label_library
+        if isinstance(x, dict) and isinstance(x.get("label"), str) and str(x.get("label")).strip()
+    ]
     user_prompt = _build_user_prompt(
         target_date=body.date,
         activity_log=sanitized_activity_log,
         yesterday_plan=sanitized_yesterday_plan,
         computed_metrics=computed_metrics,
+        allowed_activity_labels=allowed_labels,
+        forbidden_activity_names=activity_blacklist,
         target_locale=target_locale,
     )
 
@@ -621,7 +1004,12 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
 
     try:
         # Persist report. Primary path uses service-role; fallback uses user-scoped RLS path.
-        report_dict = report.model_dump(by_alias=True)
+        report_dict = _postprocess_report(
+            report_dict=report.model_dump(by_alias=True),
+            locale=target_locale,
+            activity_blacklist=activity_blacklist,
+            computed_metrics=computed_metrics,
+        )
         report_row = {
             "user_id": auth.user_id,
             "date": body.date.isoformat(),

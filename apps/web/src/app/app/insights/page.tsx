@@ -208,7 +208,7 @@ export default function InsightsPage() {
     try {
       const res = await apiFetch<{ date: string; report: AIReport; cached: boolean }>(`/analyze`, {
         method: "POST",
-        body: JSON.stringify({ date: today })
+        body: JSON.stringify({ date: today, force: true })
       });
       setReport(res.report);
       await loadConsistency();
@@ -239,7 +239,7 @@ export default function InsightsPage() {
 
       const res = await apiFetch<{ date: string; report: AIReport; cached: boolean }>(`/analyze`, {
         method: "POST",
-        body: JSON.stringify({ date: today })
+        body: JSON.stringify({ date: today, force: true })
       });
       setReport(res.report);
       await loadConsistency();

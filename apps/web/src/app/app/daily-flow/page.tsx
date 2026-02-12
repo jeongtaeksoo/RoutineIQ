@@ -381,7 +381,7 @@ export default function DailyFlowPage() {
     }
     setSaving(false); setAnalyzing(true);
     try {
-      await apiFetch(`/analyze`, { method: "POST", body: JSON.stringify({ date }) });
+      await apiFetch(`/analyze`, { method: "POST", body: JSON.stringify({ date, force: true }) });
       router.push(`/app/reports/${date}`);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
@@ -434,7 +434,7 @@ export default function DailyFlowPage() {
   async function analyzeNow() {
     setError(null); setMessage(null); setAnalyzing(true);
     try {
-      await apiFetch(`/analyze`, { method: "POST", body: JSON.stringify({ date }) });
+      await apiFetch(`/analyze`, { method: "POST", body: JSON.stringify({ date, force: true }) });
       router.push(`/app/reports/${date}`);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
