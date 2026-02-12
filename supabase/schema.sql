@@ -474,6 +474,19 @@ on public.ai_reports
 for select
 using (user_id = auth.uid());
 
+drop policy if exists ai_reports_insert_own on public.ai_reports;
+create policy ai_reports_insert_own
+on public.ai_reports
+for insert
+with check (user_id = auth.uid());
+
+drop policy if exists ai_reports_update_own on public.ai_reports;
+create policy ai_reports_update_own
+on public.ai_reports
+for update
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
 drop policy if exists ai_reports_delete_own on public.ai_reports;
 create policy ai_reports_delete_own
 on public.ai_reports
@@ -500,6 +513,25 @@ for select
 using (public.is_admin());
 
 -- USAGE_EVENTS policies (admin read only; server writes)
+drop policy if exists usage_events_select_own on public.usage_events;
+create policy usage_events_select_own
+on public.usage_events
+for select
+using (user_id = auth.uid());
+
+drop policy if exists usage_events_insert_own on public.usage_events;
+create policy usage_events_insert_own
+on public.usage_events
+for insert
+with check (user_id = auth.uid());
+
+drop policy if exists usage_events_update_own on public.usage_events;
+create policy usage_events_update_own
+on public.usage_events
+for update
+using (user_id = auth.uid())
+with check (user_id = auth.uid());
+
 drop policy if exists usage_events_select_admin on public.usage_events;
 create policy usage_events_select_admin
 on public.usage_events

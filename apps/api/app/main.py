@@ -91,10 +91,10 @@ async def supabase_rest_error_handler(request: Request, exc: SupabaseRestError):
         }
         status_code = 503
     elif is_rls_write_violation:
-        # Common causes: invalid service role key or missing RLS write policy for user-scoped fallback.
+        # Common causes: missing RLS write policy or invalid/expired service role key.
         detail = {
-            "message": "서버가 Supabase에 쓰기 권한을 얻지 못해 저장에 실패했습니다.",
-            "hint": "apps/api/.env의 SUPABASE_SERVICE_ROLE_KEY 확인 후 서버를 재시작하고, ai_reports/usage_events의 RLS 정책(user_id=auth.uid())도 함께 확인하세요.",
+            "message": "Supabase 쓰기 권한(RLS) 문제로 저장에 실패했습니다.",
+            "hint": "Supabase SQL Editor에서 supabase/patches/2026-02-12_rls_write_fallback_policies.sql 실행 후 다시 시도하세요. 배포 환경의 SUPABASE_SERVICE_ROLE_KEY도 최신값인지 확인하세요.",
             "code": exc.code or "42501",
         }
         status_code = 503
