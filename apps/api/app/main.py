@@ -51,6 +51,8 @@ app.add_middleware(
             "http://127.0.0.1:3000",
         }
     ),
+    # Allow Vercel preview deployments (e.g. *.vercel.app) in addition to explicit origins.
+    allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

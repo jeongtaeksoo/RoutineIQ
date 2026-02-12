@@ -133,7 +133,14 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   // - `NEXT_PUBLIC_API_BASE_URL` may be `http://localhost:8000` or `http://localhost:8000/api` (either is fine).
   // - Callers should pass endpoint paths like `/logs`, `/reports?date=...`, `/stripe/status`, etc.
   // - We will always produce a final URL under `${origin}/api/...` with no duplicate `/api/api`.
-  const origin = getApiOrigin();
+  let origin = getApiOrigin();
+  // Last-resort safety: a deployed browser must never call localhost.
+  if (typeof window !== "undefined") {
+    const browserHost = window.location.hostname.toLowerCase();
+    if (!isBrowserLocalhost(browserHost) && isLocalOrigin(origin)) {
+      origin = getRuntimeApiFallback() || "https://api.rutineiq.com";
+    }
+  }
   const url = `${origin}${normalizeApiPath(path)}`;
 
   const supabase = createClient();
