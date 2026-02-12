@@ -91,6 +91,8 @@ export default function ReportPage() {
         analyzeNow: "리포트 만들기",
         previewTitle: "리포트 예시",
         previewDesc: "분석이 완료되면 나만의 리포트가 만들어집니다.",
+        coachOneLiner: "오늘의 한 마디",
+        coachOneLinerDesc: "지금 바로 실행할 한 가지 행동입니다.",
         dayReview: "오늘의 요약",
         dayReviewDesc: "하루의 흐름과 코치의 조언.",
         comparisonNote: "비교 메모",
@@ -133,6 +135,8 @@ export default function ReportPage() {
       analyzeNow: "Start analyze",
       previewTitle: "What you’ll get",
       previewDesc: "Sample preview (personalized after analyze).",
+      coachOneLiner: "Coach Tip of the Day",
+      coachOneLinerDesc: "One action you can do right now.",
       dayReview: "Your Day in Review",
       dayReviewDesc: "Summary + plan vs actual (when available).",
       comparisonNote: "Comparison Note",
@@ -306,6 +310,16 @@ export default function ReportPage() {
 
       {!loading && report ? (
         <div className="grid gap-4 lg:grid-cols-12">
+          <Card className="lg:col-span-12">
+            <CardHeader>
+              <CardTitle>{t.coachOneLiner}</CardTitle>
+              <CardDescription>{t.coachOneLinerDesc}</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <p className="title-serif text-2xl leading-snug">{report.coach_one_liner}</p>
+            </CardContent>
+          </Card>
+
           <Card className="lg:col-span-12">
             <CardHeader>
               <CardTitle>{t.dayReview}</CardTitle>

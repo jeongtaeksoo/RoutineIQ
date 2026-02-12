@@ -80,6 +80,7 @@ export default function InsightsPage() {
         breakTriggers: "집중을 방해하는 것들",
         breakTriggersDesc: "나도 모르게 흐름이 끊기는 순간들.",
         breakTriggersEmpty: "분석을 실행하면, 흐름을 깨는 패턴이 표시됩니다.",
+        fixLabel: "해결안",
         consistency: "꾸준함 점수",
         consistencyDesc: "하루를 기록하며 나를 돌본 날들입니다. (최근 7일)",
         daysLogged: "기록한 날",
@@ -91,8 +92,8 @@ export default function InsightsPage() {
         deepMinutes7d: "몰입한 시간 (7일)",
         emptyMetricsTitle: "데이터가 쌓이고 있어요",
         emptyMetricsBody: "오늘 첫 기록을 남겨보세요. 3일만 쌓여도 내 패턴이 보이기 시작합니다.",
-        detailsTitle: "더 자세히 보기",
-        detailsSubtitle: "집중 시간, 방해 요인, 꾸준함 그래프",
+        detailsTitle: "주간 지표 더보기",
+        detailsSubtitle: "꾸준함 그래프와 주간 요약",
       };
     }
     return {
@@ -134,6 +135,7 @@ export default function InsightsPage() {
       breakTriggers: "Focus Break Triggers",
       breakTriggersDesc: "Patterns that reliably derail you.",
       breakTriggersEmpty: "Run Analyze to identify patterns that break your flow.",
+      fixLabel: "Fix",
       consistency: "Consistency Score",
       consistencyDesc: "How often you logged your day (since you started). Chart shows last 7 days.",
       daysLogged: "Days logged",
@@ -145,8 +147,8 @@ export default function InsightsPage() {
       deepMinutes7d: "Deep Work Minutes (7d)",
       emptyMetricsTitle: "Building your baseline",
       emptyMetricsBody: "Your first log starts the score. After 3 days, patterns show up fast.",
-      detailsTitle: "Show detailed insights",
-      detailsSubtitle: "Peak hours, triggers, consistency, weekly snapshot",
+      detailsTitle: "More weekly metrics",
+      detailsSubtitle: "Consistency chart and weekly snapshot",
     };
   }, [isKo]);
 
@@ -547,6 +549,63 @@ export default function InsightsPage() {
             )}
           </CardContent>
         </Card>
+
+        <Card className="lg:col-span-6">
+          <CardHeader>
+            <CardTitle>{t.peakHours}</CardTitle>
+            <CardDescription>{t.peakHoursDesc}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {reportLoading ? (
+              <p className="text-sm text-mutedFg">{t.loading}</p>
+            ) : report?.productivity_peaks?.length ? (
+              <div className="space-y-3">
+                {report.productivity_peaks.slice(0, 4).map((p, idx) => (
+                  <div key={idx} className="rounded-lg border bg-white/50 p-3">
+                    <p className="text-sm font-semibold">
+                      {p.start}–{p.end}
+                    </p>
+                    <p className="mt-1 text-xs text-mutedFg">{p.reason}</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-white/55 p-4">
+                <p className="text-sm text-mutedFg">{t.peakHoursEmpty}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card className="lg:col-span-6">
+          <CardHeader>
+            <CardTitle>{t.breakTriggers}</CardTitle>
+            <CardDescription>{t.breakTriggersDesc}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {reportLoading ? (
+              <p className="text-sm text-mutedFg">{t.loading}</p>
+            ) : report?.failure_patterns?.length ? (
+              <div className="space-y-3">
+                {report.failure_patterns.slice(0, 3).map((f, idx) => (
+                  <div key={idx} className="rounded-lg border bg-white/50 p-3">
+                    <p className="text-sm font-semibold">{f.pattern}</p>
+                    <p className="mt-1 text-xs text-mutedFg">
+                      {isKo ? "트리거" : "Trigger"}: {f.trigger}
+                    </p>
+                    <p className="mt-1 text-xs text-mutedFg">
+                      {t.fixLabel}: {f.fix}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="rounded-lg border bg-white/55 p-4">
+                <p className="text-sm text-mutedFg">{t.breakTriggersEmpty}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
 
       <details className="group rounded-2xl border bg-white/55 p-4 shadow-soft">
@@ -566,61 +625,7 @@ export default function InsightsPage() {
         </summary>
 
         <div className="mt-4 grid gap-4 lg:grid-cols-12">
-          <Card className="lg:col-span-4">
-            <CardHeader>
-              <CardTitle>{t.peakHours}</CardTitle>
-              <CardDescription>{t.peakHoursDesc}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {reportLoading ? (
-                <p className="text-sm text-mutedFg">{t.loading}</p>
-              ) : report?.productivity_peaks?.length ? (
-                <div className="space-y-3">
-                  {report.productivity_peaks.slice(0, 4).map((p, idx) => (
-                    <div key={idx} className="rounded-lg border bg-white/50 p-3">
-                      <p className="text-sm font-semibold">
-                        {p.start}–{p.end}
-                      </p>
-                      <p className="mt-1 text-xs text-mutedFg">{p.reason}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border bg-white/55 p-4">
-                  <p className="text-sm text-mutedFg">{t.peakHoursEmpty}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-4">
-            <CardHeader>
-              <CardTitle>{t.breakTriggers}</CardTitle>
-              <CardDescription>{t.breakTriggersDesc}</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {reportLoading ? (
-                <p className="text-sm text-mutedFg">{t.loading}</p>
-              ) : report?.failure_patterns?.length ? (
-                <div className="space-y-3">
-                  {report.failure_patterns.slice(0, 3).map((f, idx) => (
-                    <div key={idx} className="rounded-lg border bg-white/50 p-3">
-                      <p className="text-sm font-semibold">{f.pattern}</p>
-                      <p className="mt-1 text-xs text-mutedFg">
-                        {isKo ? "트리거" : "Trigger"}: {f.trigger}
-                      </p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="rounded-lg border bg-white/55 p-4">
-                  <p className="text-sm text-mutedFg">{t.breakTriggersEmpty}</p>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="lg:col-span-4">
+          <Card className="lg:col-span-12">
             <CardHeader>
               <CardTitle>{t.consistency}</CardTitle>
               <CardDescription>{t.consistencyDesc}</CardDescription>
