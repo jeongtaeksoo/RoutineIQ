@@ -39,9 +39,17 @@ def _is_service_key_failure(exc: SupabaseRestError) -> bool:
 
 _IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:\-]{8,128}$")
 _TIME_RE = re.compile(r"^\d{2}:\d{2}$")
+_MODEL_LOCALE_RE = re.compile(r"\|loc=(ko|en|ja|zh|es)$")
 _DEEP_WORK_HINTS = ("deep", "focus", "딥워크", "집중", "몰입", "sprint", "write", "coding", "study")
 _MEETING_HINTS = ("meeting", "sync", "collab", "회의", "미팅", "call", "inbox", "message", "admin")
 _RECOVERY_HINTS = ("break", "rest", "walk", "stretch", "lunch", "휴식", "산책", "스트레칭", "점심")
+_LANG_NAME = {
+    "ko": "Korean",
+    "en": "English",
+    "ja": "Japanese",
+    "zh": "Chinese",
+    "es": "Spanish",
+}
 
 
 def _normalize_idempotency_key(value: str | None) -> str | None:
@@ -53,6 +61,25 @@ def _normalize_idempotency_key(value: str | None) -> str | None:
     if not _IDEMPOTENCY_KEY_RE.fullmatch(key):
         return None
     return key
+
+
+def _model_with_locale(model: str, locale: str) -> str:
+    return f"{model}|loc={locale}"
+
+
+def _extract_locale_from_model(value: Any) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    m = _MODEL_LOCALE_RE.search(value.strip())
+    if not m:
+        return None
+    return m.group(1)
+
+
+def _public_model_name(value: Any) -> str | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    return _MODEL_LOCALE_RE.sub("", value.strip())
 
 
 def _parse_hhmm(value: Any) -> int | None:
@@ -313,7 +340,7 @@ def _compute_analysis_metrics(
     }
 
 
-def _build_system_prompt(*, plan: str) -> str:
+def _build_system_prompt(*, plan: str, target_locale: str) -> str:
     pro_hint = ""
     if plan == "pro":
         pro_hint = (
@@ -341,6 +368,8 @@ def _build_system_prompt(*, plan: str) -> str:
         "- Output MUST be valid JSON ONLY (no markdown, no explanations).\n"
         "- Output MUST match the provided JSON schema exactly.\n"
         "- Always include every required key, even if arrays are empty.\n"
+        f"- All natural-language fields must be written in { _LANG_NAME.get(target_locale, 'Korean') } (locale='{target_locale}').\n"
+        "- Keep field names unchanged (schema keys stay in English).\n"
         "- If input data is insufficient, keep the schema but put a clear request for more input in fields like reason/fix.\n"
         "- Do not invent metrics. Use only the provided computed_metrics and raw log evidence.\n"
         "- Keep language specific and personal (reference concrete times/activities from the log).\n"
@@ -361,6 +390,7 @@ def _build_system_prompt(*, plan: str) -> str:
         "- Build if_then_rules as implementation intentions (cue -> response): IF must name a concrete cue/time/state, THEN must name one observable action.\n"
         "- if_then_rules should function as recovery rules for real breakdown moments (not generic advice).\n"
         "\n"
+        f"Required output locale: {target_locale} ({_LANG_NAME.get(target_locale, 'Korean')}).\n"
         f"Plan mode: {plan}\n"
         + pro_hint
     )
@@ -372,10 +402,12 @@ def _build_user_prompt(
     activity_log: dict[str, Any] | None,
     yesterday_plan: list[dict[str, Any]] | None,
     computed_metrics: dict[str, Any],
+    target_locale: str,
 ) -> str:
     return (
         "Analyze the user's Daily Flow and produce an AI Coach Report for the target date.\n"
         f"Target date: {target_date.isoformat()}\n"
+        f"User output locale: {target_locale} ({_LANG_NAME.get(target_locale, 'Korean')})\n"
         "\n"
         "Daily Flow log (JSON):\n"
         + json.dumps(activity_log or {"date": target_date.isoformat(), "entries": [], "note": None}, ensure_ascii=False)
@@ -397,6 +429,8 @@ def _build_user_prompt(
 
 @router.post("/analyze")
 async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> dict:
+    target_locale = auth.locale
+
     await consume(
         key=f"analyze:user:{auth.user_id}",
         limit=max(int(settings.analyze_per_minute_limit), 1),
@@ -419,7 +453,14 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
     )
     if existing and not body.force:
         row = existing[0]
-        return {"date": row.get("date"), "report": row.get("report"), "model": row.get("model"), "cached": True}
+        row_locale = _extract_locale_from_model(row.get("model")) or "en"
+        if row_locale == target_locale:
+            return {
+                "date": row.get("date"),
+                "report": row.get("report"),
+                "model": _public_model_name(row.get("model")),
+                "cached": True,
+            }
 
     sub = await get_subscription_info(user_id=auth.user_id, access_token=auth.access_token)
     plan = sub.plan
@@ -475,19 +516,20 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
 
     request_key = _normalize_idempotency_key(request.headers.get("Idempotency-Key"))
     if request_key:
-        idempotency_key = f"analyze:{auth.user_id}:{request_key}"
+        idempotency_key = f"analyze:{auth.user_id}:{target_locale}:{request_key}"
     else:
         fingerprint_source = json.dumps(
             {
                 "date": body.date.isoformat(),
                 "force": body.force,
+                "locale": target_locale,
                 "activity_log": sanitized_activity_log,
             },
             sort_keys=True,
             ensure_ascii=False,
         )
         fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:24]
-        idempotency_key = f"analyze:{auth.user_id}:{body.date.isoformat()}:{fingerprint}"
+        idempotency_key = f"analyze:{auth.user_id}:{target_locale}:{body.date.isoformat()}:{fingerprint}"
 
     idem_state = await claim_idempotency_key(key=idempotency_key, processing_ttl_seconds=150)
     if idem_state != "acquired":
@@ -504,7 +546,14 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         )
         if retry_rows:
             row = retry_rows[0]
-            return {"date": row.get("date"), "report": row.get("report"), "model": row.get("model"), "cached": True}
+            row_locale = _extract_locale_from_model(row.get("model")) or "en"
+            if row_locale == target_locale:
+                return {
+                    "date": row.get("date"),
+                    "report": row.get("report"),
+                    "model": _public_model_name(row.get("model")),
+                    "cached": True,
+                }
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -516,7 +565,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
 
     completed = False
 
-    system_prompt = _build_system_prompt(plan=plan)
+    system_prompt = _build_system_prompt(plan=plan, target_locale=target_locale)
     computed_metrics = _compute_analysis_metrics(
         activity_log=sanitized_activity_log,
         yesterday_plan=sanitized_yesterday_plan,
@@ -526,6 +575,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         activity_log=sanitized_activity_log,
         yesterday_plan=sanitized_yesterday_plan,
         computed_metrics=computed_metrics,
+        target_locale=target_locale,
     )
 
     # OpenAI call + schema validation (retry once on validation error)
@@ -569,7 +619,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             "user_id": auth.user_id,
             "date": body.date.isoformat(),
             "report": report_dict,
-            "model": settings.openai_model,
+            "model": _model_with_locale(settings.openai_model, target_locale),
         }
         try:
             await sb_service.upsert_one(
@@ -604,7 +654,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             tokens_total=usage.get("total_tokens"),
             cost_usd=cost,
             request_id=usage_request_id,
-            meta={"target_date": body.date.isoformat(), "plan": plan, "forced": body.force},
+            meta={"target_date": body.date.isoformat(), "plan": plan, "forced": body.force, "locale": target_locale},
             access_token=auth.access_token,
         )
 

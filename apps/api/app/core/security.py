@@ -14,7 +14,18 @@ class AuthContext:
     user_id: str
     email: str | None
     is_anonymous: bool
+    locale: str
     access_token: str
+
+
+_SUPPORTED_LOCALES = {"ko", "en", "ja", "zh", "es"}
+
+
+def _normalize_locale(value: object) -> str:
+    if not isinstance(value, str):
+        return "ko"
+    s = value.strip().lower()
+    return s if s in _SUPPORTED_LOCALES else "ko"
 
 
 def _get_bearer_token(request: Request) -> str:
@@ -51,11 +62,14 @@ async def get_auth_context(request: Request) -> AuthContext:
     email = user.get("email")
     email_str = email if isinstance(email, str) and email.strip() else None
     is_anonymous = bool(user.get("is_anonymous") or False)
+    metadata = user.get("user_metadata") if isinstance(user.get("user_metadata"), dict) else {}
+    locale = _normalize_locale(metadata.get("routineiq_locale"))
 
     return AuthContext(
         user_id=user_id,
         email=email_str,
         is_anonymous=is_anonymous,
+        locale=locale,
         access_token=token,
     )
 
