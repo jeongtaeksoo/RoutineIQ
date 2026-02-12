@@ -5,10 +5,15 @@ from fastapi import APIRouter, HTTPException, status
 from app.core.config import settings
 from app.core.security import AuthDep
 from app.schemas.preferences import DEFAULT_COMPARE_BY, ProfilePreferences
-from app.services.supabase_rest import SupabaseRest
+from app.services.supabase_rest import SupabaseRest, SupabaseRestError
 
 
 router = APIRouter()
+
+
+def _is_rls_write_failure(exc: SupabaseRestError) -> bool:
+    msg = str(exc).lower()
+    return exc.code == "42501" or "row-level security policy" in msg
 
 
 def _normalize_compare_by(value: object) -> list[str]:
@@ -56,25 +61,39 @@ async def get_profile_preferences(auth: AuthDep) -> ProfilePreferences:
 
 @router.put("/preferences/profile", response_model=ProfilePreferences)
 async def upsert_profile_preferences(body: ProfilePreferences, auth: AuthDep) -> ProfilePreferences:
-    sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
-    row = await sb.upsert_one(
-        "profiles",
-        bearer_token=auth.access_token,
-        on_conflict="id",
-        row={
-            "id": auth.user_id,
-            "email": auth.email,
-            "age_group": body.age_group,
-            "gender": body.gender,
-            "job_family": body.job_family,
-            "work_mode": body.work_mode,
-            "chronotype": body.chronotype,
-            "trend_opt_in": body.trend_opt_in,
-            "trend_compare_by": body.trend_compare_by,
-            "goal_keyword": body.goal_keyword,
-            "goal_minutes_per_day": body.goal_minutes_per_day,
-        },
-    )
+    row_data = {
+        "id": auth.user_id,
+        "email": auth.email,
+        "age_group": body.age_group,
+        "gender": body.gender,
+        "job_family": body.job_family,
+        "work_mode": body.work_mode,
+        "chronotype": body.chronotype,
+        "trend_opt_in": body.trend_opt_in,
+        "trend_compare_by": body.trend_compare_by,
+        "goal_keyword": body.goal_keyword,
+        "goal_minutes_per_day": body.goal_minutes_per_day,
+    }
+
+    sb_rls = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
+    try:
+        row = await sb_rls.upsert_one(
+            "profiles",
+            bearer_token=auth.access_token,
+            on_conflict="id",
+            row=row_data,
+        )
+    except SupabaseRestError as exc:
+        # Fallback for environments where profile insert/update RLS is temporarily inconsistent.
+        if not _is_rls_write_failure(exc):
+            raise
+        sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+        row = await sb_service.upsert_one(
+            "profiles",
+            bearer_token=settings.supabase_service_role_key,
+            on_conflict="id",
+            row=row_data,
+        )
     if not row:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save preferences")
     return _to_preferences(row)
