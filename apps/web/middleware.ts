@@ -34,6 +34,10 @@ export async function middleware(request: NextRequest) {
     const redirectUrl = request.nextUrl.clone();
     redirectUrl.pathname = "/login";
     redirectUrl.searchParams.set("redirectedFrom", pathname);
+    // For app routes, default to guest demo flow to reduce login friction.
+    if (pathname.startsWith("/app")) {
+      redirectUrl.searchParams.set("demo", "1");
+    }
     return NextResponse.redirect(redirectUrl);
   }
 
