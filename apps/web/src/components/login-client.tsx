@@ -226,8 +226,10 @@ export default function LoginClient() {
   const [googleEnabled, setGoogleEnabled] = React.useState(true);
 
   const t = T[lang];
+  const forceAuth = searchParams.get("auth") === "1";
   const demo = searchParams.get("demo") === "1";
   const redirectedFrom = searchParams.get("redirectedFrom");
+  const autoDemo = demo || (!forceAuth && !redirectedFrom);
   const afterAuthRedirect = redirectedFrom && redirectedFrom.startsWith("/") ? redirectedFrom : "/app/insights";
   const supabaseEnv = getSupabasePublicEnv();
 
@@ -349,10 +351,10 @@ export default function LoginClient() {
   }
 
   React.useEffect(() => {
-    if (!demo || !supabaseEnv.configured) return;
+    if (!autoDemo || !supabaseEnv.configured) return;
     void tryDemo();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [demo]);
+  }, [autoDemo]);
 
   /* ─── Supabase not configured ─── */
   if (!supabaseEnv.configured) {

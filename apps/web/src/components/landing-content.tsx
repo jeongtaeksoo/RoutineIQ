@@ -327,7 +327,7 @@ export function LandingContent() {
                     }}
                 >
                     <Link
-                        href="/login"
+                        href="/login?demo=1"
                         className="group inline-flex items-center gap-2 rounded-full px-9 py-3.5 text-sm font-medium text-white transition-all duration-300 hover:shadow-xl"
                         style={{ background: "#4a3f35", boxShadow: "0 4px 20px rgba(74,63,53,0.15)" }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#3e3529"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(74,63,53,0.25)"; }}
@@ -337,7 +337,7 @@ export function LandingContent() {
                         <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
                     </Link>
                     <Link
-                        href="/login?demo=1"
+                        href="/login?auth=1"
                         className="inline-flex items-center gap-2 rounded-full px-9 py-3.5 text-sm transition-all duration-300 hover:shadow-md"
                         style={{ border: "1px solid #e6ddd3", background: "rgba(255,255,255,0.6)", color: "#7a6e62" }}
                         onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "rgba(255,255,255,0.95)"; (e.currentTarget as HTMLElement).style.borderColor = "#d4c9bc"; }}
