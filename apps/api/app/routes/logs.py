@@ -9,7 +9,6 @@ from app.core.security import AuthDep
 from app.schemas.logs import ActivityLogRow, UpsertLogRequest
 from app.services.supabase_rest import SupabaseRest
 
-
 router = APIRouter()
 
 
@@ -30,7 +29,10 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
     )
 
     if not row:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save log")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save log",
+        )
     return ActivityLogRow.model_validate(row)
 
 
@@ -53,4 +55,3 @@ async def get_log(
     if not rows:
         return {"date": date.isoformat(), "entries": [], "note": None}
     return rows[0]
-

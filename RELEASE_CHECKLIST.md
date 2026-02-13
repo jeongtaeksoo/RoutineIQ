@@ -21,6 +21,8 @@ Last updated: 2026-02-13
 - `OPENAI_MODEL` (optional, default exists)
 - `OPENAI_PRICE_INPUT_PER_1K` (optional)
 - `OPENAI_PRICE_OUTPUT_PER_1K` (optional)
+- `SENTRY_DSN` (optional, API only)
+- `SENTRY_TRACES_SAMPLE_RATE` (optional, default `0.0`)
 - `FREE_DAILY_ANALYZE_LIMIT` (optional)
 - `PRO_DAILY_ANALYZE_LIMIT` (optional)
 - `FREE_REPORT_RETENTION_DAYS` (optional)
@@ -138,3 +140,9 @@ Release only when:
 - `G6` secret exposure checks verified.
 
 If Stripe readiness is false or checkout fails, release as **core-only mode** (billing blocked) until Stripe keys/webhook are fixed.
+
+## 7) OSS Adoption Log (Loop 1)
+
+- Added `tenacity` for resilient OpenAI retry/backoff in transient failures (`429/5xx/timeout`).
+- Added `sentry-sdk` (FastAPI integration) for production-grade exception observability (inactive unless `SENTRY_DSN` is configured).
+- Research and scoring details: `docs/OSS_RESEARCH_2026-02-13_LOOP1.md`.

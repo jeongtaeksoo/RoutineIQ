@@ -50,4 +50,3 @@ async def consume(*, key: str, limit: int, window_seconds: int) -> None:
             )
 
         c.count += 1
-

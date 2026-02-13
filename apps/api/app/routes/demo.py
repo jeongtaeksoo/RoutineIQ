@@ -9,7 +9,14 @@ from pydantic import BaseModel, Field
 from app.core.config import settings
 from app.core.rate_limit import consume
 from app.core.security import AuthContext, AuthDep
-from app.schemas.ai_report import AIReport
+from app.schemas.ai_report import (
+    AIReport,
+    FailurePattern,
+    IfThenRule,
+    ProductivityPeak,
+    TomorrowRoutineItem,
+    YesterdayPlanVsActual,
+)
 from app.services.supabase_rest import SupabaseRest
 
 router = APIRouter()
@@ -211,44 +218,48 @@ def _report_fixture(locale: str) -> dict:
             "Your logs show stronger morning focus and breakdowns during transitions.",
         ),
         productivity_peaks=[
-            {
-                "start": "09:30",
-                "end": "11:00",
-                "reason": "High focus with fewer interruptions.",
-            },
+            ProductivityPeak(
+                start="09:30",
+                end="11:00",
+                reason="High focus with fewer interruptions.",
+            ),
         ],
         failure_patterns=[
-            {
-                "pattern": "Context switching after meetings",
-                "trigger": "No recovery buffer",
-                "fix": "5-minute reset + restart with a single next action",
-            }
+            FailurePattern(
+                pattern="Context switching after meetings",
+                trigger="No recovery buffer",
+                fix="5-minute reset + restart with a single next action",
+            )
         ],
         tomorrow_routine=[
-            {
-                "start": "09:30",
-                "end": "10:30",
-                "activity": "Protect one core focus block",
-                "goal": "Finish one meaningful output before noon",
-            },
-            {
-                "start": "10:30",
-                "end": "10:45",
-                "activity": "Add intentional reset after context switches",
-                "goal": "Reduce focus collapse",
-            },
+            TomorrowRoutineItem(
+                start="09:30",
+                end="10:30",
+                activity="Protect one core focus block",
+                goal="Finish one meaningful output before noon",
+            ),
+            TomorrowRoutineItem(
+                start="10:30",
+                end="10:45",
+                activity="Add intentional reset after context switches",
+                goal="Reduce focus collapse",
+            ),
         ],
         if_then_rules=[
-            {
-                "if": "If concentration drops after a switch",
-                "then": "Run a 5-minute reset and start a 25-minute focus sprint",
-            }
+            IfThenRule(
+                **{
+                    "if": "If concentration drops after a switch",
+                    "then": "Run a 5-minute reset and start a 25-minute focus sprint",
+                }
+            )
         ],
         coach_one_liner=coach_line,
-        yesterday_plan_vs_actual={
-            "comparison_note": "No previous plan baseline yet. Use this as the first reference point.",
-            "top_deviation": "NO_PREVIOUS_PLAN",
-        },
+        yesterday_plan_vs_actual=YesterdayPlanVsActual(
+            comparison_note=(
+                "No previous plan baseline yet. Use this as the first reference point."
+            ),
+            top_deviation="NO_PREVIOUS_PLAN",
+        ),
     ).model_dump(by_alias=True)
 
 

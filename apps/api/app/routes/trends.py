@@ -1,19 +1,28 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 
 from fastapi import APIRouter
 
 from app.core.config import settings
 from app.core.security import AuthDep
-from app.schemas.preferences import CohortTrendMetrics, CohortTrendResponse
+from app.schemas.preferences import (
+    CompareDimension,
+    CohortTrendMetrics,
+    CohortTrendResponse,
+)
 from app.services.supabase_rest import SupabaseRest
-
 
 router = APIRouter()
 
 
-_DIM_KEYS = ("age_group", "gender", "job_family", "work_mode", "chronotype")
+_DIM_KEYS: tuple[CompareDimension, ...] = (
+    "age_group",
+    "gender",
+    "job_family",
+    "work_mode",
+    "chronotype",
+)
 
 
 def _as_int(value: Any) -> int:
@@ -42,22 +51,53 @@ def _as_float(value: Any) -> float | None:
     return None
 
 
-def _message_for(auth_locale: str, *, focus: float | None, rebound: float | None, recovery: float | None, cohort_size: int) -> str:
+def _message_for(
+    auth_locale: str,
+    *,
+    focus: float | None,
+    rebound: float | None,
+    recovery: float | None,
+    cohort_size: int,
+) -> str:
     if auth_locale == "ko":
-        focus_text = f"집중 블록 유지율 {focus:.0f}%" if focus is not None else "집중 블록 유지율 데이터"
-        rebound_text = f"집중 붕괴 후 복귀율 {rebound:.0f}%" if rebound is not None else "복귀율 데이터"
-        recovery_text = f"회복 버퍼 사용일 비율 {recovery:.0f}%" if recovery is not None else "회복 버퍼 데이터"
+        focus_text = (
+            f"집중 블록 유지율 {focus:.0f}%"
+            if focus is not None
+            else "집중 블록 유지율 데이터"
+        )
+        rebound_text = (
+            f"집중 붕괴 후 복귀율 {rebound:.0f}%"
+            if rebound is not None
+            else "복귀율 데이터"
+        )
+        recovery_text = (
+            f"회복 버퍼 사용일 비율 {recovery:.0f}%"
+            if recovery is not None
+            else "회복 버퍼 데이터"
+        )
         return f"유사 코호트 {cohort_size}명 기준: {focus_text}, {rebound_text}, {recovery_text}. 내일은 회복 버퍼 1개를 먼저 고정해 보세요."
-    focus_text = f"focus-window consistency {focus:.0f}%" if focus is not None else "focus-window data"
-    rebound_text = f"rebound rate {rebound:.0f}%" if rebound is not None else "rebound data"
-    recovery_text = f"recovery-buffer day rate {recovery:.0f}%" if recovery is not None else "recovery data"
+    focus_text = (
+        f"focus-window consistency {focus:.0f}%"
+        if focus is not None
+        else "focus-window data"
+    )
+    rebound_text = (
+        f"rebound rate {rebound:.0f}%" if rebound is not None else "rebound data"
+    )
+    recovery_text = (
+        f"recovery-buffer day rate {recovery:.0f}%"
+        if recovery is not None
+        else "recovery data"
+    )
     return f"Among {cohort_size} similar users: {focus_text}, {rebound_text}, {recovery_text}. For tomorrow, lock one recovery buffer first."
 
 
 @router.get("/trends/cohort", response_model=CohortTrendResponse)
 async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
     sb_rls = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
-    sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+    sb_service = SupabaseRest(
+        str(settings.supabase_url), settings.supabase_service_role_key
+    )
 
     own_rows = await sb_rls.select(
         "profiles",
@@ -72,11 +112,11 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
     trend_opt_in = bool(own.get("trend_opt_in"))
 
     compare_by_raw = own.get("trend_compare_by")
-    compare_by: list[str] = []
+    compare_by: list[CompareDimension] = []
     if isinstance(compare_by_raw, list):
         for dim in compare_by_raw:
             if isinstance(dim, str) and dim in _DIM_KEYS and dim not in compare_by:
-                compare_by.append(dim)
+                compare_by.append(cast(CompareDimension, dim))
 
     if not trend_opt_in:
         return CohortTrendResponse(
@@ -104,7 +144,7 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
         "chronotype": str(own.get("chronotype") or "unknown"),
     }
 
-    effective_compare_by: list[str] = []
+    effective_compare_by: list[CompareDimension] = []
     filters: dict[str, str] = {}
     for dim in compare_by:
         val = profile_values.get(dim, "unknown")

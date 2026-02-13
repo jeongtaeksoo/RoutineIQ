@@ -108,4 +108,3 @@ def analyze_limit_for_plan(plan: Plan) -> int:
         if plan == "pro"
         else settings.free_daily_analyze_limit
     )
-

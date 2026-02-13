@@ -36,4 +36,3 @@ class InsightsWeeklyResponse(BaseModel):
     to_date: Date
     consistency: ConsistencyPayload
     weekly: WeeklySummaryPayload
-

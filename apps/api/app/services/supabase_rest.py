@@ -4,7 +4,6 @@ from typing import Any
 
 import httpx
 
-
 _http: httpx.AsyncClient | None = None
 
 
@@ -44,7 +43,9 @@ class SupabaseRest:
         self._rest_base = supabase_url.rstrip("/") + "/rest/v1"
         self._api_key = api_key
 
-    def _headers(self, bearer_token: str, *, prefer: str | None = None) -> dict[str, str]:
+    def _headers(
+        self, bearer_token: str, *, prefer: str | None = None
+    ) -> dict[str, str]:
         h = {
             "apikey": self._api_key,
             "authorization": f"Bearer {bearer_token}",
@@ -66,9 +67,21 @@ class SupabaseRest:
         try:
             payload = resp.json()
             if isinstance(payload, dict):
-                code = payload.get("code") if isinstance(payload.get("code"), str) else None
-                message = payload.get("message") if isinstance(payload.get("message"), str) else None
-                hint = payload.get("hint") if isinstance(payload.get("hint"), str) else None
+                code = (
+                    payload.get("code")
+                    if isinstance(payload.get("code"), str)
+                    else None
+                )
+                message = (
+                    payload.get("message")
+                    if isinstance(payload.get("message"), str)
+                    else None
+                )
+                hint = (
+                    payload.get("hint")
+                    if isinstance(payload.get("hint"), str)
+                    else None
+                )
                 details = payload.get("details")
             elif isinstance(payload, str):
                 message = payload
@@ -97,7 +110,9 @@ class SupabaseRest:
         params: dict[str, Any],
     ) -> list[dict[str, Any]]:
         url = f"{self._rest_base}/{table}"
-        resp = await get_http().get(url, headers=self._headers(bearer_token), params=params)
+        resp = await get_http().get(
+            url, headers=self._headers(bearer_token), params=params
+        )
         self._raise_for_error(resp)
         data = resp.json()
         if isinstance(data, list):
@@ -117,7 +132,9 @@ class SupabaseRest:
             bearer_token,
             prefer="resolution=merge-duplicates,return=representation",
         )
-        resp = await get_http().post(url, headers=headers, params={"on_conflict": on_conflict}, json=row)
+        resp = await get_http().post(
+            url, headers=headers, params={"on_conflict": on_conflict}, json=row
+        )
         self._raise_for_error(resp)
         data = resp.json()
         if isinstance(data, list):
@@ -148,7 +165,9 @@ class SupabaseRest:
         params: dict[str, Any],
     ) -> None:
         url = f"{self._rest_base}/{table}"
-        resp = await get_http().delete(url, headers=self._headers(bearer_token), params=params)
+        resp = await get_http().delete(
+            url, headers=self._headers(bearer_token), params=params
+        )
         self._raise_for_error(resp)
 
     async def rpc(
@@ -159,7 +178,9 @@ class SupabaseRest:
         params: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
         url = f"{self._rest_base}/rpc/{fn_name}"
-        resp = await get_http().post(url, headers=self._headers(bearer_token), json=params or {})
+        resp = await get_http().post(
+            url, headers=self._headers(bearer_token), json=params or {}
+        )
         self._raise_for_error(resp)
         data = resp.json()
         if isinstance(data, list):

@@ -8,12 +8,13 @@ from app.core.config import settings
 from app.core.security import AuthDep
 from app.services.supabase_rest import SupabaseRest
 
-
 router = APIRouter()
 
 
 @router.get("/reports")
-async def get_report(auth: AuthDep, date: Date = Query(..., description="YYYY-MM-DD")) -> dict:
+async def get_report(
+    auth: AuthDep, date: Date = Query(..., description="YYYY-MM-DD")
+) -> dict:
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
     rows = await sb.select(
         "ai_reports",
@@ -31,5 +32,8 @@ async def get_report(auth: AuthDep, date: Date = Query(..., description="YYYY-MM
             detail="No AI Coach Report for this date yet. Run Analyze to generate it.",
         )
     row = rows[0]
-    return {"date": row.get("date"), "report": row.get("report"), "model": row.get("model")}
-
+    return {
+        "date": row.get("date"),
+        "report": row.get("report"),
+        "model": row.get("model"),
+    }

@@ -8,7 +8,11 @@ from app.services.supabase_rest import SupabaseRest, SupabaseRestError
 
 def _is_service_key_failure(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
-    return exc.status_code in (401, 403) or exc.code == "42501" or "row-level security policy" in msg
+    return (
+        exc.status_code in (401, 403)
+        or exc.code == "42501"
+        or "row-level security policy" in msg
+    )
 
 
 async def cleanup_expired_reports(
@@ -26,7 +30,9 @@ async def cleanup_expired_reports(
     }
 
     # Primary path: service-role cleanup.
-    sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+    sb_service = SupabaseRest(
+        str(settings.supabase_url), settings.supabase_service_role_key
+    )
     try:
         await sb_service.delete(
             "ai_reports",

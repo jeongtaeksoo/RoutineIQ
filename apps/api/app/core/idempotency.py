@@ -5,7 +5,6 @@ import time
 from dataclasses import dataclass
 from typing import Literal
 
-
 IdempotencyState = Literal["acquired", "processing", "done"]
 
 
@@ -28,13 +27,17 @@ def _cleanup(now: float) -> None:
         _entries.clear()
 
 
-async def claim_idempotency_key(*, key: str, processing_ttl_seconds: int = 120) -> IdempotencyState:
+async def claim_idempotency_key(
+    *, key: str, processing_ttl_seconds: int = 120
+) -> IdempotencyState:
     now = time.time()
     async with _lock:
         _cleanup(now)
         current = _entries.get(key)
         if current is None:
-            _entries[key] = _Entry(state="processing", expires_at=now + max(processing_ttl_seconds, 30))
+            _entries[key] = _Entry(
+                state="processing", expires_at=now + max(processing_ttl_seconds, 30)
+            )
             return "acquired"
         return current.state
 
@@ -48,4 +51,3 @@ async def mark_idempotency_done(*, key: str, done_ttl_seconds: int = 600) -> Non
 async def clear_idempotency_key(*, key: str) -> None:
     async with _lock:
         _entries.pop(key, None)
-

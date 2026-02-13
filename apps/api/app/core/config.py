@@ -39,6 +39,12 @@ class Settings(BaseSettings):
         default=None, alias="OPENAI_PRICE_OUTPUT_PER_1K"
     )
 
+    # Observability
+    sentry_dsn: str | None = Field(default=None, alias="SENTRY_DSN")
+    sentry_traces_sample_rate: float = Field(
+        default=0.0, alias="SENTRY_TRACES_SAMPLE_RATE"
+    )
+
     # Stripe
     # Optional: allow running core app without Stripe configured.
     stripe_secret_key: str | None = Field(default=None, alias="STRIPE_SECRET_KEY")

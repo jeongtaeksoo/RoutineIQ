@@ -5,8 +5,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-
 TIME_RE = r"^\d{2}:\d{2}$"
+
 
 def _to_minutes(hhmm: str) -> int:
     h_s, m_s = hhmm.split(":")

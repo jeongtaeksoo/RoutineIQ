@@ -6,6 +6,8 @@ from urllib.parse import urlparse
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import sentry_sdk
+from sentry_sdk.integrations.fastapi import FastApiIntegration
 
 from app.core.config import settings
 from app.routes.admin import router as admin_router
@@ -31,6 +33,21 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="RoutineIQ API", version="0.1.0", lifespan=lifespan)
+
+
+def _init_sentry() -> None:
+    if not settings.sentry_dsn:
+        return
+    sentry_sdk.init(
+        dsn=settings.sentry_dsn,
+        integrations=[FastApiIntegration()],
+        traces_sample_rate=max(0.0, min(settings.sentry_traces_sample_rate, 1.0)),
+        send_default_pii=False,
+        environment=settings.app_env,
+    )
+
+
+_init_sentry()
 
 
 def _origin(url: str) -> str:

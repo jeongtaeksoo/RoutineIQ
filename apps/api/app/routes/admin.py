@@ -9,9 +9,12 @@ from fastapi import APIRouter, HTTPException, status
 from app.core.admin import AdminDep
 from app.core.config import settings
 from app.services.error_log import log_system_error
-from app.services.stripe_service import init_stripe, stripe_is_configured, upsert_subscription_row
+from app.services.stripe_service import (
+    init_stripe,
+    stripe_is_configured,
+    upsert_subscription_row,
+)
 from app.services.supabase_rest import SupabaseRest
-
 
 router = APIRouter()
 
@@ -57,7 +60,9 @@ async def admin_users(_: AdminDep) -> dict:
             "limit": 2000,
         },
     )
-    subs_by_user = {s.get("user_id"): s for s in subs if isinstance(s.get("user_id"), str)}
+    subs_by_user = {
+        s.get("user_id"): s for s in subs if isinstance(s.get("user_id"), str)
+    }
 
     # Latest report date per user (scan from newest)
     reports = await sb.select(
@@ -89,7 +94,9 @@ async def admin_users(_: AdminDep) -> dict:
                 "role": p.get("role"),
                 "created_at": p.get("created_at"),
                 "plan": _effective_plan(sub),
-                "subscription_status": sub.get("status") if isinstance(sub, dict) else None,
+                "subscription_status": (
+                    sub.get("status") if isinstance(sub, dict) else None
+                ),
                 "last_analyzed_date": latest_report_date.get(uid),
             }
         )
@@ -104,15 +111,25 @@ async def admin_user_detail(user_id: str, _: AdminDep) -> dict:
     prof = await sb.select(
         "profiles",
         bearer_token=settings.supabase_service_role_key,
-        params={"select": "id,email,role,created_at", "id": f"eq.{user_id}", "limit": 1},
+        params={
+            "select": "id,email,role,created_at",
+            "id": f"eq.{user_id}",
+            "limit": 1,
+        },
     )
     if not prof:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="User not found"
+        )
 
     subs = await sb.select(
         "subscriptions",
         bearer_token=settings.supabase_service_role_key,
-        params={"select": "user_id,plan,status,stripe_subscription_id", "user_id": f"eq.{user_id}", "limit": 1},
+        params={
+            "select": "user_id,plan,status,stripe_subscription_id",
+            "user_id": f"eq.{user_id}",
+            "limit": 1,
+        },
     )
     sub = subs[0] if subs else None
 
@@ -185,7 +202,9 @@ def _subscription_price_ids(sub: dict[str, Any]) -> set[str]:
 def _derive_plan_from_subscription(sub: dict[str, Any]) -> str:
     status = sub.get("status")
     price_ids = _subscription_price_ids(sub)
-    is_pro_price = bool(settings.stripe_price_id_pro and settings.stripe_price_id_pro in price_ids)
+    is_pro_price = bool(
+        settings.stripe_price_id_pro and settings.stripe_price_id_pro in price_ids
+    )
     is_active = status in ("active", "trialing")
     return "pro" if (is_pro_price and is_active) else "free"
 
@@ -193,16 +212,26 @@ def _derive_plan_from_subscription(sub: dict[str, Any]) -> str:
 @router.post("/admin/sync-subscription/{user_id}")
 async def admin_sync_subscription(user_id: str, _: AdminDep) -> dict:
     if not stripe_is_configured():
-        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail="Stripe is not configured")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Stripe is not configured",
+        )
 
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
     subs = await sb.select(
         "subscriptions",
         bearer_token=settings.supabase_service_role_key,
-        params={"select": "user_id,stripe_subscription_id", "user_id": f"eq.{user_id}", "limit": 1},
+        params={
+            "select": "user_id,stripe_subscription_id",
+            "user_id": f"eq.{user_id}",
+            "limit": 1,
+        },
     )
     if not subs or not subs[0].get("stripe_subscription_id"):
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="No Stripe subscription on record")
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No Stripe subscription on record",
+        )
 
     init_stripe()
     try:
@@ -217,7 +246,9 @@ async def admin_sync_subscription(user_id: str, _: AdminDep) -> dict:
             user_id=user_id,
             err=e,
         )
-        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail="Stripe sync failed")
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY, detail="Stripe sync failed"
+        )
 
 
 @router.get("/admin/errors")

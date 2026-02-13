@@ -4,16 +4,32 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-
 AgeGroup = Literal["0_17", "18_24", "25_34", "35_44", "45_plus", "unknown"]
 Gender = Literal["female", "male", "nonbinary", "prefer_not_to_say", "unknown"]
-JobFamily = Literal["engineering", "professional", "design", "marketing", "sales", "operations", "student", "creator", "other", "unknown"]
+JobFamily = Literal[
+    "engineering",
+    "professional",
+    "design",
+    "marketing",
+    "sales",
+    "operations",
+    "student",
+    "creator",
+    "other",
+    "unknown",
+]
 WorkMode = Literal["fixed", "flex", "shift", "freelance", "other", "unknown"]
 Chronotype = Literal["morning", "midday", "evening", "mixed", "unknown"]
-CompareDimension = Literal["age_group", "gender", "job_family", "work_mode", "chronotype"]
+CompareDimension = Literal[
+    "age_group", "gender", "job_family", "work_mode", "chronotype"
+]
 
 
-DEFAULT_COMPARE_BY: tuple[CompareDimension, ...] = ("age_group", "job_family", "work_mode")
+DEFAULT_COMPARE_BY: tuple[CompareDimension, ...] = (
+    "age_group",
+    "job_family",
+    "work_mode",
+)
 
 
 class ProfilePreferences(BaseModel):
@@ -25,13 +41,17 @@ class ProfilePreferences(BaseModel):
     work_mode: WorkMode = "unknown"
     chronotype: Chronotype = "unknown"
     trend_opt_in: bool = False
-    trend_compare_by: list[CompareDimension] = Field(default_factory=lambda: list(DEFAULT_COMPARE_BY), min_length=1, max_length=5)
+    trend_compare_by: list[CompareDimension] = Field(
+        default_factory=lambda: list(DEFAULT_COMPARE_BY), min_length=1, max_length=5
+    )
     goal_keyword: str | None = Field(default=None, max_length=60)
     goal_minutes_per_day: int | None = Field(default=None, ge=10, le=600)
 
     @field_validator("trend_compare_by")
     @classmethod
-    def validate_compare_by(cls, value: list[CompareDimension]) -> list[CompareDimension]:
+    def validate_compare_by(
+        cls, value: list[CompareDimension]
+    ) -> list[CompareDimension]:
         deduped: list[CompareDimension] = []
         for item in value:
             if item not in deduped:

@@ -385,3 +385,29 @@ Frontend (Playwright e2e):
 | `apps/web/src/app/login/page.tsx` | 🔵 P2: Korean→neutral loading fallback |
 
 **Build status:** ✅ Passed (20/20 pages, 0 errors, exit code 0)
+
+---
+
+## Loop 1 (2026-02-13) - OSS Hardening QA
+
+### Scope
+- Adopted OSS: `jd/tenacity`, `getsentry/sentry-python`
+- Goals: improve Analyze stability (retry) and production observability (optional Sentry)
+
+### Validation
+
+| Gate | Command | Result |
+| --- | --- | --- |
+| Web lint | `npm run lint` | ✅ PASS |
+| Web typecheck | `npm run typecheck` | ✅ PASS |
+| Web build | `npm run build` | ✅ PASS |
+| API compile | `./.venv/bin/python -m compileall -q app` | ✅ PASS |
+| API lint | `./.venv/bin/ruff check app` | ✅ PASS |
+| API format check | `./.venv/bin/black --check app` | ✅ PASS |
+| API type check | `./.venv/bin/mypy app --ignore-missing-imports` | ✅ PASS |
+| E2E core flows | `npm run test:e2e` | ✅ PASS |
+
+### Notes
+- `tenacity` retry targets transient transport + `429/5xx` only; no payload mutation.
+- `sentry-sdk` remains inactive unless `SENTRY_DSN` is set; no PII capture (`send_default_pii=False`).
+- `scripts/release-verify.sh` full run: PASS (including live smoke path).

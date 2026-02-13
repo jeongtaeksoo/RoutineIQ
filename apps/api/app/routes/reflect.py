@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import json
@@ -13,17 +12,24 @@ from app.core.security import AuthDep
 from app.services.error_log import log_system_error
 from app.services.openai_service import call_openai_structured
 from app.services.privacy import sanitize_for_llm
-from app.services.usage import count_daily_analyze_calls, estimate_cost_usd, insert_usage_event
+from app.services.usage import (
+    count_daily_analyze_calls,
+    estimate_cost_usd,
+    insert_usage_event,
+)
 
 router = APIRouter()
+
 
 class ReflectRequest(BaseModel):
     date: str
     entries: list[dict[str, Any]]
     note: str | None = None
 
+
 class ReflectResponse(BaseModel):
     question: str
+
 
 REFLECT_JSON_SCHEMA = {
     "type": "object",
@@ -62,7 +68,7 @@ async def reflect_on_day(body: ReflectRequest, auth: AuthDep) -> dict:
         "Focus on their energy, focus levels, or specific activities. "
         "Output valid JSON only."
     )
-    
+
     sanitized_entries = sanitize_for_llm(body.entries)
     sanitized_note = sanitize_for_llm(body.note or "None")
     user_prompt = f"Date: {body.date}. Entries: {json.dumps(sanitized_entries, ensure_ascii=False)}. Note: {sanitized_note}."
@@ -103,4 +109,6 @@ async def reflect_on_day(body: ReflectRequest, auth: AuthDep) -> dict:
             user_id=auth.user_id,
             err=e,
         )
-        raise HTTPException(status_code=502, detail="AI reflection failed. Please try again.")
+        raise HTTPException(
+            status_code=502, detail="AI reflection failed. Please try again."
+        )

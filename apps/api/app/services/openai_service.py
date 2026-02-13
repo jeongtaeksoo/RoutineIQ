@@ -1,11 +1,21 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import httpx
+from tenacity import (
+    AsyncRetrying,
+    RetryCallState,
+    retry_if_exception,
+    stop_after_attempt,
+    wait_exponential_jitter,
+)
 
 from app.core.config import settings
+
+logger = logging.getLogger(__name__)
 
 
 AI_REPORT_JSON_SCHEMA: dict[str, Any] = {
@@ -89,7 +99,10 @@ AI_REPORT_JSON_SCHEMA: dict[str, Any] = {
 
 
 def _extract_output_text(resp_json: dict[str, Any]) -> str:
-    if isinstance(resp_json.get("output_text"), str) and resp_json["output_text"].strip():
+    if (
+        isinstance(resp_json.get("output_text"), str)
+        and resp_json["output_text"].strip()
+    ):
         return resp_json["output_text"]
 
     output = resp_json.get("output")
@@ -101,7 +114,9 @@ def _extract_output_text(resp_json: dict[str, Any]) -> str:
             for c in content:
                 if not isinstance(c, dict):
                     continue
-                if c.get("type") in ("output_text", "text") and isinstance(c.get("text"), str):
+                if c.get("type") in ("output_text", "text") and isinstance(
+                    c.get("text"), str
+                ):
                     return c["text"]
     raise ValueError("OpenAI response missing output text")
 
@@ -115,10 +130,44 @@ def _extract_usage(resp_json: dict[str, Any]) -> dict[str, int | None]:
     output_tokens = usage.get("output_tokens")
     total_tokens = usage.get("total_tokens")
     return {
-        "input_tokens": int(input_tokens) if isinstance(input_tokens, (int, float)) else None,
-        "output_tokens": int(output_tokens) if isinstance(output_tokens, (int, float)) else None,
-        "total_tokens": int(total_tokens) if isinstance(total_tokens, (int, float)) else None,
+        "input_tokens": (
+            int(input_tokens) if isinstance(input_tokens, (int, float)) else None
+        ),
+        "output_tokens": (
+            int(output_tokens) if isinstance(output_tokens, (int, float)) else None
+        ),
+        "total_tokens": (
+            int(total_tokens) if isinstance(total_tokens, (int, float)) else None
+        ),
     }
+
+
+_RETRYABLE_STATUSES = {408, 409, 425, 429, 500, 502, 503, 504}
+
+
+def _is_retryable_exception(exc: BaseException) -> bool:
+    if isinstance(exc, (httpx.TimeoutException, httpx.TransportError)):
+        return True
+
+    if isinstance(exc, httpx.HTTPStatusError):
+        return exc.response.status_code in _RETRYABLE_STATUSES
+
+    return False
+
+
+def _before_sleep_log(retry_state: RetryCallState) -> None:
+    exc = retry_state.outcome.exception() if retry_state.outcome else None
+    if isinstance(exc, httpx.HTTPStatusError):
+        logger.warning(
+            "OpenAI request retrying due to status %s (attempt %s)",
+            exc.response.status_code,
+            retry_state.attempt_number,
+        )
+    else:
+        logger.warning(
+            "OpenAI request retrying due to transport error (attempt %s)",
+            retry_state.attempt_number,
+        )
 
 
 async def call_openai_structured(
@@ -158,9 +207,25 @@ async def call_openai_structured(
     }
 
     async with httpx.AsyncClient(timeout=httpx.Timeout(60.0)) as client:
-        resp = await client.post("https://api.openai.com/v1/responses", headers=headers, json=payload)
-        resp.raise_for_status()
-        resp_json = resp.json()
+        resp_json: dict[str, Any] | None = None
+        async for attempt in AsyncRetrying(
+            stop=stop_after_attempt(3),
+            wait=wait_exponential_jitter(initial=0.4, max=3.0),
+            retry=retry_if_exception(_is_retryable_exception),
+            reraise=True,
+            before_sleep=_before_sleep_log,
+        ):
+            with attempt:
+                resp = await client.post(
+                    "https://api.openai.com/v1/responses",
+                    headers=headers,
+                    json=payload,
+                )
+                resp.raise_for_status()
+                resp_json = resp.json()
+
+    if resp_json is None:
+        raise RuntimeError("OpenAI request failed without response")
 
     text = _extract_output_text(resp_json)
     obj = json.loads(text)

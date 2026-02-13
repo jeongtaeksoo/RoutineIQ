@@ -17,7 +17,6 @@ from app.schemas.insights import (
 )
 from app.services.supabase_rest import SupabaseRest
 
-
 router = APIRouter()
 
 
@@ -182,4 +181,6 @@ async def get_weekly_insights(
         goal=goal,
     )
 
-    return InsightsWeeklyResponse(from_date=from_date, to_date=to_date, consistency=consistency, weekly=weekly)
+    return InsightsWeeklyResponse(
+        from_date=from_date, to_date=to_date, consistency=consistency, weekly=weekly
+    )

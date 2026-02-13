@@ -3,15 +3,18 @@ from __future__ import annotations
 import re
 from typing import Any
 
-
 _EMAIL_RE = re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b")
-_PHONE_RE = re.compile(r"(?<!\d)(?:\+?\d{1,3}[-.\s]?)?(?:\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{4})(?!\d)")
+_PHONE_RE = re.compile(
+    r"(?<!\d)(?:\+?\d{1,3}[-.\s]?)?(?:\d{2,4}[-.\s]?\d{3,4}[-.\s]?\d{4})(?!\d)"
+)
 _KR_RRN_RE = re.compile(r"\b\d{6}-?[1-4]\d{6}\b")
 _LONG_DIGIT_RE = re.compile(r"\b\d{12,19}\b")
 _BANK_ACCOUNT_RE = re.compile(r"\b\d{2,6}-\d{2,6}-\d{2,8}\b")
 
 _BEARER_RE = re.compile(r"(?i)\bBearer\s+[A-Za-z0-9\-._~+/]+=*")
-_JWT_RE = re.compile(r"\b[A-Za-z0-9\-_]{20,}\.[A-Za-z0-9\-_]{20,}\.[A-Za-z0-9\-_]{20,}\b")
+_JWT_RE = re.compile(
+    r"\b[A-Za-z0-9\-_]{20,}\.[A-Za-z0-9\-_]{20,}\.[A-Za-z0-9\-_]{20,}\b"
+)
 _OPENAI_KEY_RE = re.compile(r"\bsk-(?:proj-|live-|test-)?[A-Za-z0-9]{16,}\b")
 _STRIPE_SECRET_RE = re.compile(r"\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b")
 _STRIPE_WEBHOOK_RE = re.compile(r"\bwhsec_[A-Za-z0-9]{16,}\b")
@@ -67,4 +70,3 @@ def sanitize_for_log(value: Any) -> Any:
     if isinstance(value, (int, float, bool)):
         return value
     return str(value)[:1200]
-

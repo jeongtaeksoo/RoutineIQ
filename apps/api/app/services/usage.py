@@ -16,13 +16,22 @@ class UsageCount:
 
 def _is_service_key_failure(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
-    return exc.status_code in (401, 403) or exc.code == "42501" or "row-level security policy" in msg
+    return (
+        exc.status_code in (401, 403)
+        or exc.code == "42501"
+        or "row-level security policy" in msg
+    )
 
 
-def estimate_cost_usd(*, input_tokens: int | None, output_tokens: int | None) -> float | None:
+def estimate_cost_usd(
+    *, input_tokens: int | None, output_tokens: int | None
+) -> float | None:
     if input_tokens is None or output_tokens is None:
         return None
-    if settings.openai_price_input_per_1k is None or settings.openai_price_output_per_1k is None:
+    if (
+        settings.openai_price_input_per_1k is None
+        or settings.openai_price_output_per_1k is None
+    ):
         return None
     return round(
         (input_tokens / 1000.0) * settings.openai_price_input_per_1k
@@ -46,7 +55,9 @@ async def count_daily_analyze_calls(
     }
 
     # Primary path: service-role count (stable for admin/server tasks).
-    sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+    sb_service = SupabaseRest(
+        str(settings.supabase_url), settings.supabase_service_role_key
+    )
     try:
         rows = await sb_service.select(
             "usage_events",
@@ -80,7 +91,11 @@ async def insert_usage_event(
     meta: dict[str, Any] | None = None,
     access_token: str | None = None,
 ) -> None:
-    rid = request_id.strip()[:128] if isinstance(request_id, str) and request_id.strip() else None
+    rid = (
+        request_id.strip()[:128]
+        if isinstance(request_id, str) and request_id.strip()
+        else None
+    )
     row = {
         "user_id": user_id,
         "event_type": event_type,
@@ -95,7 +110,9 @@ async def insert_usage_event(
     }
 
     # Primary path: service-role write.
-    sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+    sb_service = SupabaseRest(
+        str(settings.supabase_url), settings.supabase_service_role_key
+    )
     try:
         if rid:
             # Requires unique index on (user_id,event_type,event_date,request_id).

@@ -9,5 +9,6 @@ class AnalyzeRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     date: date
-    force: bool = Field(default=False, description="When true, re-run AI even if report exists.")
-
+    force: bool = Field(
+        default=False, description="When true, re-run AI even if report exists."
+    )

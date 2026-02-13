@@ -6,7 +6,6 @@ from typing import Any
 from app.core.config import settings
 from app.services.supabase_rest import get_http
 
-
 _USER_CACHE: dict[str, tuple[float, dict[str, Any]]] = {}
 _CACHE_TTL_SECONDS = 30.0
 _CACHE_MAX_ENTRIES = 2048
@@ -30,7 +29,9 @@ def _cache_set(token: str, user: dict[str, Any]) -> None:
     _USER_CACHE[token] = (time.time() + _CACHE_TTL_SECONDS, user)
 
 
-async def get_current_user(*, access_token: str, use_cache: bool = True) -> dict[str, Any]:
+async def get_current_user(
+    *, access_token: str, use_cache: bool = True
+) -> dict[str, Any]:
     """
     Fetches the current user from Supabase Auth using the user's access token.
 

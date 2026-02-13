@@ -22,4 +22,3 @@ async def require_admin(auth: AuthContext = Depends(get_auth_context)) -> AuthCo
 
 
 AdminDep = Annotated[AuthContext, Depends(require_admin)]
-

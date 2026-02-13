@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from pydantic import BaseModel, ConfigDict, Field
 
-
 TIME_RE = r"^\d{2}:\d{2}$"
 
 
@@ -50,4 +49,3 @@ class AIReport(BaseModel):
     if_then_rules: list[IfThenRule]
     coach_one_liner: str
     yesterday_plan_vs_actual: YesterdayPlanVsActual
-
