@@ -10,7 +10,9 @@ from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.routes.admin import router as admin_router
 from app.routes.analyze import router as analyze_router
+from app.routes.demo import router as demo_router
 from app.routes.logs import router as logs_router
+from app.routes.insights import router as insights_router
 from app.routes.preferences import router as preferences_router
 from app.routes.reports import router as reports_router
 from app.routes.suggest import router as suggest_router
@@ -30,6 +32,7 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(title="RoutineIQ API", version="0.1.0", lifespan=lifespan)
 
+
 def _origin(url: str) -> str:
     # Be forgiving: FRONTEND_URL may include a trailing slash or a path.
     # CORS compares against the request's Origin (scheme+host+port).
@@ -38,19 +41,41 @@ def _origin(url: str) -> str:
         return f"{p.scheme}://{p.netloc}"
     return url.rstrip("/")
 
+
+def _is_local_origin(origin: str) -> bool:
+    try:
+        p = urlparse(origin)
+    except Exception:
+        return False
+    return (p.hostname or "").lower() in {"localhost", "127.0.0.1"}
+
+
+_ALLOWED_ORIGINS = sorted(
+    {
+        _origin(str(settings.frontend_url)),
+        # Production domains for this deployment.
+        "https://rutineiq.com",
+        "https://www.rutineiq.com",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+        "http://localhost:3100",
+        "http://127.0.0.1:3100",
+    }
+)
+
+# Fail fast for unsafe prod CORS config.
+if (settings.app_env or "").strip().lower() in {"production", "prod"}:
+    frontend_origin = _origin(str(settings.frontend_url))
+    if _is_local_origin(frontend_origin):
+        raise RuntimeError(
+            "Unsafe FRONTEND_URL for production. "
+            "Set FRONTEND_URL to a public origin (not localhost)."
+        )
+
 app.add_middleware(
     CORSMiddleware,
     # Always allow local dev, plus the configured FRONTEND_URL origin.
-    allow_origins=sorted(
-        {
-            _origin(str(settings.frontend_url)),
-            # Production domains for this deployment.
-            "https://rutineiq.com",
-            "https://www.rutineiq.com",
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-        }
-    ),
+    allow_origins=_ALLOWED_ORIGINS,
     # Allow Vercel preview deployments (e.g. *.vercel.app) in addition to explicit origins.
     allow_origin_regex=r"^https://.*\.vercel\.app$",
     allow_credentials=True,
@@ -62,6 +87,7 @@ app.add_middleware(
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}
+
 
 async def _try_get_user_id_from_request(request: Request) -> str | None:
     auth = request.headers.get("authorization") or ""
@@ -82,9 +108,14 @@ async def _try_get_user_id_from_request(request: Request) -> str | None:
 async def supabase_rest_error_handler(request: Request, exc: SupabaseRestError):
     # Make DB failures visible and debuggable in dev, without leaking secrets.
     msg = str(exc) or "Supabase request failed"
-    is_rls_recursion = exc.code == "42P17" or "infinite recursion detected in policy" in msg.lower()
-    is_rls_write_violation = exc.code == "42501" and "row-level security policy" in msg.lower()
+    is_rls_recursion = (
+        exc.code == "42P17" or "infinite recursion detected in policy" in msg.lower()
+    )
+    is_rls_write_violation = (
+        exc.code == "42501" and "row-level security policy" in msg.lower()
+    )
 
+    detail: dict[str, str | None]
     if is_rls_recursion:
         detail = {
             "message": "Supabase RLS 정책 문제로 데이터 요청이 실패했습니다.",
@@ -114,7 +145,11 @@ async def supabase_rest_error_handler(request: Request, exc: SupabaseRestError):
         message="Supabase request failed",
         user_id=await _try_get_user_id_from_request(request),
         err=exc,
-        meta={"status_code": exc.status_code, "code": exc.code, "path": str(request.url.path)},
+        meta={
+            "status_code": exc.status_code,
+            "code": exc.code,
+            "path": str(request.url.path),
+        },
     )
     return JSONResponse(status_code=status_code, content={"detail": detail})
 
@@ -141,3 +176,5 @@ app.include_router(stripe_router, prefix="/api")
 app.include_router(admin_router, prefix="/api")
 app.include_router(preferences_router, prefix="/api")
 app.include_router(trends_router, prefix="/api")
+app.include_router(insights_router, prefix="/api")
+app.include_router(demo_router, prefix="/api")

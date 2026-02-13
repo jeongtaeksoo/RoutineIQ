@@ -12,7 +12,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { DAILY_FLOW_TEMPLATES, DEFAULT_TEMPLATE_NAME } from "@/lib/daily-flow-templates";
 import { downloadWeeklyShareCard } from "@/lib/share-card";
-import { createClient } from "@/lib/supabase/client";
+import { isE2ETestMode } from "@/lib/supabase/env";
 
 type AIReport = {
   summary: string;
@@ -29,9 +29,22 @@ type GoalPrefs = {
   minutesPerDay: number;
 };
 
-type ProfilePrefs = {
-  goal_keyword: string | null;
-  goal_minutes_per_day: number | null;
+type WeeklyInsightsResponse = {
+  from_date: string;
+  to_date: string;
+  consistency: {
+    score: number;
+    days_logged: number;
+    days_total: number;
+    series: { date: string; day: string; blocks: number }[];
+  };
+  weekly: {
+    days_logged: number;
+    days_total: number;
+    total_blocks: number;
+    deep_minutes: number;
+    goal: { keyword: string; minutes_per_day: number } | null;
+  };
 };
 
 type CohortTrend = {
@@ -89,8 +102,11 @@ export default function InsightsPage() {
         cta_viewTomorrow: "내일 준비하기",
         cta_editLog: "기록 열기",
         cta_openReport: "리포트 전체보기",
-        cta_reload: "새로고침",
-        progress: "진행 상황",
+      cta_reload: "새로고침",
+      cta_seedDemo: "데모 7일 시드 생성",
+      cta_seeding: "데모 시드 생성 중...",
+      seedDone: "최근 7일 데모 기록이 준비되었습니다.",
+      progress: "진행 상황",
         step_log: "기록",
         step_analyze: "정리",
         step_plan: "내일 준비",
@@ -145,6 +161,9 @@ export default function InsightsPage() {
       cta_editLog: "Open today log",
       cta_openReport: "Open report",
       cta_reload: "Reload report",
+      cta_seedDemo: "Seed 7-day demo data",
+      cta_seeding: "Seeding demo data...",
+      seedDone: "Demo logs for last 7 days are ready.",
       progress: "Progress",
       step_log: "Log",
       step_analyze: "Analyze",
@@ -185,8 +204,10 @@ export default function InsightsPage() {
   const [report, setReport] = React.useState<AIReport | null>(null);
   const [reportLoading, setReportLoading] = React.useState(true);
   const [reportError, setReportError] = React.useState<string | null>(null);
+  const [infoMessage, setInfoMessage] = React.useState<string | null>(null);
 
   const [analyzing, setAnalyzing] = React.useState(false);
+  const [seeding, setSeeding] = React.useState(false);
   const [todayLogBlocks, setTodayLogBlocks] = React.useState<number>(0);
 
   const [consistency, setConsistency] = React.useState<{
@@ -235,6 +256,7 @@ export default function InsightsPage() {
   async function analyze() {
     setAnalyzing(true);
     setReportError(null);
+    setInfoMessage(null);
     try {
       const res = await apiFetch<{ date: string; report: AIReport; cached: boolean }>(`/analyze`, {
         method: "POST",
@@ -253,6 +275,7 @@ export default function InsightsPage() {
   async function quickstart() {
     setAnalyzing(true);
     setReportError(null);
+    setInfoMessage(null);
     try {
       const log = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`);
       const hasLog = Array.isArray(log.entries) && log.entries.length > 0;
@@ -281,152 +304,79 @@ export default function InsightsPage() {
     }
   }
 
-  async function loadConsistency() {
-    const supabase = createClient();
-    const start = new Date();
-    start.setDate(start.getDate() - 6);
-    const startStr = localYYYYMMDD(start);
-
-    // Preferences from user metadata (cross-device; avoids localStorage).
-    let goal: GoalPrefs | null = null;
+  async function seedDemoData() {
+    setSeeding(true);
+    setReportError(null);
+    setInfoMessage(null);
     try {
-      const prefs = await apiFetch<ProfilePrefs>("/preferences/profile");
-      if (prefs.goal_keyword && prefs.goal_keyword.trim() && Number.isFinite(Number(prefs.goal_minutes_per_day))) {
-        goal = {
-          keyword: prefs.goal_keyword.trim(),
-          minutesPerDay: Math.round(Number(prefs.goal_minutes_per_day)),
-        };
-      }
-    } catch {
-      // ignore and fallback to metadata.
-    }
-
-    if (!goal) {
-      try {
-        const {
-          data: { user }
-        } = await supabase.auth.getUser();
-        const meta = (user?.user_metadata as any) || {};
-        const g = meta["routineiq_goal_v1"];
-        if (g && typeof g === "object") {
-          const kw = typeof (g as any).keyword === "string" ? String((g as any).keyword) : "";
-          const mpd = Number((g as any).minutesPerDay);
-          if (kw.trim() && Number.isFinite(mpd) && mpd > 0) {
-            goal = { keyword: kw.trim(), minutesPerDay: Math.round(mpd) };
-          }
-        }
-      } catch {
-        // ignore
-      }
-    }
-
-    // Cumulative consistency (so first day can be 100%).
-    const earliest = await supabase.from("activity_logs").select("date").order("date", { ascending: true }).limit(1).maybeSingle();
-    const earliestDate = earliest.data?.date ? String(earliest.data.date) : null;
-    let daysTotal = 0;
-    if (earliestDate) {
-      const [ey, em, ed] = earliestDate.split("-").map((x) => Number(x));
-      const eDt = new Date(ey, (em || 1) - 1, ed || 1);
-      const [ty, tm, td] = today.split("-").map((x) => Number(x));
-      const tDt = new Date(ty, (tm || 1) - 1, td || 1);
-      const diffDays = Math.floor((tDt.getTime() - eDt.getTime()) / (1000 * 60 * 60 * 24));
-      daysTotal = Math.max(1, diffDays + 1);
-    }
-
-    const countRes = await supabase
-      .from("activity_logs")
-      .select("id", { count: "exact", head: true })
-      .lte("date", today);
-    const daysLogged = Math.max(0, countRes.count || 0);
-
-    const { data, error } = await supabase
-      .from("activity_logs")
-      .select("date,entries")
-      .gte("date", startStr)
-      .lte("date", today)
-      .order("date", { ascending: true });
-
-    if (error) return;
-
-    const series =
-      (data || []).map((r: any) => {
-        const entries = Array.isArray(r.entries) ? (r.entries as any[]) : [];
-        const blocks = entries.length;
-
-        let energySum = 0;
-        let energyN = 0;
-        let focusSum = 0;
-        let focusN = 0;
-        let deepMinutes = 0;
-
-        for (const e of entries) {
-          const energy = typeof e.energy === "number" ? e.energy : null;
-          const focus = typeof e.focus === "number" ? e.focus : null;
-          if (energy != null) {
-            energySum += energy;
-            energyN += 1;
-          }
-          if (focus != null) {
-            focusSum += focus;
-            focusN += 1;
-          }
-          if (goal?.keyword) {
-            const act = typeof e.activity === "string" ? e.activity : "";
-            const tags = Array.isArray(e.tags) ? e.tags.join(" ") : "";
-            const hay = `${act} ${tags}`.toLowerCase();
-            if (hay.includes(goal.keyword.toLowerCase())) {
-              const s = typeof e.start === "string" ? e.start : "";
-              const en = typeof e.end === "string" ? e.end : "";
-              const m1 = /^(\d{2}):(\d{2})$/.exec(s);
-              const m2 = /^(\d{2}):(\d{2})$/.exec(en);
-              if (m1 && m2) {
-                const sm = Number(m1[1]) * 60 + Number(m1[2]);
-                const em = Number(m2[1]) * 60 + Number(m2[2]);
-                if (Number.isFinite(sm) && Number.isFinite(em) && em > sm) deepMinutes += em - sm;
-              }
-            }
-          }
-        }
-
-        return {
-          day: String(r.date).slice(5),
-          blocks,
-          avgEnergy: energyN ? Math.round((energySum / energyN) * 10) / 10 : null,
-          avgFocus: focusN ? Math.round((focusSum / focusN) * 10) / 10 : null,
-          deepMinutes
-        };
-      }) || [];
-
-    // Fill missing days for a stable chart.
-    const byDay = new Map(series.map((s) => [s.day, s]));
-    const filled: { day: string; blocks: number; avgEnergy: number | null; avgFocus: number | null; deepMinutes: number }[] = [];
-    const cursor = new Date(start);
-    for (let i = 0; i < 7; i++) {
-      const key = localYYYYMMDD(cursor).slice(5);
-      const row = byDay.get(key);
-      filled.push({
-        day: key,
-        blocks: row?.blocks ?? 0,
-        avgEnergy: row?.avgEnergy ?? null,
-        avgFocus: row?.avgFocus ?? null,
-        deepMinutes: row?.deepMinutes ?? 0
+      await apiFetch<{ ok: boolean; seeded_days: number }>("/demo/seed", {
+        method: "POST",
+        body: JSON.stringify({ reset: true, days: 7, include_reports: false }),
       });
-      cursor.setDate(cursor.getDate() + 1);
+      await Promise.all([loadTodayLog(), loadConsistency(), loadReport(), loadCohortTrend()]);
+      setInfoMessage(t.seedDone);
+    } catch (err) {
+      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
+      setReportError(err instanceof Error ? `${err.message}${hint}` : (isKo ? "데모 시드 생성에 실패했습니다" : "Failed to seed demo data"));
+    } finally {
+      setSeeding(false);
     }
+  }
 
-    const denom = daysTotal || 7;
-    const score = denom > 0 ? Math.round((daysLogged / denom) * 100) : 0;
-    setConsistency({ score: Math.max(0, Math.min(100, score)), series: filled.map((x) => ({ day: x.day, blocks: x.blocks })) });
+  async function loadConsistency() {
+    if (isE2ETestMode()) {
+      setConsistency({
+        score: 0,
+        series: [
+          { day: "02-01", blocks: 0 },
+          { day: "02-02", blocks: 0 },
+          { day: "02-03", blocks: 0 },
+          { day: "02-04", blocks: 0 },
+          { day: "02-05", blocks: 0 },
+          { day: "02-06", blocks: 0 },
+          { day: "02-07", blocks: 0 },
+        ],
+      });
+      setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
+      return;
+    }
+    try {
+      const start = new Date();
+      start.setDate(start.getDate() - 6);
+      const from = localYYYYMMDD(start);
 
-    const totalBlocks = filled.reduce((acc, x) => acc + x.blocks, 0);
-    const deepMinutes = filled.reduce((acc, x) => acc + x.deepMinutes, 0);
-    setWeekly({
-      daysLogged,
-      daysTotal: denom,
-      totalBlocks,
-      deepMinutes,
-      goal
-    });
+      const res = await apiFetch<WeeklyInsightsResponse>(`/insights/weekly?from=${from}&to=${today}`);
+      setConsistency({
+        score: Math.max(0, Math.min(100, Math.round(Number(res.consistency.score) || 0))),
+        series: Array.isArray(res.consistency.series)
+          ? res.consistency.series.map((s) => ({
+              day: String(s.day || "").slice(0, 5),
+              blocks: Number.isFinite(Number(s.blocks)) ? Number(s.blocks) : 0,
+            }))
+          : [],
+      });
+
+      const goal: GoalPrefs | null =
+        res.weekly.goal && typeof res.weekly.goal.keyword === "string"
+          ? {
+              keyword: res.weekly.goal.keyword,
+              minutesPerDay: Number.isFinite(Number(res.weekly.goal.minutes_per_day))
+                ? Math.round(Number(res.weekly.goal.minutes_per_day))
+                : 0,
+            }
+          : null;
+
+      setWeekly({
+        daysLogged: Number.isFinite(Number(res.weekly.days_logged)) ? Number(res.weekly.days_logged) : 0,
+        daysTotal: Number.isFinite(Number(res.weekly.days_total)) ? Number(res.weekly.days_total) : 0,
+        totalBlocks: Number.isFinite(Number(res.weekly.total_blocks)) ? Number(res.weekly.total_blocks) : 0,
+        deepMinutes: Number.isFinite(Number(res.weekly.deep_minutes)) ? Number(res.weekly.deep_minutes) : 0,
+        goal: goal && goal.minutesPerDay > 0 ? goal : null,
+      });
+    } catch {
+      setConsistency({ score: 0, series: [] });
+      setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
+    }
   }
 
   async function loadCohortTrend() {
@@ -462,6 +412,11 @@ export default function InsightsPage() {
       {reportError ? (
         <div className="whitespace-pre-line rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900">
           {reportError}
+        </div>
+      ) : null}
+      {infoMessage ? (
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900">
+          {infoMessage}
         </div>
       ) : null}
 
@@ -576,6 +531,9 @@ export default function InsightsPage() {
                   </div>
                 </div>
               )}
+              <Button variant="ghost" size="sm" onClick={seedDemoData} disabled={seeding || analyzing}>
+                {seeding ? t.cta_seeding : t.cta_seedDemo}
+              </Button>
             </div>
           </CardContent>
         </Card>

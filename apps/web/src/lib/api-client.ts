@@ -1,6 +1,7 @@
 "use client";
 
 import { createClient } from "@/lib/supabase/client";
+import { isE2ETestMode } from "@/lib/supabase/env";
 
 export type ApiFetchError = Error & {
   status?: number;
@@ -142,20 +143,48 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     }
   }
   const url = `${origin}${normalizeApiPath(path)}`;
+  const isE2EMode = isE2ETestMode();
+  const headers = new Headers(init?.headers || {});
+  if (!headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
 
-  const supabase = createClient();
-  const { data, error } = await supabase.auth.getSession();
-  if (error) throw new Error(error.message);
-  const token = data.session?.access_token;
-  if (!token) throw new Error("Not signed in");
+  if (!isE2EMode) {
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw new Error(error.message);
+    let token = data.session?.access_token ?? null;
+    if (!token) {
+      // Cookie-only sessions can briefly miss a hydrated client session.
+      const refreshed = await supabase.auth.refreshSession();
+      if (refreshed.error) throw new Error(refreshed.error.message);
+      token = refreshed.data.session?.access_token ?? null;
+    }
+    if (!token) {
+      // Server-side cookie session fallback for SSR-authenticated flows.
+      const tokenRes = await fetch("/auth/token", {
+        method: "GET",
+        credentials: "include",
+        cache: "no-store",
+      });
+      if (tokenRes.ok) {
+        const tokenBody = (await tokenRes.json()) as { access_token?: string };
+        token = typeof tokenBody.access_token === "string" ? tokenBody.access_token : null;
+      }
+    }
+    if (!token && process.env.NEXT_PUBLIC_ENABLE_TOKEN_BRIDGE === "1" && typeof window !== "undefined") {
+      const bridgeWindow = (window as any).__ROUTINEIQ_E2E_TOKEN__;
+      const bridgeSession = window.sessionStorage.getItem("routineiq_e2e_token");
+      const bridge = typeof bridgeWindow === "string" && bridgeWindow ? bridgeWindow : bridgeSession;
+      if (bridge) token = bridge;
+    }
+    if (!token) throw new Error("Not signed in");
+    headers.set("authorization", `Bearer ${token}`);
+  }
 
   const res = await fetch(url, {
     ...init,
-    headers: {
-      "content-type": "application/json",
-      ...(init?.headers || {}),
-      authorization: `Bearer ${token}`
-    }
+    headers
   });
 
   if (!res.ok) {

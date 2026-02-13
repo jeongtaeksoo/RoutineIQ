@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Plus, Copy, Save, ChevronLeft, ChevronRight, Sparkles, Clock, NotebookPen } from "lucide-react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 
 import { useLocale } from "@/components/locale-provider";
@@ -185,7 +185,8 @@ export default function DailyFlowPage() {
   }, [isKo]);
 
   const router = useRouter();
-  const searchParams = useSearchParams();
+  const [queryTemplate, setQueryTemplate] = React.useState<string | null>(null);
+  const [queryQuickstart, setQueryQuickstart] = React.useState(false);
   const [date, setDate] = React.useState(() => localYYYYMMDD());
   const [entries, setEntries] = React.useState<Entry[]>([]);
   const [note, setNote] = React.useState<string>("");
@@ -445,14 +446,19 @@ export default function DailyFlowPage() {
   /* ─── Effects ─── */
   React.useEffect(() => { void loadRecent(); }, []);
 
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setQueryTemplate(params.get("template"));
+    setQueryQuickstart(params.get("quickstart") === "1");
+  }, []);
+
   // Sync templates/query params
   React.useEffect(() => {
-    const tmpl = searchParams.get("template");
-    const quickstart = searchParams.get("quickstart") === "1";
-    if (!tmpl || !quickstart) return;
-    applyTemplate(tmpl in TEMPLATES ? tmpl : DEFAULT_TEMPLATE_NAME);
+    if (!queryTemplate || !queryQuickstart) return;
+    applyTemplate(queryTemplate in TEMPLATES ? queryTemplate : DEFAULT_TEMPLATE_NAME);
     setNote(isKo ? "퀵스타트 템플릿" : "Quickstart template");
-  }, [searchParams, isKo, applyTemplate]);
+  }, [queryTemplate, queryQuickstart, isKo, applyTemplate]);
 
   /* ─── Render ─── */
   const hasAnything = entries.length > 0 || Boolean(note.trim());

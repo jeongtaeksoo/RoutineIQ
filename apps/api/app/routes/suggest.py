@@ -1,9 +1,6 @@
-
 from __future__ import annotations
 
-import json
 from datetime import datetime, timezone
-from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel
@@ -13,17 +10,24 @@ from app.core.security import AuthDep
 from app.services.error_log import log_system_error
 from app.services.openai_service import call_openai_structured
 from app.services.privacy import sanitize_for_llm
-from app.services.usage import count_daily_analyze_calls, estimate_cost_usd, insert_usage_event
+from app.services.usage import (
+    count_daily_analyze_calls,
+    estimate_cost_usd,
+    insert_usage_event,
+)
 
 router = APIRouter()
+
 
 class SuggestRequest(BaseModel):
     current_time: str  # "HH:MM"
     context: str | None = None  # e.g. "I feel tired", "Just finished meeting"
 
+
 class SuggestResponse(BaseModel):
     activity: str
     reason: str
+
 
 SUGGEST_JSON_SCHEMA = {
     "type": "object",
@@ -63,7 +67,7 @@ async def suggest_activity(body: SuggestRequest, auth: AuthDep) -> dict:
         "Your suggestion should be healthy, productive, or restorative. "
         "Output valid JSON only."
     )
-    
+
     user_prompt = f"Current time: {body.current_time}. "
     if body.context:
         user_prompt += f"Context: {sanitize_for_llm(body.context)}."
@@ -106,4 +110,6 @@ async def suggest_activity(body: SuggestRequest, auth: AuthDep) -> dict:
             user_id=auth.user_id,
             err=e,
         )
-        raise HTTPException(status_code=502, detail="AI suggestion failed. Please try again.")
+        raise HTTPException(
+            status_code=502, detail="AI suggestion failed. Please try again."
+        )

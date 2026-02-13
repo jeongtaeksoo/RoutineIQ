@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from pathlib import Path
+from urllib.parse import urlparse
 
 from pydantic import AnyUrl, Field
+from pydantic import model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-
 
 ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 
@@ -41,19 +42,50 @@ class Settings(BaseSettings):
     # Stripe
     # Optional: allow running core app without Stripe configured.
     stripe_secret_key: str | None = Field(default=None, alias="STRIPE_SECRET_KEY")
-    stripe_webhook_secret: str | None = Field(default=None, alias="STRIPE_WEBHOOK_SECRET")
+    stripe_webhook_secret: str | None = Field(
+        default=None, alias="STRIPE_WEBHOOK_SECRET"
+    )
     stripe_price_id_pro: str | None = Field(default=None, alias="STRIPE_PRICE_ID_PRO")
     stripe_success_url: AnyUrl | None = Field(default=None, alias="STRIPE_SUCCESS_URL")
     stripe_cancel_url: AnyUrl | None = Field(default=None, alias="STRIPE_CANCEL_URL")
+    stripe_smoke_fake: bool = Field(default=False, alias="STRIPE_SMOKE_FAKE")
 
     # Limits / retention
     free_daily_analyze_limit: int = Field(default=1, alias="FREE_DAILY_ANALYZE_LIMIT")
     pro_daily_analyze_limit: int = Field(default=10, alias="PRO_DAILY_ANALYZE_LIMIT")
-    free_report_retention_days: int = Field(default=3, alias="FREE_REPORT_RETENTION_DAYS")
-    pro_report_retention_days: int = Field(default=30, alias="PRO_REPORT_RETENTION_DAYS")
+    free_report_retention_days: int = Field(
+        default=3, alias="FREE_REPORT_RETENTION_DAYS"
+    )
+    pro_report_retention_days: int = Field(
+        default=30, alias="PRO_REPORT_RETENTION_DAYS"
+    )
     analyze_per_minute_limit: int = Field(default=6, alias="ANALYZE_PER_MINUTE_LIMIT")
     cohort_window_days: int = Field(default=14, alias="COHORT_WINDOW_DAYS")
     cohort_min_sample_size: int = Field(default=50, alias="COHORT_MIN_SAMPLE_SIZE")
+
+    @model_validator(mode="after")
+    def validate_runtime_constraints(self) -> "Settings":
+        env = (self.app_env or "").strip().lower()
+        is_prod = env in {"production", "prod"}
+
+        frontend_origin = urlparse(str(self.frontend_url))
+        frontend_host = (frontend_origin.hostname or "").lower()
+        if is_prod and frontend_host in {"localhost", "127.0.0.1"}:
+            raise ValueError(
+                "Invalid FRONTEND_URL for production: localhost is not allowed. "
+                "Set FRONTEND_URL to your public web domain."
+            )
+
+        supabase_origin = urlparse(str(self.supabase_url))
+        supabase_host = (supabase_origin.hostname or "").lower()
+        if is_prod and supabase_host in {"localhost", "127.0.0.1"}:
+            raise ValueError(
+                "Invalid SUPABASE_URL for production: localhost is not allowed."
+            )
+        if is_prod and self.stripe_smoke_fake:
+            raise ValueError("STRIPE_SMOKE_FAKE must be disabled in production.")
+
+        return self
 
     def is_stripe_configured(self) -> bool:
         return bool(
@@ -65,4 +97,4 @@ class Settings(BaseSettings):
         )
 
 
-settings = Settings()  # singleton import
+settings = Settings()  # type: ignore[call-arg]  # singleton import via env settings

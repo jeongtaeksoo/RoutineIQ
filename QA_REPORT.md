@@ -1,5 +1,43 @@
 # RoutineIQ — Full QA Report
 
+## Update — 2026-02-13 Release Loop
+
+### Gate Snapshot
+
+- `G1 Web`: PASS
+  - `npm run lint`
+  - `npm run typecheck`
+  - `npm run build`
+  - `playwright` core flows (`F1/F2/F3`) pass in mock mode
+- `G2 API`: PASS (runtime, compile, ruff, format checks on touched files)
+  - Python runtime pinned to `3.12` via `apps/api/.python-version`
+  - Clean venv setup enforced in verify scripts
+- `G3 Live Integration`: PASS
+  - `E2E_MODE=live` F2 (`Daily Flow -> Analyze -> Report`) pass
+  - usage event row creation verified in live smoke
+  - RLS checks verified (own read allowed, cross-user blocked, admin 403 for non-admin)
+- `G4 Stripe`: BLOCKED (environment issue)
+  - `GET /api/stripe/status` returns `{"enabled": true, "ready": false}` in local smoke
+  - root cause: invalid Stripe server key in runtime env; checkout intentionally blocked (`503`) in patched API
+  - production-like endpoint without patch still returns checkout `500` on invalid key
+- `G5 Observability`: PASS
+  - core exceptions logged to `system_errors` (best effort)
+  - sensitive values redacted
+- `G6 Security`: PASS (code-level)
+  - no service role / OpenAI / Stripe secret exposure in `NEXT_PUBLIC_*`
+  - billing endpoints now fail closed on invalid Stripe auth
+- `G7 Release Docs`: PASS
+  - `RELEASE_CHECKLIST.md` added
+  - `scripts/release-verify.sh`, `scripts/staging-smoke.sh` added/updated
+
+### New Regression Fixes in This Loop
+
+1. Fixed Playwright/production crash on `/app/daily-flow` by removing `useSearchParams()` dependency that required Suspense wrapping.
+2. Enforced Python 3.12 in verification scripts and prevented accidental 3.14 wheel build failures.
+3. Added Stripe readiness guard + fail-closed checkout behavior:
+   - invalid/missing Stripe server keys no longer trigger unhandled 500 in patched API.
+4. Added live smoke diagnostics for clearer Stripe failure reasons.
+
 **Date:** 2026-02-11  
 **Build:** ✅ `next build` passed (20/20 pages, 0 errors)  
 **Scope:** Frontend (Next.js 14), Backend (FastAPI), Supabase, OpenAI, Stripe

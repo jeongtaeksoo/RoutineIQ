@@ -22,27 +22,68 @@ from app.schemas.ai_report import AIReport
 from app.schemas.analyze import AnalyzeRequest
 from app.services.error_log import log_system_error
 from app.services.openai_service import call_openai_structured
-from app.services.plan import analyze_limit_for_plan, get_subscription_info, retention_days_for_plan
+from app.services.plan import (
+    analyze_limit_for_plan,
+    get_subscription_info,
+    retention_days_for_plan,
+)
 from app.services.privacy import sanitize_for_llm
 from app.services.retention import cleanup_expired_reports
 from app.services.supabase_rest import SupabaseRest, SupabaseRestError
-from app.services.usage import count_daily_analyze_calls, estimate_cost_usd, insert_usage_event
-
+from app.services.usage import (
+    count_daily_analyze_calls,
+    estimate_cost_usd,
+    insert_usage_event,
+)
 
 router = APIRouter()
 
 
 def _is_service_key_failure(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
-    return exc.status_code in (401, 403) or exc.code == "42501" or "row-level security policy" in msg
+    return (
+        exc.status_code in (401, 403)
+        or exc.code == "42501"
+        or "row-level security policy" in msg
+    )
 
 
 _IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:\-]{8,128}$")
 _TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 _MODEL_LOCALE_RE = re.compile(r"\|loc=(ko|en|ja|zh|es)$")
-_DEEP_WORK_HINTS = ("deep", "focus", "딥워크", "집중", "몰입", "sprint", "write", "coding", "study")
-_MEETING_HINTS = ("meeting", "sync", "collab", "회의", "미팅", "call", "inbox", "message", "admin")
-_RECOVERY_HINTS = ("break", "rest", "walk", "stretch", "lunch", "휴식", "산책", "스트레칭", "점심")
+_DEEP_WORK_HINTS = (
+    "deep",
+    "focus",
+    "딥워크",
+    "집중",
+    "몰입",
+    "sprint",
+    "write",
+    "coding",
+    "study",
+)
+_MEETING_HINTS = (
+    "meeting",
+    "sync",
+    "collab",
+    "회의",
+    "미팅",
+    "call",
+    "inbox",
+    "message",
+    "admin",
+)
+_RECOVERY_HINTS = (
+    "break",
+    "rest",
+    "walk",
+    "stretch",
+    "lunch",
+    "휴식",
+    "산책",
+    "스트레칭",
+    "점심",
+)
 _LANG_NAME = {
     "ko": "Korean",
     "en": "English",
@@ -54,21 +95,33 @@ _ROUTINE_LABEL_LIBRARY: dict[str, list[dict[str, str]]] = {
     "ko": [
         {"label": "핵심 집중 블록", "duration": "45-90", "use": "중요 결과물 생성"},
         {"label": "실행 블록", "duration": "30-60", "use": "우선순위 실행"},
-        {"label": "조정/커뮤니케이션 블록", "duration": "20-45", "use": "협업/응답 처리"},
+        {
+            "label": "조정/커뮤니케이션 블록",
+            "duration": "20-45",
+            "use": "협업/응답 처리",
+        },
         {"label": "회복 버퍼", "duration": "5-15", "use": "집중 회복"},
         {"label": "마무리 블록", "duration": "15-30", "use": "정리 및 다음 준비"},
     ],
     "en": [
         {"label": "Focus Window", "duration": "45-90", "use": "deep output work"},
         {"label": "Execution Window", "duration": "30-60", "use": "priority execution"},
-        {"label": "Coordination Window", "duration": "20-45", "use": "communication/collab"},
+        {
+            "label": "Coordination Window",
+            "duration": "20-45",
+            "use": "communication/collab",
+        },
         {"label": "Recovery Buffer", "duration": "5-15", "use": "cognitive reset"},
         {"label": "Wrap-up Window", "duration": "15-30", "use": "close and prepare"},
     ],
     "ja": [
         {"label": "集中ウィンドウ", "duration": "45-90", "use": "重要アウトプット"},
         {"label": "実行ウィンドウ", "duration": "30-60", "use": "優先実行"},
-        {"label": "調整/コミュニケーション枠", "duration": "20-45", "use": "連絡と調整"},
+        {
+            "label": "調整/コミュニケーション枠",
+            "duration": "20-45",
+            "use": "連絡と調整",
+        },
         {"label": "回復バッファ", "duration": "5-15", "use": "集中回復"},
         {"label": "締めウィンドウ", "duration": "15-30", "use": "整理と準備"},
     ],
@@ -81,9 +134,21 @@ _ROUTINE_LABEL_LIBRARY: dict[str, list[dict[str, str]]] = {
     ],
     "es": [
         {"label": "Ventana de Enfoque", "duration": "45-90", "use": "trabajo profundo"},
-        {"label": "Ventana de Ejecucion", "duration": "30-60", "use": "ejecucion prioritaria"},
-        {"label": "Ventana de Coordinacion", "duration": "20-45", "use": "comunicacion/colaboracion"},
-        {"label": "Buffer de Recuperacion", "duration": "5-15", "use": "reinicio cognitivo"},
+        {
+            "label": "Ventana de Ejecucion",
+            "duration": "30-60",
+            "use": "ejecucion prioritaria",
+        },
+        {
+            "label": "Ventana de Coordinacion",
+            "duration": "20-45",
+            "use": "comunicacion/colaboracion",
+        },
+        {
+            "label": "Buffer de Recuperacion",
+            "duration": "5-15",
+            "use": "reinicio cognitivo",
+        },
         {"label": "Ventana de Cierre", "duration": "15-30", "use": "cerrar y preparar"},
     ],
 }
@@ -176,7 +241,9 @@ def _label_library(locale: str) -> list[dict[str, str]]:
 
 
 def _activity_blacklist(activity_log: dict[str, Any] | None) -> list[str]:
-    raw_entries = activity_log.get("entries") if isinstance(activity_log, dict) else None
+    raw_entries = (
+        activity_log.get("entries") if isinstance(activity_log, dict) else None
+    )
     entries = raw_entries if isinstance(raw_entries, list) else []
     phrases: list[str] = []
     seen: set[str] = set()
@@ -227,7 +294,9 @@ def _pick_label(
     if idx >= 1:
         for x in labels:
             lx = x.lower()
-            if any(k in lx for k in ("coord", "커뮤니케이션", "コミュ", "协调", "coordin")):
+            if any(
+                k in lx for k in ("coord", "커뮤니케이션", "コミュ", "协调", "coordin")
+            ):
                 return x
     for x in labels:
         lx = x.lower()
@@ -247,7 +316,11 @@ def _normalize_tomorrow_routine(
         return report_dict
 
     library = _label_library(locale)
-    allowed_labels = [x.get("label", "") for x in library if isinstance(x, dict) and isinstance(x.get("label"), str)]
+    allowed_labels = [
+        x.get("label", "")
+        for x in library
+        if isinstance(x, dict) and isinstance(x.get("label"), str)
+    ]
     allowed_set = {x.strip().lower() for x in allowed_labels if x.strip()}
     bl = {x.strip().lower() for x in activity_blacklist if isinstance(x, str)}
     generic_goal = _GENERIC_GOAL_BY_LOCALE.get(locale, _GENERIC_GOAL_BY_LOCALE["en"])
@@ -332,7 +405,11 @@ def _normalize_yesterday_plan_vs_actual(
     comparison_note = str(obj.get("comparison_note") or "").strip()
     top_deviation = str(obj.get("top_deviation") or "").strip()
 
-    adherence = computed_metrics.get("plan_adherence") if isinstance(computed_metrics, dict) else None
+    adherence = (
+        computed_metrics.get("plan_adherence")
+        if isinstance(computed_metrics, dict)
+        else None
+    )
     adherence_obj = adherence if isinstance(adherence, dict) else {}
     adherence_pct = adherence_obj.get("adherence_pct")
     avg_shift = adherence_obj.get("avg_start_shift_minutes")
@@ -354,7 +431,9 @@ def _normalize_yesterday_plan_vs_actual(
             comparison_note = _deviation_label(locale, code or "NO_PREVIOUS_PLAN")
 
     if (not top_deviation) or re.fullmatch(r"[A-Z0-9_]+", top_deviation):
-        top_deviation = _deviation_label(locale, code or top_deviation or "NO_PREVIOUS_PLAN")
+        top_deviation = _deviation_label(
+            locale, code or top_deviation or "NO_PREVIOUS_PLAN"
+        )
 
     report_dict["yesterday_plan_vs_actual"] = {
         "comparison_note": comparison_note,
@@ -374,7 +453,11 @@ def _is_generic_coach_one_liner(*, text: str, locale: str) -> bool:
 def _fallback_coach_one_liner(*, locale: str, computed_metrics: dict[str, Any]) -> str:
     flags = computed_metrics.get("flags") if isinstance(computed_metrics, dict) else {}
     flags_obj = flags if isinstance(flags, dict) else {}
-    peaks = computed_metrics.get("peak_candidates") if isinstance(computed_metrics, dict) else []
+    peaks = (
+        computed_metrics.get("peak_candidates")
+        if isinstance(computed_metrics, dict)
+        else []
+    )
     peak_rows = peaks if isinstance(peaks, list) else []
 
     peak_start = ""
@@ -564,7 +647,9 @@ def _compute_analysis_metrics(
     activity_log: dict[str, Any] | None,
     yesterday_plan: list[dict[str, Any]] | None,
 ) -> dict[str, Any]:
-    raw_entries = activity_log.get("entries") if isinstance(activity_log, dict) else None
+    raw_entries = (
+        activity_log.get("entries") if isinstance(activity_log, dict) else None
+    )
     entries = raw_entries if isinstance(raw_entries, list) else []
 
     blocks: list[dict[str, Any]] = []
@@ -608,14 +693,17 @@ def _compute_analysis_metrics(
             switch_count += 1
 
     switch_rate = round(switch_count / total_hours, 3) if total_hours > 0 else 0.0
-    fragmentation = round(switch_count / max(1, block_count - 1), 3) if block_count > 1 else 0.0
+    fragmentation = (
+        round(switch_count / max(1, block_count - 1), 3) if block_count > 1 else 0.0
+    )
 
     rated_blocks = [b for b in blocks if b.get("intensity") is not None]
     rated_minutes = sum(int(b["duration_min"]) for b in rated_blocks)
     weighted_focus_day = None
     if rated_minutes > 0:
         weighted_focus_day = round(
-            sum(float(b["intensity"]) * int(b["duration_min"]) for b in rated_blocks) / float(rated_minutes),
+            sum(float(b["intensity"]) * int(b["duration_min"]) for b in rated_blocks)
+            / float(rated_minutes),
             2,
         )
 
@@ -647,7 +735,10 @@ def _compute_analysis_metrics(
         }
         for b in sorted(
             rated_blocks,
-            key=lambda x: (float(x.get("intensity") or 0.0), int(x.get("duration_min") or 0)),
+            key=lambda x: (
+                float(x.get("intensity") or 0.0),
+                int(x.get("duration_min") or 0),
+            ),
             reverse=True,
         )[:3]
     ]
@@ -665,7 +756,9 @@ def _compute_analysis_metrics(
         or (isinstance(b.get("energy"), int) and b["energy"] <= 2)
     ][:5]
 
-    plan_adherence = _compute_plan_adherence(yesterday_plan=yesterday_plan, actual_blocks=blocks)
+    plan_adherence = _compute_plan_adherence(
+        yesterday_plan=yesterday_plan, actual_blocks=blocks
+    )
 
     return {
         "method": {
@@ -692,7 +785,8 @@ def _compute_analysis_metrics(
         "flags": {
             "high_switching_risk": switch_rate >= 1.2,
             "high_fragmentation_risk": fragmentation >= 0.6,
-            "weak_focus_day": weighted_focus_day is not None and weighted_focus_day < 55,
+            "weak_focus_day": weighted_focus_day is not None
+            and weighted_focus_day < 55,
         },
         "peak_candidates": peak_candidates,
         "low_focus_windows": low_focus_windows,
@@ -708,9 +802,7 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
             "- Make tomorrow_routine more specific and optimized.\n"
         )
     else:
-        pro_hint = (
-            "- Keep it concise. If data is insufficient, ask for specific missing inputs inside reason/fix.\n"
-        )
+        pro_hint = "- Keep it concise. If data is insufficient, ask for specific missing inputs inside reason/fix.\n"
 
     return (
         "You are RoutineIQ, an AI routine operations coach.\n"
@@ -761,8 +853,7 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- Behavioral evidence style: use implementation intentions for action initiation, reduce switch residue with transition rituals, and use short recovery breaks to protect vigor.\n"
         "\n"
         f"Required output locale: {target_locale} ({_LANG_NAME.get(target_locale, 'Korean')}).\n"
-        f"Plan mode: {plan}\n"
-        + pro_hint
+        f"Plan mode: {plan}\n" + pro_hint
     )
 
 
@@ -782,7 +873,11 @@ def _build_user_prompt(
         f"User output locale: {target_locale} ({_LANG_NAME.get(target_locale, 'Korean')})\n"
         "\n"
         "Daily Flow log (JSON):\n"
-        + json.dumps(activity_log or {"date": target_date.isoformat(), "entries": [], "note": None}, ensure_ascii=False)
+        + json.dumps(
+            activity_log
+            or {"date": target_date.isoformat(), "entries": [], "note": None},
+            ensure_ascii=False,
+        )
         + "\n\n"
         "Yesterday's recommended plan for today (if available; JSON array of routine blocks):\n"
         + json.dumps(yesterday_plan or [], ensure_ascii=False)
@@ -820,7 +915,9 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
     )
 
     sb_rls = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
-    sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+    sb_service = SupabaseRest(
+        str(settings.supabase_url), settings.supabase_service_role_key
+    )
 
     # Require personal profile fields before the first-ever analysis.
     previous_report = await sb_rls.select(
@@ -843,13 +940,17 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
                 "limit": 1,
             },
         )
-        missing_fields = _missing_required_profile_fields(profile_rows[0] if profile_rows else None)
+        missing_fields = _missing_required_profile_fields(
+            profile_rows[0] if profile_rows else None
+        )
         if missing_fields:
             if target_locale == "ko":
                 message = "첫 AI 분석 전에 개인 설정 4개 항목을 먼저 완료해 주세요."
                 hint = "설정에서 연령대/성별/직군/근무 형태를 저장하면 바로 분석할 수 있습니다. 성별은 '응답 안함' 선택이 가능합니다."
             else:
-                message = "Please complete your profile fields before your first AI analysis."
+                message = (
+                    "Please complete your profile fields before your first AI analysis."
+                )
                 hint = "Go to Preferences and save age group, gender, job family, and work mode. Gender supports 'Prefer not to say'."
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
@@ -898,7 +999,9 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
                 "cached": True,
             }
 
-    sub = await get_subscription_info(user_id=auth.user_id, access_token=auth.access_token)
+    sub = await get_subscription_info(
+        user_id=auth.user_id, access_token=auth.access_token
+    )
     plan = sub.plan
 
     # Hard daily limit (based on call day, UTC)
@@ -915,7 +1018,11 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             detail={
                 "message": f"Daily AI analysis limit reached ({used}/{limit}).",
                 "plan": plan,
-                "hint": "Upgrade to Pro for more daily analyses." if plan == "free" else "Try again tomorrow.",
+                "hint": (
+                    "Upgrade to Pro for more daily analyses."
+                    if plan == "free"
+                    else "Try again tomorrow."
+                ),
             },
         )
 
@@ -930,7 +1037,11 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             "limit": 1,
         },
     )
-    activity_log = logs[0] if logs else {"date": body.date.isoformat(), "entries": [], "note": None}
+    activity_log = (
+        logs[0]
+        if logs
+        else {"date": body.date.isoformat(), "entries": [], "note": None}
+    )
     sanitized_activity_log = sanitize_for_llm(activity_log)
 
     # Load yesterday's report to compare "plan vs actual"
@@ -964,10 +1075,14 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             sort_keys=True,
             ensure_ascii=False,
         )
-        fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[:24]
+        fingerprint = hashlib.sha256(fingerprint_source.encode("utf-8")).hexdigest()[
+            :24
+        ]
         idempotency_key = f"analyze:{auth.user_id}:{target_locale}:{body.date.isoformat()}:{fingerprint}"
 
-    idem_state = await claim_idempotency_key(key=idempotency_key, processing_ttl_seconds=150)
+    idem_state = await claim_idempotency_key(
+        key=idempotency_key, processing_ttl_seconds=150
+    )
     if idem_state != "acquired":
         # If a same-key request already completed/in-flight, return current report when possible.
         retry_rows = await sb_rls.select(
@@ -1011,7 +1126,9 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
     allowed_labels = [
         x.get("label", "")
         for x in label_library
-        if isinstance(x, dict) and isinstance(x.get("label"), str) and str(x.get("label")).strip()
+        if isinstance(x, dict)
+        and isinstance(x.get("label"), str)
+        and str(x.get("label")).strip()
     ]
     user_prompt = _build_user_prompt(
         target_date=body.date,
@@ -1025,7 +1142,9 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
 
     # OpenAI call + schema validation (retry once on validation error)
     try:
-        obj, usage = await call_openai_structured(system_prompt=system_prompt, user_prompt=user_prompt)
+        obj, usage = await call_openai_structured(
+            system_prompt=system_prompt, user_prompt=user_prompt
+        )
         report = AIReport.model_validate(obj)
     except httpx.HTTPError as e:
         await log_system_error(
@@ -1033,16 +1152,25 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             message="OpenAI request failed",
             user_id=auth.user_id,
             err=e,
-            meta={"target_date": body.date.isoformat(), "plan": plan, "model": settings.openai_model},
+            meta={
+                "target_date": body.date.isoformat(),
+                "plan": plan,
+                "model": settings.openai_model,
+            },
         )
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI analysis failed. Please try again in a moment.",
         )
-    except (ValidationError, json.JSONDecodeError, ValueError) as e:
+    except (ValidationError, json.JSONDecodeError, ValueError):
         try:
-            strict_system = system_prompt + "\nThe previous output was invalid. Retry and strictly follow the schema."
-            obj, usage = await call_openai_structured(system_prompt=strict_system, user_prompt=user_prompt)
+            strict_system = (
+                system_prompt
+                + "\nThe previous output was invalid. Retry and strictly follow the schema."
+            )
+            obj, usage = await call_openai_structured(
+                system_prompt=strict_system, user_prompt=user_prompt
+            )
             report = AIReport.model_validate(obj)
         except Exception as e2:
             await log_system_error(
@@ -1093,7 +1221,9 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             input_tokens=usage.get("input_tokens"),
             output_tokens=usage.get("output_tokens"),
         )
-        usage_request_id = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[:32]
+        usage_request_id = hashlib.sha256(idempotency_key.encode("utf-8")).hexdigest()[
+            :32
+        ]
         await insert_usage_event(
             user_id=auth.user_id,
             event_date=call_day,
@@ -1104,7 +1234,12 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             tokens_total=usage.get("total_tokens"),
             cost_usd=cost,
             request_id=usage_request_id,
-            meta={"target_date": body.date.isoformat(), "plan": plan, "forced": body.force, "locale": target_locale},
+            meta={
+                "target_date": body.date.isoformat(),
+                "plan": plan,
+                "forced": body.force,
+                "locale": target_locale,
+            },
             access_token=auth.access_token,
         )
 
@@ -1117,7 +1252,12 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         )
         completed = True
         await mark_idempotency_done(key=idempotency_key, done_ttl_seconds=600)
-        return {"date": body.date.isoformat(), "report": report_dict, "model": settings.openai_model, "cached": False}
+        return {
+            "date": body.date.isoformat(),
+            "report": report_dict,
+            "model": settings.openai_model,
+            "cached": False,
+        }
     finally:
         if not completed:
             await clear_idempotency_key(key=idempotency_key)

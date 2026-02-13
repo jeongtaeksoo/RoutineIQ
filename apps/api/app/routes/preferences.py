@@ -7,7 +7,6 @@ from app.core.security import AuthDep
 from app.schemas.preferences import DEFAULT_COMPARE_BY, ProfilePreferences
 from app.services.supabase_rest import SupabaseRest, SupabaseRestError
 
-
 router = APIRouter()
 
 
@@ -21,7 +20,11 @@ def _normalize_compare_by(value: object) -> list[str]:
         return list(DEFAULT_COMPARE_BY)
     out: list[str] = []
     for item in value:
-        if isinstance(item, str) and item in {"age_group", "gender", "job_family", "work_mode", "chronotype"} and item not in out:
+        if (
+            isinstance(item, str)
+            and item in {"age_group", "gender", "job_family", "work_mode", "chronotype"}
+            and item not in out
+        ):
             out.append(item)
     return out or list(DEFAULT_COMPARE_BY)
 
@@ -60,7 +63,9 @@ async def get_profile_preferences(auth: AuthDep) -> ProfilePreferences:
 
 
 @router.put("/preferences/profile", response_model=ProfilePreferences)
-async def upsert_profile_preferences(body: ProfilePreferences, auth: AuthDep) -> ProfilePreferences:
+async def upsert_profile_preferences(
+    body: ProfilePreferences, auth: AuthDep
+) -> ProfilePreferences:
     row_data = {
         "id": auth.user_id,
         "email": auth.email,
@@ -87,7 +92,9 @@ async def upsert_profile_preferences(body: ProfilePreferences, auth: AuthDep) ->
         # Fallback for environments where profile insert/update RLS is temporarily inconsistent.
         if not _is_rls_write_failure(exc):
             raise
-        sb_service = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
+        sb_service = SupabaseRest(
+            str(settings.supabase_url), settings.supabase_service_role_key
+        )
         row = await sb_service.upsert_one(
             "profiles",
             bearer_token=settings.supabase_service_role_key,
@@ -95,5 +102,25 @@ async def upsert_profile_preferences(body: ProfilePreferences, auth: AuthDep) ->
             row=row_data,
         )
     if not row:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save preferences")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to save preferences",
+        )
     return _to_preferences(row)
+
+
+@router.delete("/preferences/data")
+async def delete_my_data(auth: AuthDep) -> dict[str, bool]:
+    sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
+    # Core user data tables only; profile/auth records stay intact.
+    await sb.delete(
+        "ai_reports",
+        bearer_token=auth.access_token,
+        params={"user_id": f"eq.{auth.user_id}"},
+    )
+    await sb.delete(
+        "activity_logs",
+        bearer_token=auth.access_token,
+        params={"user_id": f"eq.{auth.user_id}"},
+    )
+    return {"ok": True}

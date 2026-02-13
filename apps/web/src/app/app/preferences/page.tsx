@@ -440,18 +440,7 @@ export default function PreferencesPage() {
     setError(null);
     setMessage(null);
     try {
-      const supabase = createClient();
-      const {
-        data: { user }
-      } = await supabase.auth.getUser();
-      if (!user) throw new Error(t.login_required);
-
-      const del1 = await supabase.from("activity_logs").delete().eq("user_id", user.id);
-      if (del1.error) throw del1.error;
-
-      const del2 = await supabase.from("ai_reports").delete().eq("user_id", user.id);
-      if (del2.error) throw del2.error;
-
+      await apiFetch<{ ok: boolean }>("/preferences/data", { method: "DELETE" });
       setMessage(t.reset_complete);
     } catch (err) {
       setError(err instanceof Error ? err.message : t.delete_failed);

@@ -12,28 +12,34 @@ from app.services.error_log import log_system_error
 from app.services.stripe_service import (
     create_pro_checkout_session,
     init_stripe,
+    stripe_is_fake_mode,
+    stripe_is_ready,
     set_subscription_free,
     stripe_is_configured,
     upsert_subscription_row,
 )
 
-
 router = APIRouter()
+
 
 @router.get("/stripe/status")
 async def stripe_status(_: AuthDep) -> dict:
-    # Returns only an enable/disable flag (no secrets).
-    return {"enabled": stripe_is_configured()}
+    # Returns only readiness flags (no secrets).
+    return {
+        "enabled": stripe_is_configured(),
+        "ready": stripe_is_ready(),
+        "mode": "fake" if stripe_is_fake_mode() else "live",
+    }
 
 
 @router.post("/stripe/create-checkout-session")
 async def create_checkout_session(auth: AuthDep) -> dict:
-    if not stripe_is_configured():
+    if not stripe_is_ready(force=True):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail={
                 "message": "Billing is not configured yet.",
-                "hint": "Stripe keys are missing on the server. Core features still work in guest mode.",
+                "hint": "Stripe key/config is missing or invalid on the server. Core features still work in guest mode.",
                 "code": "STRIPE_NOT_CONFIGURED",
             },
         )
@@ -50,15 +56,54 @@ async def create_checkout_session(auth: AuthDep) -> dict:
             },
         )
 
-    url = await create_pro_checkout_session(user_id=auth.user_id, email=str(email))
-    return {"url": url}
+    try:
+        url = await create_pro_checkout_session(user_id=auth.user_id, email=str(email))
+        return {"url": url}
+    except stripe.AuthenticationError as e:
+        await log_system_error(
+            route="/api/stripe/create-checkout-session",
+            message="Stripe authentication failed",
+            user_id=auth.user_id,
+            err=e,
+            meta={"code": "STRIPE_AUTHENTICATION_ERROR"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail={
+                "message": "Billing is temporarily unavailable.",
+                "hint": "Server Stripe key is invalid. Update STRIPE_SECRET_KEY and redeploy API.",
+                "code": "STRIPE_AUTH_INVALID",
+            },
+        ) from e
+    except stripe.StripeError as e:
+        await log_system_error(
+            route="/api/stripe/create-checkout-session",
+            message="Stripe checkout provider error",
+            user_id=auth.user_id,
+            err=e,
+            meta={"code": "STRIPE_PROVIDER_ERROR"},
+        )
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail={
+                "message": "Billing provider error. Try again shortly.",
+                "code": "STRIPE_PROVIDER_ERROR",
+            },
+        ) from e
 
 
 def _get_user_id_from_metadata(obj: dict[str, Any]) -> str | None:
     md = obj.get("metadata")
-    if isinstance(md, dict) and isinstance(md.get("user_id"), str) and md["user_id"].strip():
+    if (
+        isinstance(md, dict)
+        and isinstance(md.get("user_id"), str)
+        and md["user_id"].strip()
+    ):
         return md["user_id"].strip()
-    if isinstance(obj.get("client_reference_id"), str) and obj["client_reference_id"].strip():
+    if (
+        isinstance(obj.get("client_reference_id"), str)
+        and obj["client_reference_id"].strip()
+    ):
         return obj["client_reference_id"].strip()
     return None
 
@@ -83,7 +128,9 @@ def _subscription_price_ids(sub: dict[str, Any]) -> set[str]:
 def _derive_plan_from_subscription(sub: dict[str, Any]) -> str:
     status = sub.get("status")
     price_ids = _subscription_price_ids(sub)
-    is_pro_price = bool(settings.stripe_price_id_pro and settings.stripe_price_id_pro in price_ids)
+    is_pro_price = bool(
+        settings.stripe_price_id_pro and settings.stripe_price_id_pro in price_ids
+    )
     is_active = status in ("active", "trialing")
     return "pro" if (is_pro_price and is_active) else "free"
 
@@ -105,7 +152,10 @@ async def stripe_webhook(request: Request) -> dict:
     payload = await request.body()
     sig = request.headers.get("stripe-signature")
     if not sig:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing Stripe-Signature header")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Missing Stripe-Signature header",
+        )
 
     try:
         # settings.stripe_webhook_secret is guaranteed by stripe_is_configured()
@@ -115,8 +165,14 @@ async def stripe_webhook(request: Request) -> dict:
             secret=str(settings.stripe_webhook_secret),
         )
     except Exception as e:
-        await log_system_error(route="/api/stripe/webhook", message="Stripe webhook signature verification failed", err=e)
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature")
+        await log_system_error(
+            route="/api/stripe/webhook",
+            message="Stripe webhook signature verification failed",
+            err=e,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature"
+        )
 
     etype = event.get("type")
     data = event.get("data", {}).get("object", {})
@@ -185,4 +241,7 @@ async def stripe_webhook(request: Request) -> dict:
             err=e,
             meta={"type": etype},
         )
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Webhook handler error")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Webhook handler error",
+        )

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { apiFetch } from "@/lib/api-client";
+import { isE2ETestMode } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 
 export function BillingActions({ plan, isGuest }: { plan: "free" | "pro"; isGuest: boolean }) {
@@ -53,6 +54,11 @@ export function BillingActions({ plan, isGuest }: { plan: "free" | "pro"; isGues
       if (!password) throw new Error(isKo ? "비밀번호를 입력해주세요" : "Password is required");
       if (password !== password2) throw new Error(isKo ? "비밀번호가 일치하지 않습니다" : "Passwords do not match");
       if (password.length < 8) throw new Error(isKo ? "8자 이상으로 설정해주세요" : "Use at least 8 characters");
+
+      if (isE2ETestMode()) {
+        setConverted(true);
+        return;
+      }
 
       const supabase = createClient();
       const { error } = await supabase.auth.updateUser({ email: email.trim(), password });
@@ -129,9 +135,15 @@ export function BillingActions({ plan, isGuest }: { plan: "free" | "pro"; isGues
           </Button>
 
           {converted ? (
-            <p className="text-xs text-mutedFg">
-              {isKo ? "계정이 생성되었습니다. 이제 Pro 결제를 진행할 수 있어요." : "Account created. You can now upgrade to Pro."}
-            </p>
+            <div className="space-y-2">
+              <p className="text-xs text-mutedFg">
+                {isKo ? "계정이 생성되었습니다. 이제 Pro 결제를 진행할 수 있어요." : "Account created. You can now upgrade to Pro."}
+              </p>
+              <Button onClick={upgrade} disabled={loading} data-testid="continue-checkout">
+                {loading ? (isKo ? "이동 중..." : "Redirecting...") : isKo ? "결제로 계속하기" : "Continue to checkout"}
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+            </div>
           ) : null}
         </div>
       ) : (

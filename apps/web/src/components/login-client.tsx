@@ -8,7 +8,7 @@ import { ArrowLeft, Globe, Mail } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { getSupabasePublicEnv, isE2ETestMode } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 
 /* ─── i18n ─── */
@@ -334,6 +334,10 @@ export default function LoginClient() {
   async function tryDemo() {
     setError(null); setMessage(null); setLoading(true);
     try {
+      if (isE2ETestMode()) {
+        router.replace("/app/insights");
+        return;
+      }
       if (!supabaseEnv.configured) return;
       const supabase = createClient();
       const { error } = await supabase.auth.signInAnonymously();
