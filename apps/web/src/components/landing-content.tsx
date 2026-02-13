@@ -440,7 +440,7 @@ export function LandingContent() {
                 <FadeUp delay={0.15}>
                     <div className="mt-10">
                         <Link
-                            href="/login"
+                            href="/login?demo=1"
                             className="group inline-flex items-center gap-2 rounded-full px-9 py-3.5 text-sm font-medium text-white transition-all duration-300"
                             style={{ background: "#4a3f35", boxShadow: "0 4px 20px rgba(74,63,53,0.15)" }}
                             onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#3e3529"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(74,63,53,0.25)"; }}
