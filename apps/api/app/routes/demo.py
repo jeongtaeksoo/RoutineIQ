@@ -12,7 +12,6 @@ from app.core.security import AuthContext, AuthDep
 from app.schemas.ai_report import AIReport
 from app.services.supabase_rest import SupabaseRest
 
-
 router = APIRouter()
 
 
@@ -34,39 +33,156 @@ def _is_prod() -> bool:
     return (settings.app_env or "").strip().lower() in {"production", "prod"}
 
 
-def _can_seed(auth: AuthContext) -> bool:
+async def _is_admin(auth: AuthContext) -> bool:
+    sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
+    rows = await sb.select(
+        "profiles",
+        bearer_token=auth.access_token,
+        params={"select": "role", "id": f"eq.{auth.user_id}", "limit": 1},
+    )
+    return bool(rows and rows[0].get("role") == "admin")
+
+
+async def _can_seed(auth: AuthContext) -> bool:
     if auth.is_anonymous:
         return True
     if auth.email and auth.email.lower().endswith("@routineiq.test"):
         return True
-    # Keep local/staging convenient.
-    if not _is_prod():
+    if await _is_admin(auth):
         return True
+    # Non-demo regular users are blocked in all environments.
+    if not _is_prod():
+        return False
     return False
 
 
 def _entries_for_offset(offset: int) -> list[dict]:
     templates = [
         [
-            {"start": "09:00", "end": "09:30", "activity": "Planning + setup", "energy": 3, "focus": 3, "tags": ["planning"]},
-            {"start": "09:30", "end": "10:30", "activity": "Deep work sprint", "energy": 4, "focus": 5, "tags": ["deep-work"]},
-            {"start": "11:00", "end": "12:00", "activity": "Meetings / collaboration", "energy": 3, "focus": 3, "tags": ["meeting"]},
-            {"start": "14:00", "end": "15:00", "activity": "Execution block", "energy": 4, "focus": 4, "tags": ["execution"]},
-            {"start": "16:00", "end": "16:30", "activity": "Wrap-up review", "energy": 2, "focus": 3, "tags": ["review"]},
+            {
+                "start": "09:00",
+                "end": "09:30",
+                "activity": "Planning + setup",
+                "energy": 3,
+                "focus": 3,
+                "tags": ["planning"],
+            },
+            {
+                "start": "09:30",
+                "end": "10:30",
+                "activity": "Deep work sprint",
+                "energy": 4,
+                "focus": 5,
+                "tags": ["deep-work"],
+            },
+            {
+                "start": "11:00",
+                "end": "12:00",
+                "activity": "Meetings / collaboration",
+                "energy": 3,
+                "focus": 3,
+                "tags": ["meeting"],
+            },
+            {
+                "start": "14:00",
+                "end": "15:00",
+                "activity": "Execution block",
+                "energy": 4,
+                "focus": 4,
+                "tags": ["execution"],
+            },
+            {
+                "start": "16:00",
+                "end": "16:30",
+                "activity": "Wrap-up review",
+                "energy": 2,
+                "focus": 3,
+                "tags": ["review"],
+            },
         ],
         [
-            {"start": "08:30", "end": "09:00", "activity": "Morning planning", "energy": 3, "focus": 3, "tags": ["planning"]},
-            {"start": "09:00", "end": "10:20", "activity": "Deep work sprint", "energy": 4, "focus": 5, "tags": ["deep-work"]},
-            {"start": "10:30", "end": "11:00", "activity": "Recovery break", "energy": 2, "focus": 2, "tags": ["recovery"]},
-            {"start": "13:00", "end": "14:00", "activity": "Project execution", "energy": 4, "focus": 4, "tags": ["execution"]},
-            {"start": "15:30", "end": "16:30", "activity": "Admin / communication", "energy": 3, "focus": 3, "tags": ["admin"]},
+            {
+                "start": "08:30",
+                "end": "09:00",
+                "activity": "Morning planning",
+                "energy": 3,
+                "focus": 3,
+                "tags": ["planning"],
+            },
+            {
+                "start": "09:00",
+                "end": "10:20",
+                "activity": "Deep work sprint",
+                "energy": 4,
+                "focus": 5,
+                "tags": ["deep-work"],
+            },
+            {
+                "start": "10:30",
+                "end": "11:00",
+                "activity": "Recovery break",
+                "energy": 2,
+                "focus": 2,
+                "tags": ["recovery"],
+            },
+            {
+                "start": "13:00",
+                "end": "14:00",
+                "activity": "Project execution",
+                "energy": 4,
+                "focus": 4,
+                "tags": ["execution"],
+            },
+            {
+                "start": "15:30",
+                "end": "16:30",
+                "activity": "Admin / communication",
+                "energy": 3,
+                "focus": 3,
+                "tags": ["admin"],
+            },
         ],
         [
-            {"start": "09:00", "end": "09:45", "activity": "Priority alignment", "energy": 3, "focus": 3, "tags": ["planning"]},
-            {"start": "10:00", "end": "11:10", "activity": "Deep work sprint", "energy": 4, "focus": 5, "tags": ["deep-work"]},
-            {"start": "11:20", "end": "12:00", "activity": "Meetings / collaboration", "energy": 3, "focus": 3, "tags": ["meeting"]},
-            {"start": "14:00", "end": "15:20", "activity": "Focused execution", "energy": 4, "focus": 4, "tags": ["execution"]},
-            {"start": "16:00", "end": "16:30", "activity": "Wrap-up review", "energy": 2, "focus": 3, "tags": ["review"]},
+            {
+                "start": "09:00",
+                "end": "09:45",
+                "activity": "Priority alignment",
+                "energy": 3,
+                "focus": 3,
+                "tags": ["planning"],
+            },
+            {
+                "start": "10:00",
+                "end": "11:10",
+                "activity": "Deep work sprint",
+                "energy": 4,
+                "focus": 5,
+                "tags": ["deep-work"],
+            },
+            {
+                "start": "11:20",
+                "end": "12:00",
+                "activity": "Meetings / collaboration",
+                "energy": 3,
+                "focus": 3,
+                "tags": ["meeting"],
+            },
+            {
+                "start": "14:00",
+                "end": "15:20",
+                "activity": "Focused execution",
+                "energy": 4,
+                "focus": 4,
+                "tags": ["execution"],
+            },
+            {
+                "start": "16:00",
+                "end": "16:30",
+                "activity": "Wrap-up review",
+                "energy": 2,
+                "focus": 3,
+                "tags": ["review"],
+            },
         ],
     ]
     selected = templates[offset % len(templates)]
@@ -79,7 +195,10 @@ def _report_fixture(locale: str) -> dict:
         "ja": "明日は集中ブロックの間に10分バッファを入れて流れを守りましょう。",
         "zh": "明天在专注块之间加入10分钟缓冲，保持节奏。",
         "es": "Mañana añade un buffer de 10 minutos entre bloques para sostener el ritmo.",
-    }.get(locale, "Tomorrow, add a 10-minute buffer between focus blocks to protect momentum.")
+    }.get(
+        locale,
+        "Tomorrow, add a 10-minute buffer between focus blocks to protect momentum.",
+    )
 
     return AIReport(
         summary={
@@ -87,9 +206,16 @@ def _report_fixture(locale: str) -> dict:
             "ja": "記録パターンでは午前の集中が高く、切り替え区間で崩れが見られました。",
             "zh": "记录显示上午专注度更高，切换时段容易中断。",
             "es": "Tus registros muestran mejor foco por la mañana y caídas en transiciones.",
-        }.get(locale, "Your logs show stronger morning focus and breakdowns during transitions."),
+        }.get(
+            locale,
+            "Your logs show stronger morning focus and breakdowns during transitions.",
+        ),
         productivity_peaks=[
-            {"start": "09:30", "end": "11:00", "reason": "High focus with fewer interruptions."},
+            {
+                "start": "09:30",
+                "end": "11:00",
+                "reason": "High focus with fewer interruptions.",
+            },
         ],
         failure_patterns=[
             {
@@ -128,10 +254,10 @@ def _report_fixture(locale: str) -> dict:
 
 @router.post("/demo/seed", response_model=DemoSeedResponse)
 async def seed_demo_data(body: DemoSeedRequest, auth: AuthDep) -> DemoSeedResponse:
-    if not _can_seed(auth):
+    if not await _can_seed(auth):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Demo seed is available only for demo users.",
+            detail="Demo seed is available only for demo sessions or admins.",
         )
     # Abuse guard: keep demo seeding bounded per user.
     await consume(key=f"demo_seed:{auth.user_id}", limit=6, window_seconds=60)

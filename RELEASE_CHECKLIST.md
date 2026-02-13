@@ -98,6 +98,35 @@ Notes:
 - Web deploy/build logs: Vercel build/runtime logs.
 - Stripe webhook diagnostics: Stripe dashboard event logs + API `system_errors`.
 
+Useful checks:
+
+```sql
+-- 최근 서버 에러 50개
+select created_at, route, message, user_id
+from public.system_errors
+order by created_at desc
+limit 50;
+```
+
+```bash
+# Render API live health
+curl -sS https://routineiq.onrender.com/health
+```
+
+```bash
+# Stripe mode check (requires bearer token)
+curl -sS -H "Authorization: Bearer <access_token>" https://routineiq.onrender.com/api/stripe/status
+```
+
+## 5.1 Vercel Build Fail Quick Fix
+
+If Vercel shows `Command "npm run build" exited with 1`, check:
+
+1. `NEXT_PUBLIC_SUPABASE_URL` set for **Preview + Production**
+2. `NEXT_PUBLIC_SUPABASE_ANON_KEY` set for **Preview + Production**
+3. `NEXT_PUBLIC_API_BASE_URL` set for **Preview + Production**, and **not localhost**
+4. No sensitive key under `NEXT_PUBLIC_*` (forbidden: `SECRET`, `SERVICE_ROLE`, `OPENAI`, `STRIPE`, `JWT`, `PASSWORD`)
+
 ## 6) Go/No-Go Criteria
 
 Release only when:

@@ -84,6 +84,23 @@ app.add_middleware(
 )
 
 
+@app.middleware("http")
+async def log_server_error_responses(request: Request, call_next):
+    response = await call_next(request)
+    if response.status_code >= 500:
+        await log_system_error(
+            route=str(request.url.path),
+            message=f"Server response status {response.status_code}",
+            user_id=await _try_get_user_id_from_request(request),
+            meta={
+                "status_code": response.status_code,
+                "method": request.method,
+                "path": str(request.url.path),
+            },
+        )
+    return response
+
+
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True}

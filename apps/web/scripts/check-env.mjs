@@ -39,6 +39,21 @@ const missing = required.filter((name) => !(process.env[name] || "").trim());
 if (missing.length) {
   console.error("[env-check] Missing required public env:");
   for (const key of missing) console.error(`- ${key}`);
+  if (runningInCiLike) {
+    console.error("[env-check] Set these in Vercel Project Settings > Environment Variables (Preview + Production).");
+  }
+  process.exit(1);
+}
+
+const sensitivePublicKeys = Object.keys(process.env).filter((key) => {
+  if (!key.startsWith("NEXT_PUBLIC_")) return false;
+  if (key === "NEXT_PUBLIC_SUPABASE_URL") return false;
+  if (key === "NEXT_PUBLIC_SUPABASE_ANON_KEY") return false;
+  return /(SERVICE_ROLE|SECRET|WEBHOOK|PRIVATE|OPENAI|STRIPE|JWT|PASSWORD)/i.test(key);
+});
+if (sensitivePublicKeys.length) {
+  console.error("[env-check] Sensitive env keys must not be public (NEXT_PUBLIC_*):");
+  for (const key of sensitivePublicKeys) console.error(`- ${key}`);
   process.exit(1);
 }
 
@@ -52,6 +67,7 @@ const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
 if (enforceStrictApiBase) {
   if (!apiBase) {
     console.error("[env-check] NEXT_PUBLIC_API_BASE_URL is required in CI/deploy builds.");
+    console.error("[env-check] Example: https://api.rutineiq.com");
     process.exit(1);
   }
   let parsed;

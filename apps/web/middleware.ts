@@ -2,7 +2,9 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function middleware(request: NextRequest) {
-  if (process.env.E2E_TEST_MODE === "1" || process.env.NEXT_PUBLIC_E2E_TEST_MODE === "1") {
+  const appEnv = (process.env.APP_ENV || "").toLowerCase();
+  const testBypassEnabled = process.env.E2E_TEST_MODE === "1" && appEnv !== "production";
+  if (testBypassEnabled) {
     return NextResponse.next();
   }
 

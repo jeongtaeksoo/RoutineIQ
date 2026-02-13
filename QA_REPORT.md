@@ -37,6 +37,9 @@
 3. Added Stripe readiness guard + fail-closed checkout behavior:
    - invalid/missing Stripe server keys no longer trigger unhandled 500 in patched API.
 4. Added live smoke diagnostics for clearer Stripe failure reasons.
+5. Added centralized `5xx` response logging middleware so key route failures are always captured in `system_errors`.
+6. Tightened test bypass to one middleware gate (`E2E_TEST_MODE=1` + non-production only).
+7. Added build-time env security check to block sensitive `NEXT_PUBLIC_*` keys.
 
 **Date:** 2026-02-11  
 **Build:** ✅ `next build` passed (20/20 pages, 0 errors)  
