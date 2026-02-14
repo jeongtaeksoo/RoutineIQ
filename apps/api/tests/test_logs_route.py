@@ -5,8 +5,8 @@ from fastapi.testclient import TestClient
 from app.services.supabase_rest import SupabaseRestError
 
 
-def _log_payload(date_value: str) -> dict:
-    return {
+def _log_payload(date_value: str, *, meta: dict | None = None) -> dict:
+    payload = {
         "date": date_value,
         "entries": [
             {
@@ -20,6 +20,9 @@ def _log_payload(date_value: str) -> dict:
         ],
         "note": "good session",
     }
+    if meta is not None:
+        payload["meta"] = meta
+    return payload
 
 
 def test_post_logs_creates_entry(
@@ -115,6 +118,7 @@ def test_get_logs_returns_saved_log(
             "date": "2026-02-15",
             "entries": _log_payload("2026-02-15")["entries"],
             "note": "from db",
+            "meta": {"mood": "good"},
         }
     ]
 
@@ -123,6 +127,7 @@ def test_get_logs_returns_saved_log(
     assert response.status_code == 200
     assert response.json()["date"] == "2026-02-15"
     assert response.json()["note"] == "from db"
+    assert response.json()["meta"] == {"mood": "good"}
 
 
 def test_logs_requires_auth(client: TestClient) -> None:
@@ -188,3 +193,39 @@ def test_post_logs_ignores_missing_streak_columns_until_migration_applied(
 
     assert response.status_code == 200
     assert response.json()["date"] == "2026-02-15"
+
+
+def test_post_logs_persists_optional_daily_meta(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    supabase_mock["upsert_one"].side_effect = [
+        {
+            "id": "log-meta-1",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-02-15",
+            "entries": _log_payload("2026-02-15")["entries"],
+            "note": "good session",
+            "meta": {"mood": "good", "sleep_quality": 4},
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
+    ]
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
+
+    response = authenticated_client.post(
+        "/api/logs",
+        json=_log_payload(
+            "2026-02-15",
+            meta={"mood": "good", "sleep_quality": 4, "hydration_level": "ok"},
+        ),
+    )
+
+    assert response.status_code == 200
+    first_call = supabase_mock["upsert_one"].await_args_list[0].kwargs
+    assert first_call["table"] == "activity_logs"
+    assert first_call["row"]["meta"]["mood"] == "good"
+    assert first_call["row"]["meta"]["sleep_quality"] == 4
+    assert first_call["row"]["meta"]["hydration_level"] == "ok"

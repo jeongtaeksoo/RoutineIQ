@@ -39,9 +39,25 @@ class YesterdayPlanVsActual(BaseModel):
     top_deviation: str
 
 
+class WellbeingInsight(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    burnout_risk: str = "medium"
+    energy_curve_forecast: str = ""
+    note: str = ""
+
+
+class MicroAdviceItem(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    action: str
+    when: str
+    reason: str
+    duration_min: int = Field(ge=1, le=20)
+
+
 class AIReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
+    schema_version: int = Field(default=2, ge=1, le=9)
     summary: str
     productivity_peaks: list[ProductivityPeak]
     failure_patterns: list[FailurePattern]
@@ -49,3 +65,6 @@ class AIReport(BaseModel):
     if_then_rules: list[IfThenRule]
     coach_one_liner: str
     yesterday_plan_vs_actual: YesterdayPlanVsActual
+    wellbeing_insight: WellbeingInsight = Field(default_factory=WellbeingInsight)
+    micro_advice: list[MicroAdviceItem] = Field(default_factory=list)
+    weekly_pattern_insight: str = ""

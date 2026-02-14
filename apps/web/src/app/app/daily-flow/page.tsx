@@ -8,6 +8,7 @@ import useSWR, { useSWRConfig } from "swr";
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
@@ -17,6 +18,63 @@ import { DailyEntryRow, DailyEntrySkeleton } from "./entry-row";
 
 /* ─── Types and Helpers ─── */
 type Entry = DailyFlowEntry;
+type DailyMeta = {
+  mood?: "very_low" | "low" | "neutral" | "good" | "great" | null;
+  sleep_quality?: number | null;
+  sleep_hours?: number | null;
+  stress_level?: number | null;
+  hydration_level?: "low" | "ok" | "great" | null;
+  water_intake_ml?: number | null;
+  micro_habit_done?: boolean | null;
+};
+
+const EMPTY_META: DailyMeta = {
+  mood: null,
+  sleep_quality: null,
+  sleep_hours: null,
+  stress_level: null,
+  hydration_level: null,
+  water_intake_ml: null,
+  micro_habit_done: null,
+};
+
+function normalizeMeta(raw: unknown): DailyMeta {
+  if (!raw || typeof raw !== "object") return { ...EMPTY_META };
+  const src = raw as Record<string, unknown>;
+  const mood =
+    src.mood === "very_low" || src.mood === "low" || src.mood === "neutral" || src.mood === "good" || src.mood === "great"
+      ? src.mood
+      : null;
+  const sleepQuality = Number.isFinite(Number(src.sleep_quality)) ? Number(src.sleep_quality) : null;
+  const sleepHours = Number.isFinite(Number(src.sleep_hours)) ? Number(src.sleep_hours) : null;
+  const stressLevel = Number.isFinite(Number(src.stress_level)) ? Number(src.stress_level) : null;
+  const hydration =
+    src.hydration_level === "low" || src.hydration_level === "ok" || src.hydration_level === "great"
+      ? src.hydration_level
+      : null;
+  const waterMl = Number.isFinite(Number(src.water_intake_ml)) ? Number(src.water_intake_ml) : null;
+  return {
+    mood,
+    sleep_quality: sleepQuality && sleepQuality >= 1 && sleepQuality <= 5 ? sleepQuality : null,
+    sleep_hours: sleepHours && sleepHours >= 0 && sleepHours <= 14 ? sleepHours : null,
+    stress_level: stressLevel && stressLevel >= 1 && stressLevel <= 5 ? stressLevel : null,
+    hydration_level: hydration,
+    water_intake_ml: waterMl && waterMl >= 0 && waterMl <= 6000 ? waterMl : null,
+    micro_habit_done: typeof src.micro_habit_done === "boolean" ? src.micro_habit_done : null,
+  };
+}
+
+function buildMetaPayload(meta: DailyMeta): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  if (meta.mood) payload.mood = meta.mood;
+  if (meta.sleep_quality != null) payload.sleep_quality = meta.sleep_quality;
+  if (meta.sleep_hours != null) payload.sleep_hours = meta.sleep_hours;
+  if (meta.stress_level != null) payload.stress_level = meta.stress_level;
+  if (meta.hydration_level) payload.hydration_level = meta.hydration_level;
+  if (meta.water_intake_ml != null) payload.water_intake_ml = meta.water_intake_ml;
+  if (meta.micro_habit_done != null) payload.micro_habit_done = meta.micro_habit_done;
+  return payload;
+}
 
 function localYYYYMMDD(d = new Date()) {
   const y = d.getFullYear();
@@ -123,6 +181,23 @@ export default function DailyFlowPage() {
         tagsPlaceholder: "딥워크, 미팅, 운동",
         dayNote: "오늘의 메모",
         dayNotePlaceholder: "오늘 하루 중 가장 중요했던 순간은?",
+        quickSignalsTitle: "퀵 시그널 (선택)",
+        quickSignalsDesc: "30초 입력 원칙: 기분/수면/수분만 체크해도 AI 정확도가 올라갑니다.",
+        mood: "기분",
+        sleepQuality: "수면 질",
+        sleepHours: "수면 시간",
+        stress: "스트레스",
+        hydration: "수분 상태",
+        waterIntake: "수분 섭취(ml)",
+        microHabit: "오늘 5분 마이크로 습관 완료",
+        mood_very_low: "매우 낮음",
+        mood_low: "낮음",
+        mood_neutral: "보통",
+        mood_good: "좋음",
+        mood_great: "매우 좋음",
+        hydration_low: "부족",
+        hydration_ok: "보통",
+        hydration_great: "충분",
         now: "지금",
         invalidTime: (n: number) => `블록 #${n}: 시간 형식이 올바르지 않습니다`,
         endAfterStart: (n: number) => `블록 #${n}: 종료가 시작보다 빨라요`,
@@ -168,6 +243,23 @@ export default function DailyFlowPage() {
       tagsPlaceholder: "deep work, meeting, workout",
       dayNote: "Day note",
       dayNotePlaceholder: "What was the highlight of your day?",
+      quickSignalsTitle: "Quick Signals (Optional)",
+      quickSignalsDesc: "30-second rule: mood/sleep/hydration gives the AI better context.",
+      mood: "Mood",
+      sleepQuality: "Sleep quality",
+      sleepHours: "Sleep hours",
+      stress: "Stress",
+      hydration: "Hydration",
+      waterIntake: "Water intake (ml)",
+      microHabit: "I completed one 5-minute micro habit today",
+      mood_very_low: "Very low",
+      mood_low: "Low",
+      mood_neutral: "Neutral",
+      mood_good: "Good",
+      mood_great: "Great",
+      hydration_low: "Low",
+      hydration_ok: "Okay",
+      hydration_great: "Great",
       now: "Now",
       invalidTime: (n: number) => `Block #${n}: invalid time format`,
       endAfterStart: (n: number) => `Block #${n}: end must be after start`,
@@ -190,6 +282,7 @@ export default function DailyFlowPage() {
   const [date, setDate] = React.useState(() => localYYYYMMDD());
   const [entries, setEntries] = React.useState<Entry[]>([]);
   const [note, setNote] = React.useState<string>("");
+  const [meta, setMeta] = React.useState<DailyMeta>({ ...EMPTY_META });
   const [recentActivities, setRecentActivities] = React.useState<string[]>([]);
   const [saving, setSaving] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
@@ -199,7 +292,7 @@ export default function DailyFlowPage() {
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
 
   /* ─── SWR Data Fetching ─── */
-  const { data: serverData, isLoading } = useSWR<{ date: string; entries: Entry[]; note: string | null }>(
+  const { data: serverData, isLoading } = useSWR<{ date: string; entries: Entry[]; note: string | null; meta?: DailyMeta | null }>(
     `/logs?date=${date}`,
     apiFetch,
     {
@@ -208,6 +301,7 @@ export default function DailyFlowPage() {
         if (data && !saving) { // Don't overwrite if currently saving
           setEntries(Array.isArray(data.entries) ? data.entries : []);
           setNote(data.note || "");
+          setMeta(normalizeMeta(data.meta));
         }
       },
       onError: (err) => {
@@ -270,9 +364,10 @@ export default function DailyFlowPage() {
     setSaving(true);
     try {
       const y = addDays(date, -1);
-      const res = await apiFetch<{ entries: Entry[]; note: string | null }>(`/logs?date=${y}`);
+      const res = await apiFetch<{ entries: Entry[]; note: string | null; meta?: DailyMeta | null }>(`/logs?date=${y}`);
       if (res.entries) setEntries(res.entries);
-      if (res.note) setNote(res.note);
+      setNote(res.note || "");
+      setMeta(normalizeMeta(res.meta));
     } catch (err) {
       setError(t.failedLoad);
     } finally {
@@ -347,7 +442,7 @@ export default function DailyFlowPage() {
     setSaving(true);
 
     // Optimistically update SWR cache
-    const newData = { date, entries, note: note || null };
+    const newData = { date, entries, note: note || null, meta: buildMetaPayload(meta) };
     await mutate(`/logs?date=${date}`, newData, false);
 
     try {
@@ -370,7 +465,7 @@ export default function DailyFlowPage() {
     if (v) { setError(v); return; }
     setSaving(true);
     try {
-      const newData = { date, entries, note: note || null };
+      const newData = { date, entries, note: note || null, meta: buildMetaPayload(meta) };
       await apiFetch(`/logs`, { method: "POST", body: JSON.stringify(newData) });
       const labels = entries.map((e) => e.activity.trim()).filter(Boolean);
       await saveRecent(Array.from(new Set([...labels.reverse(), ...recentActivities])).slice(0, 12));
@@ -463,6 +558,18 @@ export default function DailyFlowPage() {
   /* ─── Render ─── */
   const hasAnything = entries.length > 0 || Boolean(note.trim());
   const isBusy = saving || analyzing;
+  const moodOptions: Array<{ value: NonNullable<DailyMeta["mood"]>; emoji: string; label: string }> = [
+    { value: "very_low", emoji: "😵", label: t.mood_very_low },
+    { value: "low", emoji: "😕", label: t.mood_low },
+    { value: "neutral", emoji: "😐", label: t.mood_neutral },
+    { value: "good", emoji: "🙂", label: t.mood_good },
+    { value: "great", emoji: "😄", label: t.mood_great },
+  ];
+  const hydrationOptions: Array<{ value: NonNullable<DailyMeta["hydration_level"]>; label: string }> = [
+    { value: "low", label: t.hydration_low },
+    { value: "ok", label: t.hydration_ok },
+    { value: "great", label: t.hydration_great },
+  ];
 
   return (
     <div
@@ -645,6 +752,167 @@ export default function DailyFlowPage() {
               <Plus className="h-4 w-4" /> {t.emptyManual}
             </button>
           </div>
+        )}
+
+        {/* ─── Optional Daily Signals ─── */}
+        {!isLoading && (
+          <details className="group rounded-xl border bg-white/55 p-4 shadow-sm">
+            <summary className="cursor-pointer list-none">
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold">{t.quickSignalsTitle}</p>
+                  <p className="mt-0.5 text-xs text-mutedFg">{t.quickSignalsDesc}</p>
+                </div>
+                <span className="rounded-full border bg-white/70 px-2 py-1 text-[10px] text-mutedFg group-open:hidden">
+                  {isKo ? "열기" : "Open"}
+                </span>
+                <span className="hidden rounded-full border bg-white/70 px-2 py-1 text-[10px] text-mutedFg group-open:inline-flex">
+                  {isKo ? "닫기" : "Close"}
+                </span>
+              </div>
+            </summary>
+
+            <div className="mt-4 space-y-4">
+              <div>
+                <Label className="text-xs text-mutedFg">{t.mood}</Label>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {moodOptions.map((opt) => {
+                    const active = meta.mood === opt.value;
+                    return (
+                      <button
+                        key={opt.value}
+                        type="button"
+                        onClick={() => setMeta((prev) => ({ ...prev, mood: prev.mood === opt.value ? null : opt.value }))}
+                        className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                          active ? "border-brand bg-brand/10 text-fg" : "bg-white/70 text-mutedFg hover:text-fg"
+                        }`}
+                      >
+                        <span className="mr-1">{opt.emoji}</span>
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-3">
+                <div>
+                  <Label className="text-xs text-mutedFg">{t.sleepQuality}</Label>
+                  <div className="mt-2 flex gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => {
+                      const active = meta.sleep_quality === n;
+                      return (
+                        <button
+                          key={`sleep-${n}`}
+                          type="button"
+                          onClick={() => setMeta((prev) => ({ ...prev, sleep_quality: prev.sleep_quality === n ? null : n }))}
+                          className={`h-8 w-8 rounded-md border text-xs transition-colors ${
+                            active ? "border-brand bg-brand/10 text-fg" : "bg-white/70 text-mutedFg hover:text-fg"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div>
+                  <Label className="text-xs text-mutedFg">{t.stress}</Label>
+                  <div className="mt-2 flex gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => {
+                      const active = meta.stress_level === n;
+                      return (
+                        <button
+                          key={`stress-${n}`}
+                          type="button"
+                          onClick={() => setMeta((prev) => ({ ...prev, stress_level: prev.stress_level === n ? null : n }))}
+                          className={`h-8 w-8 rounded-md border text-xs transition-colors ${
+                            active ? "border-brand bg-brand/10 text-fg" : "bg-white/70 text-mutedFg hover:text-fg"
+                          }`}
+                        >
+                          {n}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-mutedFg">{t.sleepHours}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={14}
+                    step={0.5}
+                    value={meta.sleep_hours ?? ""}
+                    onChange={(e) => {
+                      const next = e.target.value === "" ? null : Number(e.target.value);
+                      setMeta((prev) => ({
+                        ...prev,
+                        sleep_hours: typeof next === "number" && Number.isFinite(next) ? next : null,
+                      }));
+                    }}
+                    className="h-8 bg-white/70 text-sm"
+                  />
+                </div>
+              </div>
+
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div>
+                  <Label className="text-xs text-mutedFg">{t.hydration}</Label>
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    {hydrationOptions.map((opt) => {
+                      const active = meta.hydration_level === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() =>
+                            setMeta((prev) => ({
+                              ...prev,
+                              hydration_level: prev.hydration_level === opt.value ? null : opt.value,
+                            }))
+                          }
+                          className={`rounded-full border px-3 py-1.5 text-xs transition-colors ${
+                            active ? "border-brand bg-brand/10 text-fg" : "bg-white/70 text-mutedFg hover:text-fg"
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-mutedFg">{t.waterIntake}</Label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={6000}
+                    step={50}
+                    value={meta.water_intake_ml ?? ""}
+                    onChange={(e) => {
+                      const next = e.target.value === "" ? null : Number(e.target.value);
+                      setMeta((prev) => ({
+                        ...prev,
+                        water_intake_ml: typeof next === "number" && Number.isFinite(next) ? next : null,
+                      }));
+                    }}
+                    className="h-8 bg-white/70 text-sm"
+                  />
+                </div>
+              </div>
+
+              <label className="flex cursor-pointer items-center gap-2 rounded-lg border bg-white/60 px-3 py-2 text-xs">
+                <input
+                  type="checkbox"
+                  checked={meta.micro_habit_done === true}
+                  onChange={(e) => setMeta((prev) => ({ ...prev, micro_habit_done: e.target.checked }))}
+                  className="h-4 w-4 accent-brand"
+                />
+                <span>{t.microHabit}</span>
+              </label>
+            </div>
+          </details>
         )}
 
         {/* ─── Day Note ─── */}

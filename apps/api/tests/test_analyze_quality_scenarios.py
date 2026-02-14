@@ -142,6 +142,17 @@ def test_analyze_quality_scenarios(
 
     supabase_mock["select"].side_effect = [
         [{"date": "2026-02-14"}],  # previous_report
+        [
+            {
+                "age_group": "25_34",
+                "gender": "prefer_not_to_say",
+                "job_family": "engineering",
+                "work_mode": "fixed",
+                "chronotype": "mixed",
+                "goal_keyword": "deep work",
+                "goal_minutes_per_day": 90,
+            }
+        ],  # profile context
         [],  # existing report cache miss
         [
             _activity_row(target_date.isoformat(), entries, note=scenario_name)

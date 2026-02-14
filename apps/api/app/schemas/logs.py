@@ -29,12 +29,25 @@ class ActivityLogEntry(BaseModel):
     note: str | None = Field(default=None, max_length=280)
 
 
+class DailySignals(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    mood: str | None = Field(default=None, pattern="^(very_low|low|neutral|good|great)$")
+    sleep_quality: int | None = Field(default=None, ge=1, le=5)
+    sleep_hours: float | None = Field(default=None, ge=0, le=14)
+    stress_level: int | None = Field(default=None, ge=1, le=5)
+    hydration_level: str | None = Field(default=None, pattern="^(low|ok|great)$")
+    water_intake_ml: int | None = Field(default=None, ge=0, le=6000)
+    micro_habit_done: bool | None = None
+
+
 class UpsertLogRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     date: date
     entries: list[ActivityLogEntry] = Field(default_factory=list)
     note: str | None = Field(default=None, max_length=1000)
+    meta: DailySignals | None = None
 
     @model_validator(mode="after")
     def validate_entries(self):
@@ -64,5 +77,6 @@ class ActivityLogRow(BaseModel):
     date: date
     entries: list[dict[str, Any]]
     note: str | None = None
+    meta: dict[str, Any] | None = None
     created_at: str | None = None
     updated_at: str | None = None

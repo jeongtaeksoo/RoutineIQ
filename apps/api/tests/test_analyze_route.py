@@ -55,6 +55,7 @@ def test_analyze_success_returns_report(
 
     supabase_mock["select"].side_effect = [
         [{"date": "2026-02-14"}],  # previous_report
+        [_profile_row()],  # profile context
         [],  # existing report for target date
         [_activity_log()],  # activity log
         [_activity_log()],  # recent activity logs
@@ -109,6 +110,7 @@ def test_analyze_openai_failure_returns_502(
 
     supabase_mock["select"].side_effect = [
         [{"date": "2026-02-14"}],  # previous_report
+        [_profile_row()],  # profile context
         [],  # existing report
         [_activity_log()],  # activity log
         [_activity_log()],  # recent activity logs

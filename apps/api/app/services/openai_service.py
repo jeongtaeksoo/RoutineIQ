@@ -22,6 +22,7 @@ AI_REPORT_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
     "additionalProperties": False,
     "required": [
+        "schema_version",
         "summary",
         "productivity_peaks",
         "failure_patterns",
@@ -29,8 +30,12 @@ AI_REPORT_JSON_SCHEMA: dict[str, Any] = {
         "if_then_rules",
         "coach_one_liner",
         "yesterday_plan_vs_actual",
+        "wellbeing_insight",
+        "micro_advice",
+        "weekly_pattern_insight",
     ],
     "properties": {
+        "schema_version": {"type": "integer", "enum": [2]},
         "summary": {"type": "string"},
         "productivity_peaks": {
             "type": "array",
@@ -94,6 +99,34 @@ AI_REPORT_JSON_SCHEMA: dict[str, Any] = {
                 "top_deviation": {"type": "string"},
             },
         },
+        "wellbeing_insight": {
+            "type": "object",
+            "additionalProperties": False,
+            "required": ["burnout_risk", "energy_curve_forecast", "note"],
+            "properties": {
+                "burnout_risk": {
+                    "type": "string",
+                    "enum": ["low", "medium", "high"],
+                },
+                "energy_curve_forecast": {"type": "string"},
+                "note": {"type": "string"},
+            },
+        },
+        "micro_advice": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "additionalProperties": False,
+                "required": ["action", "when", "reason", "duration_min"],
+                "properties": {
+                    "action": {"type": "string"},
+                    "when": {"type": "string"},
+                    "reason": {"type": "string"},
+                    "duration_min": {"type": "integer", "minimum": 1, "maximum": 20},
+                },
+            },
+        },
+        "weekly_pattern_insight": {"type": "string"},
     },
 }
 

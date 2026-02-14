@@ -394,6 +394,32 @@ def _missing_required_profile_fields(row: dict[str, Any] | None) -> list[str]:
     return missing
 
 
+def _profile_prompt_context(row: dict[str, Any] | None) -> dict[str, Any]:
+    src = row if isinstance(row, dict) else {}
+
+    def _clean_text(value: Any) -> str | None:
+        if not isinstance(value, str):
+            return None
+        text = value.strip()
+        return text if text and text.lower() != "unknown" else None
+
+    goal_minutes_raw = src.get("goal_minutes_per_day")
+    goal_minutes = (
+        int(goal_minutes_raw)
+        if isinstance(goal_minutes_raw, int) and goal_minutes_raw > 0
+        else None
+    )
+    return {
+        "age_group": _clean_text(src.get("age_group")),
+        "gender": _clean_text(src.get("gender")),
+        "job_family": _clean_text(src.get("job_family")),
+        "work_mode": _clean_text(src.get("work_mode")),
+        "chronotype": _clean_text(src.get("chronotype")),
+        "goal_keyword": _clean_text(src.get("goal_keyword")),
+        "goal_minutes_per_day": goal_minutes,
+    }
+
+
 def _normalize_yesterday_plan_vs_actual(
     *,
     report_dict: dict[str, Any],
@@ -499,12 +525,186 @@ def _normalize_coach_one_liner(
     return report_dict
 
 
+def _normalize_schema_v2_fields(
+    *,
+    report_dict: dict[str, Any],
+    locale: str,
+    computed_metrics: dict[str, Any],
+    recent_trends: dict[str, Any],
+) -> dict[str, Any]:
+    out = dict(report_dict)
+    out["schema_version"] = 2
+
+    signals_raw = (
+        computed_metrics.get("wellbeing_signals")
+        if isinstance(computed_metrics, dict)
+        else {}
+    )
+    signals = signals_raw if isinstance(signals_raw, dict) else {}
+    burnout_default = str(signals.get("burnout_risk") or "medium").lower()
+    if burnout_default not in {"low", "medium", "high"}:
+        burnout_default = "medium"
+
+    wellbeing_raw = out.get("wellbeing_insight")
+    wellbeing_obj = wellbeing_raw if isinstance(wellbeing_raw, dict) else {}
+    burnout_risk = str(wellbeing_obj.get("burnout_risk") or burnout_default).lower()
+    if burnout_risk not in {"low", "medium", "high"}:
+        burnout_risk = burnout_default
+
+    energy_curve_forecast = str(
+        wellbeing_obj.get("energy_curve_forecast") or ""
+    ).strip()
+    if not energy_curve_forecast:
+        peaks = computed_metrics.get("peak_candidates") if isinstance(computed_metrics, dict) else []
+        peak_rows = peaks if isinstance(peaks, list) else []
+        if peak_rows and isinstance(peak_rows[0], dict):
+            p_start = str(peak_rows[0].get("start") or "").strip()
+            p_end = str(peak_rows[0].get("end") or "").strip()
+            if p_start and p_end:
+                if locale == "ko":
+                    energy_curve_forecast = f"{p_start}-{p_end} 구간에서 에너지/집중 유지 가능성이 높습니다."
+                else:
+                    energy_curve_forecast = (
+                        f"Energy and focus are likely to hold best around {p_start}-{p_end}."
+                    )
+        if not energy_curve_forecast:
+            energy_curve_forecast = (
+                "충분한 데이터가 쌓이면 에너지 곡선을 더 정확히 예측할 수 있습니다."
+                if locale == "ko"
+                else "More days of logs will improve your energy-curve forecast."
+            )
+
+    wellbeing_note = str(wellbeing_obj.get("note") or "").strip()
+    if not wellbeing_note:
+        if burnout_risk == "high":
+            wellbeing_note = (
+                "내일은 회복 버퍼를 먼저 고정하고, 고강도 블록 수를 1개만 유지하세요."
+                if locale == "ko"
+                else "Tomorrow, lock a recovery buffer first and keep only one high-intensity block."
+            )
+        elif burnout_risk == "medium":
+            wellbeing_note = (
+                "집중 블록 사이에 5-10분 회복 루틴을 넣어 에너지 저하를 완만하게 만드세요."
+                if locale == "ko"
+                else "Insert a 5-10 min reset between focus blocks to flatten energy dips."
+            )
+        else:
+            wellbeing_note = (
+                "좋은 리듬을 유지하려면 오늘 잘 된 시작 루틴을 내일 첫 블록에도 반복하세요."
+                if locale == "ko"
+                else "Repeat your strongest start ritual tomorrow to preserve this rhythm."
+            )
+
+    out["wellbeing_insight"] = {
+        "burnout_risk": burnout_risk,
+        "energy_curve_forecast": energy_curve_forecast,
+        "note": wellbeing_note,
+    }
+
+    raw_advice = out.get("micro_advice")
+    advice_rows = raw_advice if isinstance(raw_advice, list) else []
+    normalized_advice: list[dict[str, Any]] = []
+    for item in advice_rows:
+        if not isinstance(item, dict):
+            continue
+        action = str(item.get("action") or "").strip()
+        when = str(item.get("when") or "").strip()
+        reason = str(item.get("reason") or "").strip()
+        dur_raw = item.get("duration_min")
+        duration_min = int(dur_raw) if isinstance(dur_raw, int) else 0
+        if not action or not when or not reason:
+            continue
+        if duration_min < 1 or duration_min > 20:
+            duration_min = 10
+        normalized_advice.append(
+            {
+                "action": action,
+                "when": when,
+                "reason": reason,
+                "duration_min": duration_min,
+            }
+        )
+        if len(normalized_advice) >= 3:
+            break
+
+    if not normalized_advice:
+        flags_raw = computed_metrics.get("flags") if isinstance(computed_metrics, dict) else {}
+        flags = flags_raw if isinstance(flags_raw, dict) else {}
+        if flags.get("high_switching_risk"):
+            fallback = (
+                {
+                    "action": "다음 블록 전 3분 리셋(물+메모) 실행",
+                    "when": "활동 전환 직전",
+                    "reason": "전환 잔여 피로를 줄여 몰입 복귀 속도를 높입니다.",
+                    "duration_min": 3,
+                }
+                if locale == "ko"
+                else {
+                    "action": "Run a 3-min reset (water + notes) before switching",
+                    "when": "Right before each context switch",
+                    "reason": "Reduces switch residue and restores focus faster.",
+                    "duration_min": 3,
+                }
+            )
+        else:
+            fallback = (
+                {
+                    "action": "시작 저항이 올 때 5분 타이머로 첫 행동만 시작",
+                    "when": "첫 집중 블록 시작 전",
+                    "reason": "행동 시작 마찰을 줄여 실행 확률을 높입니다.",
+                    "duration_min": 5,
+                }
+                if locale == "ko"
+                else {
+                    "action": "Use a 5-min starter timer and begin one tiny action",
+                    "when": "Before your first focus block",
+                    "reason": "Lowers activation friction and improves follow-through.",
+                    "duration_min": 5,
+                }
+            )
+        normalized_advice = [fallback]
+
+    out["micro_advice"] = normalized_advice
+
+    weekly_pattern_insight = str(out.get("weekly_pattern_insight") or "").strip()
+    if not weekly_pattern_insight:
+        days_with_logs = recent_trends.get("days_with_logs") if isinstance(recent_trends, dict) else 0
+        focus_trend = str(recent_trends.get("focus_trend") or "insufficient_data") if isinstance(recent_trends, dict) else "insufficient_data"
+        switch_trend = str(recent_trends.get("switch_trend") or "insufficient_data") if isinstance(recent_trends, dict) else "insufficient_data"
+        dates = recent_trends.get("sampled_dates") if isinstance(recent_trends, dict) else []
+        date_span = ""
+        if isinstance(dates, list) and dates:
+            head = str(dates[0])
+            tail = str(dates[-1])
+            if head and tail:
+                date_span = f"{tail}~{head}"
+        if isinstance(days_with_logs, int) and days_with_logs >= 3:
+            if locale == "ko":
+                weekly_pattern_insight = (
+                    f"최근 {days_with_logs}일({date_span}) 기준, 집중 추세는 {focus_trend}, 전환 추세는 {switch_trend}입니다."
+                )
+            else:
+                weekly_pattern_insight = (
+                    f"Across the last {days_with_logs} logged days ({date_span}), focus trend is {focus_trend} and switch trend is {switch_trend}."
+                )
+        else:
+            weekly_pattern_insight = (
+                "주간 패턴 분석은 최소 3일 기록 후 더 정확해집니다."
+                if locale == "ko"
+                else "Weekly pattern insight becomes reliable after at least 3 logged days."
+            )
+
+    out["weekly_pattern_insight"] = weekly_pattern_insight
+    return out
+
+
 def _postprocess_report(
     *,
     report_dict: dict[str, Any],
     locale: str,
     activity_blacklist: list[str],
     computed_metrics: dict[str, Any],
+    recent_trends: dict[str, Any],
 ) -> dict[str, Any]:
     out = dict(report_dict)
     out = _normalize_tomorrow_routine(
@@ -521,6 +721,12 @@ def _postprocess_report(
         report_dict=out,
         locale=locale,
         computed_metrics=computed_metrics,
+    )
+    out = _normalize_schema_v2_fields(
+        report_dict=out,
+        locale=locale,
+        computed_metrics=computed_metrics,
+        recent_trends=recent_trends,
     )
     return out
 
@@ -553,6 +759,22 @@ def _as_int_1_to_5(value: Any) -> int | None:
     if iv < 1 or iv > 5:
         return None
     return iv
+
+
+def _as_float_in_range(value: Any, *, min_value: float, max_value: float) -> float | None:
+    if not isinstance(value, (int, float)):
+        return None
+    fv = float(value)
+    if fv < min_value or fv > max_value:
+        return None
+    return round(fv, 1)
+
+
+def _normalize_choice(value: Any, *, allowed: set[str]) -> str | None:
+    if not isinstance(value, str):
+        return None
+    norm = value.strip().lower()
+    return norm if norm in allowed else None
 
 
 def _text_blob(entry: dict[str, Any]) -> str:
@@ -647,6 +869,29 @@ def _compute_analysis_metrics(
     activity_log: dict[str, Any] | None,
     yesterday_plan: list[dict[str, Any]] | None,
 ) -> dict[str, Any]:
+    raw_meta = activity_log.get("meta") if isinstance(activity_log, dict) else None
+    meta = raw_meta if isinstance(raw_meta, dict) else {}
+    mood = _normalize_choice(
+        meta.get("mood"),
+        allowed={"very_low", "low", "neutral", "good", "great"},
+    )
+    sleep_quality = _as_int_1_to_5(meta.get("sleep_quality"))
+    sleep_hours = _as_float_in_range(meta.get("sleep_hours"), min_value=0.0, max_value=14.0)
+    stress_level = _as_int_1_to_5(meta.get("stress_level"))
+    hydration_level = _normalize_choice(
+        meta.get("hydration_level"),
+        allowed={"low", "ok", "great"},
+    )
+    water_intake_ml_raw = meta.get("water_intake_ml")
+    water_intake_ml = (
+        int(water_intake_ml_raw)
+        if isinstance(water_intake_ml_raw, int) and 0 <= water_intake_ml_raw <= 6000
+        else None
+    )
+    micro_habit_done = (
+        meta.get("micro_habit_done") if isinstance(meta.get("micro_habit_done"), bool) else None
+    )
+
     raw_entries = (
         activity_log.get("entries") if isinstance(activity_log, dict) else None
     )
@@ -760,6 +1005,39 @@ def _compute_analysis_metrics(
         yesterday_plan=yesterday_plan, actual_blocks=blocks
     )
 
+    burnout_risk_points = 0
+    if sleep_quality is not None:
+        burnout_risk_points += 2 if sleep_quality <= 2 else 1 if sleep_quality == 3 else 0
+    if sleep_hours is not None:
+        burnout_risk_points += 2 if sleep_hours < 6 else 1 if sleep_hours < 7 else 0
+    if stress_level is not None:
+        burnout_risk_points += 2 if stress_level >= 4 else 1 if stress_level == 3 else 0
+    if hydration_level == "low":
+        burnout_risk_points += 1
+    if weighted_focus_day is not None and weighted_focus_day < 50:
+        burnout_risk_points += 1
+    if micro_habit_done is False:
+        burnout_risk_points += 1
+
+    burnout_risk = "low"
+    if burnout_risk_points >= 5:
+        burnout_risk = "high"
+    elif burnout_risk_points >= 3:
+        burnout_risk = "medium"
+
+    wellbeing_completeness = sum(
+        1
+        for x in (
+            mood,
+            sleep_quality,
+            sleep_hours,
+            stress_level,
+            hydration_level,
+            water_intake_ml,
+        )
+        if x is not None
+    )
+
     return {
         "method": {
             "block_intensity_formula": "((0.6*focus + 0.4*energy)-1)/4*100",
@@ -791,6 +1069,17 @@ def _compute_analysis_metrics(
         "peak_candidates": peak_candidates,
         "low_focus_windows": low_focus_windows,
         "plan_adherence": plan_adherence,
+        "wellbeing_signals": {
+            "mood": mood,
+            "sleep_quality_1_to_5": sleep_quality,
+            "sleep_hours": sleep_hours,
+            "stress_level_1_to_5": stress_level,
+            "hydration_level": hydration_level,
+            "water_intake_ml": water_intake_ml,
+            "micro_habit_done": micro_habit_done,
+            "burnout_risk": burnout_risk,
+            "completeness_score_0_to_6": wellbeing_completeness,
+        },
     }
 
 
@@ -916,6 +1205,7 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- Output MUST be valid JSON ONLY (no markdown, no explanations).\n"
         "- Output MUST match the provided JSON schema exactly.\n"
         "- Always include every required key, even if arrays are empty.\n"
+        "- schema_version MUST be 2.\n"
         f"- All natural-language fields must be written in { _LANG_NAME.get(target_locale, 'Korean') } (locale='{target_locale}').\n"
         "- Keep field names unchanged (schema keys stay in English).\n"
         "- If input data is insufficient, keep the schema but put a clear request for more input in fields like reason/fix.\n"
@@ -923,6 +1213,9 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- Keep language specific and personal (reference concrete times/activities from the log).\n"
         "- Avoid abstract self-help phrases. Every recommendation should be immediately actionable.\n"
         "- tomorrow_routine is a personalized routine template, NOT a prediction of tomorrow's exact tasks.\n"
+        "- Use wellbeing_signals (mood/sleep/stress/hydration/micro_habit) whenever available.\n"
+        "- Use profile_context.age_group/gender/job_family/work_mode for personalization when known.\n"
+        "- Use profile_context.chronotype to place peak-focus windows at realistic times.\n"
         "\n"
         "Method constraints (apply exactly):\n"
         "- BlockIntensity_i = ((0.6*Focus_i + 0.4*Energy_i) - 1) / 4 * 100\n"
@@ -940,9 +1233,16 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- start/end in tomorrow_routine are guidance windows anchored to observed rhythm and triggers, not certainty claims about tomorrow.\n"
         "- Do not fabricate tomorrow-specific meetings/deadlines unless explicitly provided in user data.\n"
         "- Every failure_patterns.fix and if_then_rules.then must be directly executable within 5-20 minutes.\n"
+        "- micro_advice must include 1-3 actions; each action must be executable in 5-20 minutes.\n"
+        "- wellbeing_insight.burnout_risk must align with provided wellbeing_signals; do not contradict the signals.\n"
+        "- wellbeing_insight.energy_curve_forecast must reference actual peak/low windows from data.\n"
+        "- weekly_pattern_insight must mention a concrete multi-day pattern when recent_trends.days_with_logs >= 3.\n"
+        "- If recent_trends.days_with_logs < 3, weekly_pattern_insight should state that more days are needed.\n"
         "- Build if_then_rules as implementation intentions (cue -> response): IF must name a concrete cue/time/state, THEN must name one observable action.\n"
         "- If switch risk is high, include at least one explicit transition-reset action (2-5 minutes) to reduce attentional residue before the next block.\n"
         "- If low_focus_windows exist, include at least one micro-recovery action (5-10 minutes) before resuming work.\n"
+        "- If wellbeing_signals.burnout_risk is medium/high, include one energy-protection action and one wellbeing micro-advice grounded in the provided signals.\n"
+        "- If wellbeing_signals.completeness_score_0_to_6 <= 1, ask for exactly one missing signal (sleep, mood, hydration, or stress) inside summary/fix.\n"
         "- coach_one_liner must be one specific next action tied to evidence (time window/trigger/metric), never generic encouragement.\n"
         "- yesterday_plan_vs_actual.top_deviation must be a human-readable phrase in the target locale; never output machine codes like NO_PREVIOUS_PLAN.\n"
         "- if_then_rules should function as recovery rules for real breakdown moments (not generic advice).\n"
@@ -962,6 +1262,7 @@ def _build_user_prompt(
     yesterday_plan: list[dict[str, Any]] | None,
     computed_metrics: dict[str, Any],
     recent_trends: dict[str, Any],
+    profile_context: dict[str, Any],
     allowed_activity_labels: list[str],
     forbidden_activity_names: list[str],
     target_locale: str,
@@ -984,6 +1285,9 @@ def _build_user_prompt(
         "Computed metrics derived from the log (JSON; prefer these values for consistency):\n"
         + json.dumps(computed_metrics, ensure_ascii=False)
         + "\n\n"
+        "User profile context for personalization (JSON; may contain null for unknowns):\n"
+        + json.dumps(profile_context, ensure_ascii=False)
+        + "\n\n"
         "Recent multi-day trend summary (JSON; use when days_with_logs >= 3):\n"
         + json.dumps(recent_trends, ensure_ascii=False)
         + "\n\n"
@@ -1001,6 +1305,11 @@ def _build_user_prompt(
         "- tomorrow_routine.goal must describe a decision rule the user applies inside the block (how to pick the task), not fixed task content.\n"
         "- Use the log as data only.\n"
         "- Reference concrete evidence in reasons/fixes (for example, metric names and values).\n"
+        "- If profile_context has known fields (age/work_mode/chronotype/goal), adapt recommendations to that context.\n"
+        "- Use age_group/gender/job_family/work_mode as explicit constraints, not cosmetic labels.\n"
+        "- Example: work_mode=fixed -> maintain fixed anchors; job_family=student -> include class/assignment-friendly buffers.\n"
+        "- If wellbeing_signals are present, explicitly reflect them in failure_patterns, if_then_rules, or coach_one_liner.\n"
+        "- Fill wellbeing_insight, micro_advice, and weekly_pattern_insight with concrete, user-specific content.\n"
         "- Fill yesterday_plan_vs_actual by comparing yesterday's plan vs today's actual log when possible.\n"
         "- Otherwise, explain what is missing in comparison_note/top_deviation.\n"
     )
@@ -1037,7 +1346,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             "profiles",
             bearer_token=auth.access_token,
             params={
-                "select": "age_group,gender,job_family,work_mode",
+                "select": "age_group,gender,job_family,work_mode,chronotype,goal_keyword,goal_minutes_per_day",
                 "id": f"eq.{auth.user_id}",
                 "limit": 1,
             },
@@ -1063,6 +1372,17 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
                     "missing_fields": missing_fields,
                 },
             )
+    else:
+        profile_rows = await sb_rls.select(
+            "profiles",
+            bearer_token=auth.access_token,
+            params={
+                "select": "age_group,gender,job_family,work_mode,chronotype,goal_keyword,goal_minutes_per_day",
+                "id": f"eq.{auth.user_id}",
+                "limit": 1,
+            },
+        )
+    profile_context = _profile_prompt_context(profile_rows[0] if profile_rows else None)
 
     # Cache: if report already exists and not forcing, return it without consuming usage.
     existing = await sb_rls.select(
@@ -1133,7 +1453,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         "activity_logs",
         bearer_token=auth.access_token,
         params={
-            "select": "date,entries,note",
+            "select": "date,entries,note,meta",
             "user_id": f"eq.{auth.user_id}",
             "date": f"eq.{body.date.isoformat()}",
             "limit": 1,
@@ -1142,7 +1462,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
     activity_log = (
         logs[0]
         if logs
-        else {"date": body.date.isoformat(), "entries": [], "note": None}
+        else {"date": body.date.isoformat(), "entries": [], "note": None, "meta": {}}
     )
     sanitized_activity_log = sanitize_for_llm(activity_log)
 
@@ -1150,7 +1470,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         "activity_logs",
         bearer_token=auth.access_token,
         params={
-            "select": "date,entries,note",
+            "select": "date,entries,note,meta",
             "user_id": f"eq.{auth.user_id}",
             "date": f"lte.{body.date.isoformat()}",
             "order": "date.desc",
@@ -1252,6 +1572,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         yesterday_plan=sanitized_yesterday_plan,
         computed_metrics=computed_metrics,
         recent_trends=recent_trends,
+        profile_context=profile_context,
         allowed_activity_labels=allowed_labels,
         forbidden_activity_names=activity_blacklist,
         target_locale=target_locale,
@@ -1309,6 +1630,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             locale=target_locale,
             activity_blacklist=activity_blacklist,
             computed_metrics=computed_metrics,
+            recent_trends=recent_trends,
         )
         report_row = {
             "user_id": auth.user_id,

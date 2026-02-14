@@ -19,6 +19,7 @@ import { downloadWeeklyShareCard } from "@/lib/share-card";
 import { isE2ETestMode } from "@/lib/supabase/env";
 
 type AIReport = {
+  schema_version?: number;
   summary: string;
   productivity_peaks: { start: string; end: string; reason: string }[];
   failure_patterns: { pattern: string; trigger: string; fix: string }[];
@@ -26,6 +27,13 @@ type AIReport = {
   if_then_rules: { if: string; then: string }[];
   coach_one_liner: string;
   yesterday_plan_vs_actual: { comparison_note: string; top_deviation: string };
+  wellbeing_insight?: {
+    burnout_risk?: "low" | "medium" | "high" | string;
+    energy_curve_forecast?: string;
+    note?: string;
+  };
+  micro_advice?: { action: string; when: string; reason: string; duration_min: number }[];
+  weekly_pattern_insight?: string;
 };
 
 type GoalPrefs = {
@@ -91,6 +99,40 @@ function localYYYYMMDD(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+function normalizeReport(raw: AIReport | null, isKo: boolean): AIReport | null {
+  if (!raw) return null;
+  const riskRaw = String(raw?.wellbeing_insight?.burnout_risk || "medium").toLowerCase();
+  const burnout_risk = riskRaw === "low" || riskRaw === "high" ? riskRaw : "medium";
+  const microRaw = Array.isArray(raw?.micro_advice) ? raw.micro_advice : [];
+  return {
+    ...raw,
+    schema_version: Number.isFinite(Number(raw?.schema_version)) ? Number(raw?.schema_version) : 1,
+    wellbeing_insight: {
+      burnout_risk,
+      energy_curve_forecast:
+        typeof raw?.wellbeing_insight?.energy_curve_forecast === "string" && raw.wellbeing_insight.energy_curve_forecast.trim()
+          ? raw.wellbeing_insight.energy_curve_forecast
+          : (isKo ? "기록이 더 쌓이면 에너지 곡선 예측이 개선됩니다." : "Energy forecast improves as more days are logged."),
+      note:
+        typeof raw?.wellbeing_insight?.note === "string" && raw.wellbeing_insight.note.trim()
+          ? raw.wellbeing_insight.note
+          : (isKo ? "내일 회복 버퍼 1개를 먼저 고정하세요." : "Lock one recovery buffer first tomorrow."),
+    },
+    micro_advice: microRaw
+      .filter((it) => it && typeof it.action === "string" && typeof it.when === "string" && typeof it.reason === "string")
+      .map((it) => ({
+        action: it.action,
+        when: it.when,
+        reason: it.reason,
+        duration_min: Number.isFinite(Number(it.duration_min)) ? Math.min(20, Math.max(1, Number(it.duration_min))) : 5,
+      })),
+    weekly_pattern_insight:
+      typeof raw?.weekly_pattern_insight === "string" && raw.weekly_pattern_insight.trim()
+        ? raw.weekly_pattern_insight
+        : (isKo ? "주간 패턴은 최소 3일 기록 후 더 선명해집니다." : "Weekly pattern insight becomes clearer after at least 3 logged days."),
+  };
+}
+
 export default function InsightsPage() {
   const locale = useLocale();
   const isKo = locale === "ko";
@@ -103,6 +145,9 @@ export default function InsightsPage() {
         todayLabel: "오늘",
         coachTitle: "오늘의 한 마디",
         coachDesc: "기록을 바탕으로, 지금 실행할 행동 1개를 제안합니다.",
+        schemaLabel: "스키마",
+        weeklyPatternLabel: "주간 패턴",
+        microAdviceLabel: "5분 실행",
         coachEmptyTitle: "아직 오늘 리포트가 없어요",
         coachEmptyBody_noLog: "먼저 Daily Flow를 기록하면, 오늘의 한 마디가 생성됩니다.",
         coachEmptyBody_hasLog: "기록은 완료됐어요. AI로 정리하면 오늘의 한 마디가 바로 생성됩니다.",
@@ -112,14 +157,11 @@ export default function InsightsPage() {
         nextDesc_noReport: "오늘 기록을 바탕으로, 내일 흐름을 같이 잡아봅니다.",
         nextDesc_hasReport: "내일 일정을 미리 보고, 여유가 필요한 곳을 찾아보세요.",
         cta_start3min: "3분으로 시작하기",
-        cta_analyzeNow: "AI로 정리하기",
-        cta_viewTomorrow: "내일 준비하기",
-        cta_editLog: "기록 열기",
-        cta_openReport: "리포트 전체보기",
+      cta_analyzeNow: "AI로 정리하기",
+      cta_viewTomorrow: "내일 준비하기",
+      cta_editLog: "기록 열기",
+      cta_openReport: "리포트 전체보기",
       cta_reload: "새로고침",
-      cta_seedDemo: "데모 7일 시드 생성",
-      cta_seeding: "데모 시드 생성 중...",
-      seedDone: "최근 7일 데모 기록이 준비되었습니다.",
       progress: "진행 상황",
         step_log: "기록",
         step_analyze: "정리",
@@ -166,6 +208,9 @@ export default function InsightsPage() {
       todayLabel: "Today",
       coachTitle: "One-line Coaching",
       coachDesc: "Based on your log, we suggest one action you can do now.",
+      schemaLabel: "Schema",
+      weeklyPatternLabel: "Weekly pattern",
+      microAdviceLabel: "5-min action",
       coachEmptyTitle: "No report for today yet",
       coachEmptyBody_noLog: "Start with today's Daily Flow log to generate your one-line coaching.",
       coachEmptyBody_hasLog: "Your log is ready. Run Analyze to generate today's one-line coaching.",
@@ -180,9 +225,6 @@ export default function InsightsPage() {
       cta_editLog: "Open today log",
       cta_openReport: "Open report",
       cta_reload: "Reload report",
-      cta_seedDemo: "Seed 7-day demo data",
-      cta_seeding: "Seeding demo data...",
-      seedDone: "Demo logs for last 7 days are ready.",
       progress: "Progress",
       step_log: "Log",
       step_analyze: "Analyze",
@@ -231,7 +273,6 @@ export default function InsightsPage() {
   const [infoMessage, setInfoMessage] = React.useState<string | null>(null);
 
   const [analyzing, setAnalyzing] = React.useState(false);
-  const [seeding, setSeeding] = React.useState(false);
   const [todayLogBlocks, setTodayLogBlocks] = React.useState<number>(0);
 
   const [consistency, setConsistency] = React.useState<{
@@ -268,7 +309,7 @@ export default function InsightsPage() {
     setReportLoading(true);
     try {
       const res = await apiFetch<{ date: string; report: AIReport; model?: string }>(`/reports?date=${today}`);
-      setReport(res.report);
+      setReport(normalizeReport(res.report, isKo));
     } catch (err) {
       // 404 = no report yet; treat as empty state.
       const status = isApiFetchError(err) ? err.status : null;
@@ -292,7 +333,7 @@ export default function InsightsPage() {
         method: "POST",
         body: JSON.stringify({ date: today, force: true })
       });
-      setReport(res.report);
+      setReport(normalizeReport(res.report, isKo));
       await loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
@@ -324,32 +365,13 @@ export default function InsightsPage() {
         method: "POST",
         body: JSON.stringify({ date: today, force: true })
       });
-      setReport(res.report);
+      setReport(normalizeReport(res.report, isKo));
       await loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "퀵스타트에 실패했습니다" : "Quickstart failed");
     } finally {
       setAnalyzing(false);
-    }
-  }
-
-  async function seedDemoData() {
-    setSeeding(true);
-    setReportError(null);
-    setInfoMessage(null);
-    try {
-      await apiFetch<{ ok: boolean; seeded_days: number }>("/demo/seed", {
-        method: "POST",
-        body: JSON.stringify({ reset: true, days: 7, include_reports: false }),
-      });
-      await Promise.all([loadTodayLog(), loadConsistency(), loadReport(), loadCohortTrend()]);
-      setInfoMessage(t.seedDone);
-    } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setReportError(err instanceof Error ? `${err.message}${hint}` : (isKo ? "데모 시드 생성에 실패했습니다" : "Failed to seed demo data"));
-    } finally {
-      setSeeding(false);
     }
   }
 
@@ -512,6 +534,20 @@ export default function InsightsPage() {
               <div className="space-y-3">
                 <p className="title-serif text-2xl leading-snug">{report.coach_one_liner}</p>
                 <p className="text-sm text-mutedFg">{report.summary}</p>
+                <div className="rounded-xl border bg-white/55 p-3">
+                  <p className="text-xs text-mutedFg">
+                    {t.schemaLabel}: v{report.schema_version ?? 1}
+                  </p>
+                  <p className="mt-1 text-xs text-mutedFg">
+                    {t.weeklyPatternLabel}: {report.weekly_pattern_insight}
+                  </p>
+                  {report.micro_advice?.[0] ? (
+                    <p className="mt-2 text-sm">
+                      <span className="font-semibold">{t.microAdviceLabel}:</span>{" "}
+                      {report.micro_advice[0].action} ({report.micro_advice[0].duration_min}m)
+                    </p>
+                  ) : null}
+                </div>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Button asChild variant="outline" size="sm">
                     <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
@@ -602,9 +638,6 @@ export default function InsightsPage() {
                   </div>
                 </div>
               )}
-              <Button variant="ghost" size="sm" onClick={seedDemoData} disabled={seeding || analyzing}>
-                {seeding ? t.cta_seeding : t.cta_seedDemo}
-              </Button>
             </div>
           </CardContent>
         </Card>

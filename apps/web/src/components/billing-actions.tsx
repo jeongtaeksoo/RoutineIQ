@@ -12,7 +12,7 @@ import { apiFetch } from "@/lib/api-client";
 import { isE2ETestMode } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 
-export function BillingActions({ plan, isGuest }: { plan: "free" | "pro"; isGuest: boolean }) {
+export function BillingActions({ plan, needsEmailSetup }: { plan: "free" | "pro"; needsEmailSetup: boolean }) {
   const router = useRouter();
   const locale = useLocale();
   const isKo = locale === "ko";
@@ -46,7 +46,7 @@ export function BillingActions({ plan, isGuest }: { plan: "free" | "pro"; isGues
     };
   }, [plan]);
 
-  async function convertGuestToEmail() {
+  async function convertToEmailAccount() {
     setError(null);
     setLoading(true);
     try {
@@ -100,14 +100,14 @@ export function BillingActions({ plan, isGuest }: { plan: "free" | "pro"; isGues
         <div className="space-y-2">
           <div className="rounded-xl border bg-white/50 p-3 text-sm text-mutedFg">
             {isKo
-              ? "결제는 아직 준비 중입니다. 대신 핵심 기능(게스트, 기록, AI 분석)은 지금 바로 사용할 수 있어요."
-              : "Billing isn’t configured yet. Core features (guest, logging, AI analysis) still work."}
+              ? "결제는 아직 준비 중입니다. 대신 핵심 기능(기록, AI 분석)은 지금 바로 사용할 수 있어요."
+              : "Billing isn’t configured yet. Core features (logging and AI analysis) still work."}
           </div>
           <Button variant="outline" disabled>
             {isKo ? "결제 준비 중" : "Payments Coming Soon"}
           </Button>
         </div>
-      ) : isGuest ? (
+      ) : needsEmailSetup ? (
         <div className="space-y-3">
           <div className="rounded-xl border bg-white/50 p-3 text-sm text-mutedFg">
             {isKo
@@ -130,7 +130,7 @@ export function BillingActions({ plan, isGuest }: { plan: "free" | "pro"; isGues
             </div>
           </div>
 
-          <Button onClick={convertGuestToEmail} disabled={loading}>
+          <Button onClick={convertToEmailAccount} disabled={loading}>
             {loading ? (isKo ? "계정 생성 중..." : "Creating account...") : isKo ? "계정 만들고 계속하기" : "Create account to continue"}
           </Button>
 

@@ -12,7 +12,6 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 from app.core.config import settings
 from app.routes.admin import router as admin_router
 from app.routes.analyze import router as analyze_router
-from app.routes.demo import router as demo_router
 from app.routes.logs import router as logs_router
 from app.routes.insights import router as insights_router
 from app.routes.preferences import router as preferences_router
@@ -211,4 +210,3 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(preferences_router, prefix="/api")
 app.include_router(trends_router, prefix="/api")
 app.include_router(insights_router, prefix="/api")
-app.include_router(demo_router, prefix="/api")

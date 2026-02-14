@@ -5,13 +5,11 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ArrowLeft, Globe, Mail } from "lucide-react";
 
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { getSupabasePublicEnv, isE2ETestMode } from "@/lib/supabase/env";
+import { getSupabasePublicEnv } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/client";
 
-/* ─── i18n ─── */
 type LangKey = "ko" | "en" | "ja" | "zh" | "es";
 
 const LANG_LABELS: Record<LangKey, string> = {
@@ -22,35 +20,30 @@ const LANG_LABELS: Record<LangKey, string> = {
   es: "Español",
 };
 
-const T: Record<LangKey, {
-  welcome: string;
-  welcomeSub: string;
-  tabLogin: string;
-  tabSignup: string;
-  email: string;
-  password: string;
-  login: string;
-  loggingIn: string;
-  signUp: string;
-  signingUp: string;
-  forgotPassword: string;
-  or: string;
-  googleLogin: string;
-  googleSignup: string;
-  demo: string;
-  demoLoading: string;
-  demoHint: string;
-  back: string;
-  privacy: string;
-  signupSuccess: string;
-  signupRedirect: string;
-  resetSent: string;
-  noEmailYet: string;
-  supabaseTitle: string;
-  supabaseSub: string;
-  googleUnavailable: string;
-  googleSetupHint: string;
-}> = {
+const T: Record<
+  LangKey,
+  {
+    welcome: string;
+    welcomeSub: string;
+    tabLogin: string;
+    tabSignup: string;
+    email: string;
+    password: string;
+    login: string;
+    loggingIn: string;
+    signUp: string;
+    signingUp: string;
+    forgotPassword: string;
+    back: string;
+    privacy: string;
+    signupSuccess: string;
+    signupRedirect: string;
+    resetSent: string;
+    noEmailYet: string;
+    supabaseTitle: string;
+    supabaseSub: string;
+  }
+> = {
   ko: {
     welcome: "다시 오셨군요",
     welcomeSub: "편안한 속도로 이어가세요.",
@@ -63,12 +56,6 @@ const T: Record<LangKey, {
     signUp: "가입하기",
     signingUp: "가입 중...",
     forgotPassword: "비밀번호를 잊으셨나요?",
-    or: "또는",
-    googleLogin: "Google로 로그인",
-    googleSignup: "Google로 가입",
-    demo: "먼저 둘러보기",
-    demoLoading: "준비 중...",
-    demoHint: "가입 없이 바로 체험할 수 있어요",
     back: "돌아가기",
     privacy: "개인정보는 루틴 분석에만 사용됩니다.",
     signupSuccess: "가입 완료! 이메일을 확인해 주세요.",
@@ -77,8 +64,6 @@ const T: Record<LangKey, {
     noEmailYet: "이메일을 먼저 입력해 주세요.",
     supabaseTitle: "환경 설정 필요",
     supabaseSub: "Supabase 환경변수를 설정하고 서버를 재시작해 주세요.",
-    googleUnavailable: "Google 로그인이 아직 활성화되지 않았습니다. 이메일 로그인 또는 데모 모드를 이용해 주세요.",
-    googleSetupHint: "Google 로그인은 Supabase Dashboard > Auth > Providers > Google에서 켠 뒤 사용 가능합니다.",
   },
   en: {
     welcome: "Welcome back",
@@ -92,12 +77,6 @@ const T: Record<LangKey, {
     signUp: "Create account",
     signingUp: "Creating...",
     forgotPassword: "Forgot password?",
-    or: "or",
-    googleLogin: "Sign in with Google",
-    googleSignup: "Sign up with Google",
-    demo: "Explore first",
-    demoLoading: "Loading...",
-    demoHint: "Try without an account",
     back: "Back",
     privacy: "Your data is used only for routine analysis.",
     signupSuccess: "Account created! Please check your email.",
@@ -106,8 +85,6 @@ const T: Record<LangKey, {
     noEmailYet: "Please enter your email first.",
     supabaseTitle: "Setup required",
     supabaseSub: "Set Supabase environment variables and restart the server.",
-    googleUnavailable: "Google login is not enabled yet. Use email login or demo mode for now.",
-    googleSetupHint: "Enable it in Supabase Dashboard > Auth > Providers > Google.",
   },
   ja: {
     welcome: "おかえりなさい",
@@ -121,12 +98,6 @@ const T: Record<LangKey, {
     signUp: "アカウント作成",
     signingUp: "作成中...",
     forgotPassword: "パスワードを忘れた場合",
-    or: "または",
-    googleLogin: "Googleでログイン",
-    googleSignup: "Googleで登録",
-    demo: "まず見てみる",
-    demoLoading: "準備中...",
-    demoHint: "アカウント不要で体験できます",
     back: "戻る",
     privacy: "個人情報はルーティン分析にのみ使用されます。",
     signupSuccess: "登録完了！メールをご確認ください。",
@@ -135,8 +106,6 @@ const T: Record<LangKey, {
     noEmailYet: "まずメールアドレスを入力してください。",
     supabaseTitle: "設定が必要です",
     supabaseSub: "Supabase環境変数を設定してサーバーを再起動してください。",
-    googleUnavailable: "Googleログインはまだ有効化されていません。メールログインまたはデモをご利用ください。",
-    googleSetupHint: "Supabase Dashboard > Auth > Providers > Google で有効化できます。",
   },
   zh: {
     welcome: "欢迎回来",
@@ -150,12 +119,6 @@ const T: Record<LangKey, {
     signUp: "创建账户",
     signingUp: "创建中...",
     forgotPassword: "忘记密码？",
-    or: "或",
-    googleLogin: "用Google登录",
-    googleSignup: "用Google注册",
-    demo: "先看看",
-    demoLoading: "加载中...",
-    demoHint: "无需账户即可体验",
     back: "返回",
     privacy: "个人信息仅用于习惯分析。",
     signupSuccess: "注册成功！请查看您的邮箱。",
@@ -164,8 +127,6 @@ const T: Record<LangKey, {
     noEmailYet: "请先输入您的电子邮件。",
     supabaseTitle: "需要设置",
     supabaseSub: "请设置Supabase环境变量并重启服务器。",
-    googleUnavailable: "Google 登录尚未启用。请先使用邮箱登录或演示模式。",
-    googleSetupHint: "请在 Supabase Dashboard > Auth > Providers > Google 启用。",
   },
   es: {
     welcome: "Bienvenido de nuevo",
@@ -179,12 +140,6 @@ const T: Record<LangKey, {
     signUp: "Crear cuenta",
     signingUp: "Creando...",
     forgotPassword: "¿Olvidaste tu contraseña?",
-    or: "o",
-    googleLogin: "Iniciar con Google",
-    googleSignup: "Registrarse con Google",
-    demo: "Explorar primero",
-    demoLoading: "Cargando...",
-    demoHint: "Prueba sin necesidad de una cuenta",
     back: "Volver",
     privacy: "Tus datos se usan solo para analizar rutinas.",
     signupSuccess: "Cuenta creada. Revisa tu correo.",
@@ -193,24 +148,9 @@ const T: Record<LangKey, {
     noEmailYet: "Primero ingresa tu correo electrónico.",
     supabaseTitle: "Configuración necesaria",
     supabaseSub: "Configura las variables de entorno de Supabase y reinicia el servidor.",
-    googleUnavailable: "El inicio con Google aún no está habilitado. Usa correo o modo demo por ahora.",
-    googleSetupHint: "Actívalo en Supabase Dashboard > Auth > Providers > Google.",
   },
 };
 
-/* ─── Google SVG Icon ─── */
-function GoogleIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none">
-      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4" />
-      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853" />
-      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 001 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84z" fill="#FBBC05" />
-      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335" />
-    </svg>
-  );
-}
-
-/* ─── Main Component ─── */
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -223,44 +163,18 @@ export default function LoginClient() {
   const [message, setMessage] = React.useState<string | null>(null);
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
-  const [googleEnabled, setGoogleEnabled] = React.useState(true);
 
   const t = T[lang];
-  const forceAuth = searchParams.get("auth") === "1";
-  const demo = searchParams.get("demo") === "1";
   const redirectedFrom = searchParams.get("redirectedFrom");
-  const autoDemo = demo || (!forceAuth && !redirectedFrom);
   const afterAuthRedirect = redirectedFrom && redirectedFrom.startsWith("/") ? redirectedFrom : "/app/insights";
   const supabaseEnv = getSupabasePublicEnv();
 
-  React.useEffect(() => {
-    if (!supabaseEnv.configured || !supabaseEnv.url || !supabaseEnv.anonKey) return;
-    let cancelled = false;
-    const anonKey = supabaseEnv.anonKey;
-    (async () => {
-      try {
-        const res = await fetch(`${supabaseEnv.url}/auth/v1/settings`, {
-          headers: { apikey: anonKey },
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { external?: { google?: boolean } };
-        if (!cancelled) {
-          setGoogleEnabled(Boolean(data?.external?.google));
-        }
-      } catch {
-        // Keep default value on transient network errors.
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [supabaseEnv.anonKey, supabaseEnv.configured, supabaseEnv.url]);
-
-  /* ─── Auth Handlers ─── */
   async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
     if (!supabaseEnv.configured) return;
-    setError(null); setMessage(null); setLoading(true);
+    setError(null);
+    setMessage(null);
+    setLoading(true);
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithPassword({ email, password });
@@ -268,13 +182,17 @@ export default function LoginClient() {
       router.replace(afterAuthRedirect);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function signUp(e: React.FormEvent) {
     e.preventDefault();
     if (!supabaseEnv.configured) return;
-    setError(null); setMessage(null); setLoading(true);
+    setError(null);
+    setMessage(null);
+    setLoading(true);
     try {
       const supabase = createClient();
       const { data, error } = await supabase.auth.signUp({ email, password });
@@ -287,81 +205,40 @@ export default function LoginClient() {
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Sign up failed");
-    } finally { setLoading(false); }
-  }
-
-  async function signInWithGoogle() {
-    if (!supabaseEnv.configured) return;
-    if (!googleEnabled) {
-      setError(t.googleUnavailable);
-      return;
-    }
-    setError(null); setMessage(null); setLoading(true);
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
-        provider: "google",
-        options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(afterAuthRedirect)}`
-        }
-      });
-      if (error) throw error;
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : "Google login failed";
-      if (msg.toLowerCase().includes("unsupported provider")) {
-        setError(t.googleUnavailable);
-      } else {
-        setError(msg);
-      }
+    } finally {
       setLoading(false);
     }
   }
 
   async function sendPasswordReset() {
-    setError(null); setMessage(null);
-    if (!email.trim()) { setError(t.noEmailYet); return; }
+    setError(null);
+    setMessage(null);
+    if (!email.trim()) {
+      setError(t.noEmailYet);
+      return;
+    }
     setLoading(true);
     try {
       const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`
+        redirectTo: `${window.location.origin}/reset-password`,
       });
       if (error) throw error;
       setMessage(t.resetSent);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset failed");
-    } finally { setLoading(false); }
+    } finally {
+      setLoading(false);
+    }
   }
 
-  async function tryDemo() {
-    setError(null); setMessage(null); setLoading(true);
-    try {
-      if (isE2ETestMode()) {
-        router.replace("/app/insights");
-        return;
-      }
-      if (!supabaseEnv.configured) return;
-      const supabase = createClient();
-      const { error } = await supabase.auth.signInAnonymously();
-      if (error) throw error;
-      router.replace("/app/insights");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Demo login failed");
-    } finally { setLoading(false); }
-  }
-
-  React.useEffect(() => {
-    if (!autoDemo || !supabaseEnv.configured) return;
-    void tryDemo();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [autoDemo]);
-
-  /* ─── Supabase not configured ─── */
   if (!supabaseEnv.configured) {
     return (
       <main className="flex min-h-screen items-center justify-center bg-[#faf8f5] px-6">
         <div className="w-full max-w-md rounded-2xl border border-[#e8e4de] bg-white p-8 text-center shadow-sm">
-          <h1 className="text-xl font-semibold text-[#3d3a36]" style={{ fontFamily: "var(--font-serif)" }}>{t.supabaseTitle}</h1>
+          <h1 className="text-xl font-semibold text-[#3d3a36]" style={{ fontFamily: "var(--font-serif)" }}>
+            {t.supabaseTitle}
+          </h1>
           <p className="mt-2 text-sm text-[#8a8480]">{t.supabaseSub}</p>
           <div className="mt-6 rounded-xl border border-[#e8e4de] bg-[#faf8f5] p-4 text-left">
             <div className="space-y-1 font-mono text-xs text-[#6b6560]">
@@ -374,14 +251,11 @@ export default function LoginClient() {
     );
   }
 
-  /* ─── Main Login UI ─── */
   return (
     <main className="flex min-h-screen items-center justify-center bg-[#faf8f5] px-6 py-10">
-      {/* Click outside to close lang */}
-      {langOpen && <div className="fixed inset-0 z-20" onClick={() => setLangOpen(false)} />}
+      {langOpen ? <div className="fixed inset-0 z-20" onClick={() => setLangOpen(false)} /> : null}
 
       <div className="w-full max-w-md">
-        {/* Top bar: Back & Lang */}
         <div className="mb-6 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-1.5 text-sm text-[#8a8480] transition-colors hover:text-[#3d3a36]">
             <ArrowLeft className="h-4 w-4" />
@@ -389,96 +263,68 @@ export default function LoginClient() {
           </Link>
           <div className="relative">
             <button
-              onClick={() => setLangOpen(!langOpen)}
+              onClick={() => setLangOpen((v) => !v)}
               className="flex items-center gap-1.5 rounded-full border border-[#e8e4de] bg-white/70 px-3 py-1.5 text-xs text-[#6b6560] transition-all hover:border-[#c5bfb7]"
             >
               <Globe className="h-3.5 w-3.5" />
               {LANG_LABELS[lang]}
             </button>
-            {langOpen && (
+            {langOpen ? (
               <div className="absolute right-0 top-full z-30 mt-1 w-32 overflow-hidden rounded-xl border border-[#e8e4de] bg-white shadow-lg">
                 {(Object.keys(LANG_LABELS) as LangKey[]).map((k) => (
                   <button
                     key={k}
-                    onClick={() => { setLang(k); setLangOpen(false); }}
-                    className={`block w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#f5f2ee] ${k === lang ? "font-medium text-[#3d3a36] bg-[#f5f2ee]" : "text-[#6b6560]"
-                      }`}
+                    onClick={() => {
+                      setLang(k);
+                      setLangOpen(false);
+                    }}
+                    className={`block w-full px-4 py-2.5 text-left text-sm transition-colors hover:bg-[#f5f2ee] ${
+                      k === lang ? "bg-[#f5f2ee] font-medium text-[#3d3a36]" : "text-[#6b6560]"
+                    }`}
                   >
                     {LANG_LABELS[k]}
                   </button>
                 ))}
               </div>
-            )}
+            ) : null}
           </div>
         </div>
 
-        {/* Card */}
         <div className="rounded-2xl border border-[#e8e4de] bg-white p-8 shadow-sm">
-          {/* Header */}
           <div className="mb-8 text-center">
             <Link href="/" className="text-2xl font-semibold text-[#3d3a36]" style={{ fontFamily: "var(--font-serif)" }}>
               RutineIQ
             </Link>
-            <p className="mt-2 text-sm text-[#8a8480]">
-              {tab === "login" ? t.welcome : t.welcomeSub}
-            </p>
-            <p className="mt-0.5 text-xs text-[#b5b0a9]">
-              {tab === "login" ? t.welcomeSub : ""}
-            </p>
+            <p className="mt-2 text-sm text-[#8a8480]">{tab === "login" ? t.welcome : t.welcomeSub}</p>
+            <p className="mt-0.5 text-xs text-[#b5b0a9]">{tab === "login" ? t.welcomeSub : ""}</p>
           </div>
 
-          {/* Tab Toggle */}
           <div className="mb-6 flex rounded-xl bg-[#f5f2ee] p-1">
             {(["login", "signup"] as const).map((tabKey) => (
               <button
                 key={tabKey}
-                onClick={() => { setTab(tabKey); setError(null); setMessage(null); }}
-                className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${tab === tabKey
-                    ? "bg-white text-[#3d3a36] shadow-sm"
-                    : "text-[#8a8480] hover:text-[#6b6560]"
-                  }`}
+                onClick={() => {
+                  setTab(tabKey);
+                  setError(null);
+                  setMessage(null);
+                }}
+                className={`flex-1 rounded-lg py-2 text-sm font-medium transition-all ${
+                  tab === tabKey ? "bg-white text-[#3d3a36] shadow-sm" : "text-[#8a8480] hover:text-[#6b6560]"
+                }`}
               >
                 {tabKey === "login" ? t.tabLogin : t.tabSignup}
               </button>
             ))}
           </div>
 
-          {/* Messages */}
-          {message && (
-            <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-800">
-              {message}
-            </div>
-          )}
-          {error && (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm text-red-800">
-              {error}
-            </div>
-          )}
+          {message ? <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-800">{message}</div> : null}
+          {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm text-red-800">{error}</div> : null}
 
-          {/* Google Sign In */}
-          <button
-            onClick={signInWithGoogle}
-            disabled={loading || !googleEnabled}
-            className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#e8e4de] bg-white py-3 text-sm font-medium text-[#3d3a36] transition-all hover:bg-[#f5f2ee] hover:shadow-sm disabled:opacity-50"
-          >
-            <GoogleIcon className="h-5 w-5" />
-            {tab === "login" ? t.googleLogin : t.googleSignup}
-          </button>
-          {!googleEnabled ? (
-            <p className="mt-2 text-xs text-[#9b7a4a]">{t.googleSetupHint}</p>
-          ) : null}
-
-          {/* Divider */}
-          <div className="my-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-[#e8e4de]" />
-            <span className="text-xs text-[#b5b0a9]">{t.or}</span>
-            <div className="h-px flex-1 bg-[#e8e4de]" />
-          </div>
-
-          {/* Email/Password Form */}
           <form className="space-y-4" onSubmit={tab === "login" ? signInWithPassword : signUp}>
             <div className="space-y-1.5">
-              <Label htmlFor="login-email" className="text-xs text-[#6b6560]">{t.email}</Label>
+              <Label htmlFor="login-email" className="text-xs text-[#6b6560]">
+                {t.email}
+              </Label>
               <Input
                 id="login-email"
                 type="email"
@@ -490,7 +336,9 @@ export default function LoginClient() {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="login-password" className="text-xs text-[#6b6560]">{t.password}</Label>
+              <Label htmlFor="login-password" className="text-xs text-[#6b6560]">
+                {t.password}
+              </Label>
               <Input
                 id="login-password"
                 type="password"
@@ -507,13 +355,10 @@ export default function LoginClient() {
               className="flex w-full items-center justify-center gap-2 rounded-xl bg-[#3d3a36] py-3 text-sm font-medium text-white transition-all hover:bg-[#2a2826] disabled:opacity-50"
             >
               <Mail className="h-4 w-4" />
-              {tab === "login"
-                ? (loading ? t.loggingIn : t.login)
-                : (loading ? t.signingUp : t.signUp)
-              }
+              {tab === "login" ? (loading ? t.loggingIn : t.login) : loading ? t.signingUp : t.signUp}
             </button>
 
-            {tab === "login" && (
+            {tab === "login" ? (
               <button
                 type="button"
                 onClick={sendPasswordReset}
@@ -522,23 +367,10 @@ export default function LoginClient() {
               >
                 {t.forgotPassword}
               </button>
-            )}
+            ) : null}
           </form>
         </div>
 
-        {/* Demo Section */}
-        <div className="mt-4 rounded-2xl border border-[#e8e4de] bg-white/60 p-5 text-center">
-          <button
-            onClick={tryDemo}
-            disabled={loading}
-            className="text-sm font-medium text-[#6b6560] transition-colors hover:text-[#3d3a36] disabled:opacity-50"
-          >
-            {loading ? t.demoLoading : t.demo}
-          </button>
-          <p className="mt-1 text-xs text-[#b5b0a9]">{t.demoHint}</p>
-        </div>
-
-        {/* Privacy */}
         <p className="mt-6 text-center text-xs text-[#c5bfb7]">{t.privacy}</p>
       </div>
     </main>

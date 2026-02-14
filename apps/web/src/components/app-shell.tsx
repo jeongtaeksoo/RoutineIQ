@@ -105,7 +105,10 @@ export function AppShell({
   }, []);
 
   return (
-    <div className="min-h-screen md:flex" style={{ background: "linear-gradient(180deg, hsl(35 30% 96%) 0%, hsl(33 25% 94%) 100%)" }}>
+    <div
+      className="min-h-screen md:flex"
+      style={{ background: "linear-gradient(180deg, hsl(var(--bg)) 0%, hsl(var(--bg-soft)) 100%)" }}
+    >
       <ReminderScheduler
         userMetaVersion={userMetaVersion}
         reminderLogTitle={strings.reminder_log_title}
@@ -114,7 +117,10 @@ export function AppShell({
         reminderPlanBody={strings.reminder_plan_body}
       />
       <aside className="hidden w-72 shrink-0 p-5 md:flex">
-        <div className="flex w-full flex-col gap-4 rounded-2xl border p-4 backdrop-blur" style={{ background: "rgba(255,252,248,0.65)", boxShadow: "0 8px 32px -8px rgba(74,63,53,0.08)" }}>
+        <div
+          className="flex w-full flex-col gap-4 rounded-2xl border p-4 backdrop-blur"
+          style={{ background: "hsl(var(--card) / 0.7)", boxShadow: "0 8px 32px -8px hsl(var(--fg) / 0.12)" }}
+        >
           <div className="flex items-center justify-between">
             <div>
               <div className="title-serif text-xl leading-none">RutineIQ</div>
@@ -148,7 +154,9 @@ export function AppShell({
                   href={it.href}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
-                    active ? "bg-[#f5efe7] text-fg shadow-sm font-medium" : "text-mutedFg hover:bg-[#faf5ee] hover:text-fg"
+                    active
+                      ? "bg-[hsl(var(--muted)/0.85)] text-fg shadow-sm font-medium"
+                      : "text-mutedFg hover:bg-[hsl(var(--muted)/0.55)] hover:text-fg"
                   )}
                 >
                   <Icon className="h-4 w-4" />
@@ -163,8 +171,8 @@ export function AppShell({
                 className={cn(
                   "mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
                   pathname === "/admin" || pathname.startsWith("/admin/")
-                    ? "bg-[#f5efe7] text-fg shadow-sm font-medium"
-                    : "text-mutedFg hover:bg-[#faf5ee] hover:text-fg"
+                    ? "bg-[hsl(var(--muted)/0.85)] text-fg shadow-sm font-medium"
+                    : "text-mutedFg hover:bg-[hsl(var(--muted)/0.55)] hover:text-fg"
                 )}
               >
                 <Shield className="h-4 w-4" />
@@ -174,9 +182,9 @@ export function AppShell({
           </nav>
 
           <div className="mt-auto space-y-3">
-            <div className="rounded-xl border bg-[#faf5ee]/70 p-3 text-xs text-mutedFg">
+            <div className="rounded-xl border bg-[hsl(var(--muted)/0.45)] p-3 text-xs text-mutedFg">
               {strings.signed_in_as}
-              <div className="mt-1 truncate text-sm font-medium text-fg">{email || strings.guest}</div>
+              <div className="mt-1 truncate text-sm font-medium text-fg">{email || strings.visitor}</div>
             </div>
             <Button variant="outline" className="w-full justify-between" onClick={signOut} disabled={signingOut}>
               <span>{strings.sign_out}</span>
@@ -192,7 +200,10 @@ export function AppShell({
         </main>
       </div>
 
-      <nav className="fixed bottom-0 left-0 right-0 z-20 border-t backdrop-blur md:hidden" style={{ background: "rgba(253,249,244,0.88)" }}>
+      <nav
+        className="fixed bottom-0 left-0 right-0 z-20 border-t backdrop-blur md:hidden"
+        style={{ background: "hsl(var(--bg) / 0.9)" }}
+      >
         <div className="mx-auto grid max-w-2xl grid-cols-5">
           {navItems.map((it) => {
             const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
@@ -211,10 +222,12 @@ export function AppShell({
               <Link
                 key={it.href}
                 href={it.href}
+                aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex flex-col items-center gap-1 px-2 py-3 text-[11px] transition-colors",
+                  "flex min-h-[68px] flex-col items-center justify-center gap-1 px-2 pt-2 text-[11px] transition-colors",
                   active ? "text-fg" : "text-mutedFg"
                 )}
+                style={{ paddingBottom: "calc(0.55rem + env(safe-area-inset-bottom))" }}
               >
                 <Icon className={cn("h-5 w-5", active ? "text-brand" : "text-mutedFg")} />
                 <span className="line-clamp-1">{short}</span>

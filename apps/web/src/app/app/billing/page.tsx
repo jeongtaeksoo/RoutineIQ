@@ -9,7 +9,7 @@ export default async function BillingPage() {
   if (isE2ETestMode()) {
     const isKo = true;
     const plan: "free" | "pro" = "free";
-    const isGuest = true;
+    const needsEmailSetup = true;
     const sub: {
       status?: string;
       current_period_end?: string | null;
@@ -68,7 +68,7 @@ export default async function BillingPage() {
                 <li>{isKo ? "실패 패턴(최대 3개) + 해결책 더 구체화" : "Up to 3 failure patterns + more specific fixes"}</li>
                 <li>{isKo ? "우선 처리(재시도 포함)" : "Priority handling (with retries)"}</li>
               </ul>
-              <BillingActions plan={plan} isGuest={isGuest} />
+              <BillingActions plan={plan} needsEmailSetup={needsEmailSetup} />
             </CardContent>
           </Card>
         </div>
@@ -151,7 +151,7 @@ export default async function BillingPage() {
     .maybeSingle();
 
   const plan = sub?.plan === "pro" && (sub.status === "active" || sub.status === "trialing") ? "pro" : "free";
-  const isGuest = !user?.email;
+  const needsEmailSetup = !user?.email;
   const periodEnd = sub?.current_period_end ? String(sub.current_period_end).slice(0, 10) : "-";
   const showCancel = Boolean(sub?.cancel_at_period_end);
 
@@ -205,7 +205,7 @@ export default async function BillingPage() {
               <li>{isKo ? "실패 패턴(최대 3개) + 해결책 더 구체화" : "Up to 3 failure patterns + more specific fixes"}</li>
               <li>{isKo ? "우선 처리(재시도 포함)" : "Priority handling (with retries)"}</li>
             </ul>
-            <BillingActions plan={plan} isGuest={isGuest} />
+            <BillingActions plan={plan} needsEmailSetup={needsEmailSetup} />
           </CardContent>
         </Card>
       </div>

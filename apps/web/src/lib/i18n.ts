@@ -22,7 +22,7 @@ export type Strings = {
   nav_short_preferences: string;
 
   signed_in_as: string;
-  guest: string;
+  visitor: string;
   sign_out: string;
 
   reminder_log_title: string;
@@ -54,7 +54,7 @@ const EN: Strings = {
   nav_short_preferences: "Prefs",
 
   signed_in_as: "Signed in as",
-  guest: "Guest",
+  visitor: "Visitor",
   sign_out: "Sign out",
 
   reminder_log_title: "Log your day",
@@ -85,7 +85,7 @@ const KO: Strings = {
   nav_short_preferences: "설정",
 
   signed_in_as: "로그인",
-  guest: "게스트",
+  visitor: "방문자",
   sign_out: "로그아웃",
 
   reminder_log_title: "오늘 기록하기",
@@ -113,7 +113,7 @@ const JA: Strings = {
   nav_short_billing: "料金",
   nav_short_preferences: "設定",
   signed_in_as: "ログイン中",
-  guest: "ゲスト",
+  visitor: "訪問ユーザー",
   sign_out: "ログアウト",
   reminder_log_title: "今日の記録",
   reminder_log_body: "デイリーフローを開いて、主要な活動を記録しましょう。",
@@ -140,7 +140,7 @@ const ZH: Strings = {
   nav_short_billing: "账单",
   nav_short_preferences: "设置",
   signed_in_as: "已登录",
-  guest: "访客",
+  visitor: "访问用户",
   sign_out: "登出",
   reminder_log_title: "记录今天",
   reminder_log_body: "打开每日流程并记录关键事项。",
@@ -167,7 +167,7 @@ const ES: Strings = {
   nav_short_billing: "Planes",
   nav_short_preferences: "Prefs",
   signed_in_as: "Sesión iniciada",
-  guest: "Invitado",
+  visitor: "Visitante",
   sign_out: "Cerrar sesión",
   reminder_log_title: "Registra tu día",
   reminder_log_body: "Abre el Flujo Diario y registra bloque clave.",

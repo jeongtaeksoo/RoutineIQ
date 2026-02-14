@@ -12,6 +12,7 @@ import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { buildTomorrowRoutineIcs } from "@/lib/ics";
 
 type AIReport = {
+  schema_version?: number;
   summary: string;
   productivity_peaks: { start: string; end: string; reason: string }[];
   failure_patterns: { pattern: string; trigger: string; fix: string }[];
@@ -19,9 +20,17 @@ type AIReport = {
   if_then_rules: { if: string; then: string }[];
   coach_one_liner: string;
   yesterday_plan_vs_actual: { comparison_note: string; top_deviation: string };
+  wellbeing_insight?: {
+    burnout_risk?: "low" | "medium" | "high" | string;
+    energy_curve_forecast?: string;
+    note?: string;
+  };
+  micro_advice?: { action: string; when: string; reason: string; duration_min: number }[];
+  weekly_pattern_insight?: string;
 };
 
 const PREVIEW_REPORT_EN: AIReport = {
+  schema_version: 2,
   summary: "Preview: your plan breaks when sessions have no buffers. Tomorrow we’ll protect power hours and add recovery rules.",
   productivity_peaks: [{ start: "09:30", end: "11:00", reason: "Low interruptions and high energy." }],
   failure_patterns: [
@@ -33,10 +42,25 @@ const PREVIEW_REPORT_EN: AIReport = {
   ],
   if_then_rules: [{ if: "If you drift", then: "Then do 5-min reset + 25-min sprint (no inbox)." }],
   coach_one_liner: "Protect one real deep work block, and add buffers where you usually break.",
-  yesterday_plan_vs_actual: { comparison_note: "Preview: run Analyze to see this comparison.", top_deviation: "Preview: interruptions and missing buffers." }
+  yesterday_plan_vs_actual: { comparison_note: "Preview: run Analyze to see this comparison.", top_deviation: "Preview: interruptions and missing buffers." },
+  wellbeing_insight: {
+    burnout_risk: "medium",
+    energy_curve_forecast: "Energy is likely strongest in your 09:30-11:00 window.",
+    note: "Keep one 10-min recovery buffer after intense blocks.",
+  },
+  micro_advice: [
+    {
+      action: "3-minute transition reset",
+      when: "Before context switching",
+      reason: "Reduces attention residue and protects focus depth.",
+      duration_min: 3,
+    },
+  ],
+  weekly_pattern_insight: "Weekly pattern preview: focus improves when mornings start with one uninterrupted deep-work block.",
 };
 
 const PREVIEW_REPORT_KO: AIReport = {
+  schema_version: 2,
   summary:
     "미리보기: 쉴 틈 없이 달리면 지치기 쉽습니다. 내일은 중간에 휴식을 꼭 챙기고, 나만의 속도를 찾아보세요.",
   productivity_peaks: [{ start: "09:30", end: "11:00", reason: "방해가 적고 에너지가 높은 시간대입니다." }],
@@ -53,7 +77,21 @@ const PREVIEW_REPORT_KO: AIReport = {
   ],
   if_then_rules: [{ if: "자꾸 미루고 싶을 때", then: "5분만 책상을 정리하고, 딱 20분만 시작해봅니다." }],
   coach_one_liner: "하루에 하나, 온전히 집중하는 시간을 챙겨보세요.",
-  yesterday_plan_vs_actual: { comparison_note: "미리보기: 리포트가 생성되면 계획과 실제를 비교해드립니다.", top_deviation: "미리보기: 방해 요소와 휴식 부족." }
+  yesterday_plan_vs_actual: { comparison_note: "미리보기: 리포트가 생성되면 계획과 실제를 비교해드립니다.", top_deviation: "미리보기: 방해 요소와 휴식 부족." },
+  wellbeing_insight: {
+    burnout_risk: "medium",
+    energy_curve_forecast: "09:30-11:00 구간에서 에너지 유지 가능성이 높습니다.",
+    note: "강한 집중 블록 뒤에는 10분 회복 버퍼를 먼저 고정하세요.",
+  },
+  micro_advice: [
+    {
+      action: "전환 전 3분 리셋",
+      when: "작업 전환 직전",
+      reason: "주의 잔여 피로를 줄여 다음 블록 몰입을 지킵니다.",
+      duration_min: 3,
+    },
+  ],
+  weekly_pattern_insight: "주간 패턴 미리보기: 아침 첫 블록을 지킨 날에 집중 유지율이 더 높았습니다.",
 };
 
 // ... (addDays function remains same) ...
@@ -76,6 +114,40 @@ function toMinutes(hhmm: string): number | null {
   if (!Number.isFinite(h) || !Number.isFinite(mm)) return null;
   if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
   return h * 60 + mm;
+}
+
+function normalizeReport(raw: AIReport, isKo: boolean): AIReport {
+  const riskRaw = String(raw?.wellbeing_insight?.burnout_risk || "medium").toLowerCase();
+  const burnout_risk = riskRaw === "low" || riskRaw === "high" ? riskRaw : "medium";
+  const microRaw = Array.isArray(raw?.micro_advice) ? raw.micro_advice : [];
+  const micro_advice = microRaw
+    .filter((it) => it && typeof it.action === "string" && typeof it.when === "string" && typeof it.reason === "string")
+    .map((it) => ({
+      action: it.action,
+      when: it.when,
+      reason: it.reason,
+      duration_min: Number.isFinite(Number(it.duration_min)) ? Math.min(20, Math.max(1, Number(it.duration_min))) : 5,
+    }));
+  return {
+    ...raw,
+    schema_version: Number.isFinite(Number(raw?.schema_version)) ? Number(raw?.schema_version) : 1,
+    wellbeing_insight: {
+      burnout_risk,
+      energy_curve_forecast:
+        typeof raw?.wellbeing_insight?.energy_curve_forecast === "string" && raw.wellbeing_insight.energy_curve_forecast.trim()
+          ? raw.wellbeing_insight.energy_curve_forecast
+          : (isKo ? "기록이 쌓이면 에너지 곡선 예측 정확도가 높아집니다." : "Energy-curve forecast improves as you log more days."),
+      note:
+        typeof raw?.wellbeing_insight?.note === "string" && raw.wellbeing_insight.note.trim()
+          ? raw.wellbeing_insight.note
+          : (isKo ? "내일은 회복 버퍼 1개를 먼저 고정해보세요." : "For tomorrow, lock one recovery buffer first."),
+    },
+    micro_advice,
+    weekly_pattern_insight:
+      typeof raw?.weekly_pattern_insight === "string" && raw.weekly_pattern_insight.trim()
+        ? raw.weekly_pattern_insight
+        : (isKo ? "주간 패턴은 최소 3일 기록 후 정확도가 높아집니다." : "Weekly pattern signal becomes clearer after at least 3 logged days."),
+  };
 }
 
 export default function ReportPage() {
@@ -103,8 +175,18 @@ export default function ReportPage() {
         previewDesc: "분석이 완료되면 나만의 리포트가 만들어집니다.",
         coachOneLiner: "오늘의 한 마디",
         coachOneLinerDesc: "지금 바로 실행할 한 가지 행동입니다.",
+        schemaBadge: "리포트 스키마",
         dayReview: "오늘의 요약",
         dayReviewDesc: "하루의 흐름과 코치의 조언.",
+        wellbeingTitle: "웰빙 인사이트",
+        wellbeingDesc: "번아웃 위험과 에너지 곡선 예측입니다.",
+        burnoutRisk: "번아웃 위험도",
+        energyForecast: "에너지 곡선 예측",
+        wellbeingNote: "웰빙 메모",
+        weeklyPattern: "주간 패턴",
+        microAdviceTitle: "5분 실행 가이드",
+        microAdviceDesc: "짧게 바로 실행할 수 있는 행동입니다.",
+        durationMin: "소요",
         comparisonNote: "비교 메모",
         topDeviation: "주요 원인",
         powerHours: "집중이 잘 된 시간",
@@ -147,8 +229,18 @@ export default function ReportPage() {
       previewDesc: "Sample preview (personalized after analyze).",
       coachOneLiner: "Coach Tip of the Day",
       coachOneLinerDesc: "One action you can do right now.",
+      schemaBadge: "Report schema",
       dayReview: "Your Day in Review",
       dayReviewDesc: "Summary + plan vs actual (when available).",
+      wellbeingTitle: "Wellbeing Insight",
+      wellbeingDesc: "Burnout risk + energy-curve outlook.",
+      burnoutRisk: "Burnout risk",
+      energyForecast: "Energy forecast",
+      wellbeingNote: "Wellbeing note",
+      weeklyPattern: "Weekly pattern signal",
+      microAdviceTitle: "5-Minute Micro Advice",
+      microAdviceDesc: "Short actions you can execute right away.",
+      durationMin: "Duration",
       comparisonNote: "Comparison Note",
       topDeviation: "Top Deviation",
       powerHours: "Your Power Hours",
@@ -182,6 +274,27 @@ export default function ReportPage() {
   const [exporting, setExporting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<AIReport | null>(null);
+  const burnoutRisk =
+    report?.wellbeing_insight?.burnout_risk === "low" || report?.wellbeing_insight?.burnout_risk === "high"
+      ? report.wellbeing_insight.burnout_risk
+      : "medium";
+  const burnoutRiskLabel = isKo
+    ? burnoutRisk === "high"
+      ? "높음"
+      : burnoutRisk === "low"
+        ? "낮음"
+        : "중간"
+    : burnoutRisk === "high"
+      ? "High"
+      : burnoutRisk === "low"
+        ? "Low"
+        : "Medium";
+  const burnoutBadgeClass =
+    burnoutRisk === "high"
+      ? "border-red-300 bg-red-50 text-red-700"
+      : burnoutRisk === "low"
+        ? "border-emerald-300 bg-emerald-50 text-emerald-700"
+        : "border-amber-300 bg-amber-50 text-amber-700";
   const peakTimeline = React.useMemo(() => {
     if (!report?.productivity_peaks?.length) return [];
     return report.productivity_peaks
@@ -211,7 +324,7 @@ export default function ReportPage() {
     setLoading(true);
     try {
       const res = await apiFetch<{ date: string; report: AIReport }>(`/reports?date=${date}`);
-      setReport(res.report);
+      setReport(normalizeReport(res.report, isKo));
     } catch (err) {
       const status = isApiFetchError(err) ? err.status : null;
       if (status === 404) {
@@ -233,7 +346,7 @@ export default function ReportPage() {
         method: "POST",
         body: JSON.stringify({ date, force: true })
       });
-      setReport(res.report);
+      setReport(normalizeReport(res.report, isKo));
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setError(err instanceof Error ? `${err.message}${hint}` : t.analyzeFailed);
@@ -350,6 +463,9 @@ export default function ReportPage() {
             </CardHeader>
             <CardContent>
               <p className="title-serif text-2xl leading-snug">{report.coach_one_liner}</p>
+              <p className="mt-2 text-xs text-mutedFg">
+                {t.schemaBadge}: v{report.schema_version ?? 1}
+              </p>
             </CardContent>
           </Card>
 
@@ -370,6 +486,58 @@ export default function ReportPage() {
                   <p className="mt-1 text-sm">{report.yesterday_plan_vs_actual.top_deviation}</p>
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-6">
+            <CardHeader>
+              <CardTitle>{t.wellbeingTitle}</CardTitle>
+              <CardDescription>{t.wellbeingDesc}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-white/50 p-3">
+                <p className="text-xs text-mutedFg">{t.burnoutRisk}</p>
+                <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${burnoutBadgeClass}`}>
+                  {burnoutRiskLabel}
+                </span>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.energyForecast}</p>
+                <p className="mt-1 text-sm">{report.wellbeing_insight?.energy_curve_forecast}</p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.wellbeingNote}</p>
+                <p className="mt-1 text-sm">{report.wellbeing_insight?.note}</p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.weeklyPattern}</p>
+                <p className="mt-1 text-sm">{report.weekly_pattern_insight}</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="lg:col-span-6">
+            <CardHeader>
+              <CardTitle>{t.microAdviceTitle}</CardTitle>
+              <CardDescription>{t.microAdviceDesc}</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {report.micro_advice?.length ? (
+                report.micro_advice.map((item, idx) => (
+                  <div key={idx} className="rounded-xl border bg-white/50 p-4">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <p className="text-sm font-semibold">{item.action}</p>
+                      <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
+                        {t.durationMin}: {item.duration_min}m
+                      </span>
+                    </div>
+                    <p className="mt-1 text-xs text-mutedFg">{item.when}</p>
+                    <p className="mt-2 text-sm">{item.reason}</p>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-mutedFg">{isKo ? "아직 실행 가이드가 없습니다." : "No micro advice generated yet."}</p>
+              )}
             </CardContent>
           </Card>
 

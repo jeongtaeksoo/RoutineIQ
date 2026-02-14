@@ -339,6 +339,7 @@ create table if not exists public.activity_logs (
   user_id uuid not null references public.profiles(id) on delete cascade,
   date date not null,
   entries jsonb not null default '[]'::jsonb,
+  meta jsonb not null default '{}'::jsonb,
   note text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),

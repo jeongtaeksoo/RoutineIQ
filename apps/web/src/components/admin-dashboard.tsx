@@ -50,7 +50,7 @@ export function AdminDashboard() {
         usersDesc: "이메일, 플랜, 최근 분석일",
         joined: "가입",
         lastAnalyze: "최근 분석",
-        guest: "(게스트)",
+        visitor: "(방문 사용자)",
         noUsers: "유저가 없습니다.",
         userDetail: "유저 상세",
         userDetailDesc: "최근 7일 로그/사용량, 최신 리포트 미리보기",
@@ -80,7 +80,7 @@ export function AdminDashboard() {
       usersDesc: "Email, plan, and last analyzed date.",
       joined: "Joined",
       lastAnalyze: "Last analyze",
-      guest: "(guest)",
+      visitor: "(visitor)",
       noUsers: "No users.",
       userDetail: "User Detail",
       userDetailDesc: "Last 7 days activity + usage, and latest report preview.",
@@ -204,7 +204,7 @@ export function AdminDashboard() {
                 >
                   <div className="flex items-center justify-between gap-3">
                     <div className="min-w-0">
-                      <div className="truncate text-sm font-semibold">{u.email || t.guest}</div>
+                      <div className="truncate text-sm font-semibold">{u.email || t.visitor}</div>
                       <div className="mt-1 text-xs text-mutedFg">
                         {t.joined}: {String(u.created_at).slice(0, 10)} · {t.lastAnalyze}: {u.last_analyzed_date || "-"}
                       </div>

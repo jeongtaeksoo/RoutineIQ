@@ -174,7 +174,7 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
     privacy_title: "Datos y Privacidad",
     privacy_desc: "Uso de datos transparente.",
     privacy_p1: "Los registros solo se usan para tu análisis de rutina.",
-    privacy_p2: "Sin anuncios, no vendemos datos.",
+    privacy_p2: "Sin anuncios, no comercializamos datos.",
     privacy_p3: "Puedes borrar tus datos cuando quieras.",
     reset_data: "Restablecer datos",
     reset_confirm: "¿Eliminar todos los registros y reportes? Esto no se puede deshacer.",
@@ -253,6 +253,14 @@ const WORK_MODE_OPTIONS = [
   { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
 
+const CHRONOTYPE_OPTIONS = [
+  { value: "morning", ko: "아침형", en: "Morning type" },
+  { value: "midday", ko: "중간형", en: "Midday type" },
+  { value: "evening", ko: "저녁형", en: "Evening type" },
+  { value: "mixed", ko: "혼합형", en: "Mixed" },
+  { value: "unknown", ko: "잘 모르겠어요 (선택)", en: "Not sure (optional)" },
+] as const;
+
 export default function PreferencesPage() {
   const [busy, setBusy] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -268,6 +276,25 @@ export default function PreferencesPage() {
   const [profile, setProfile] = React.useState<ProfilePreferences>(DEFAULT_PROFILE);
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission | "unsupported">(
     "unsupported"
+  );
+  const profileHelp = React.useMemo(
+    () =>
+      isKo
+        ? {
+            age: "이 정보로 연령대별 집중 시간대를 참고해 루틴 강도를 조절합니다.",
+            gender: "이 정보로 유사 사용자 패턴 비교 정확도를 높입니다. 원치 않으면 '응답 안함'을 선택하세요.",
+            job: "이 정보로 업무 맥락(깊은 집중/협업 비중)을 맞춘 루틴을 제안합니다.",
+            mode: "이 정보로 근무 제약(고정/교대/유연)에 맞는 실행 가능한 시간표를 생성합니다.",
+            chronotype: "선택 항목: 하루 에너지 피크 시간 예측 정확도를 높입니다.",
+          }
+        : {
+            age: "Improves age-cohort calibration for realistic focus intensity.",
+            gender: "Improves similar-user trend quality. You can choose 'Prefer not to say'.",
+            job: "Adapts deep-work vs coordination balance to your work context.",
+            mode: "Builds feasible time blocks around schedule constraints.",
+            chronotype: "Optional: improves peak-hour placement using your natural rhythm.",
+          },
+    [isKo]
   );
 
   React.useEffect(() => {
@@ -558,14 +585,15 @@ export default function PreferencesPage() {
             <CardTitle>{isKo ? "개인 설정" : "Personal Profile"}</CardTitle>
             <CardDescription>
               {isKo
-                ? "첫 AI 분석 전에 필요한 기본 정보입니다. 맞춤 루틴 정확도 향상 용도로만 사용되며 성별은 '응답 안함' 선택이 가능합니다."
-                : "These fields are required before your first AI analysis. They are used only to improve recommendation quality. Gender supports 'Prefer not to say'."}
+                ? "첫 AI 분석 전에 필요한 기본 정보입니다. 개인화 리포트와 유사 사용자 트렌드 정확도 향상에만 사용되며 성별은 '응답 안함' 선택이 가능합니다."
+                : "Required before your first AI analysis. Used only for personalized reports and similar-user trend quality. Gender supports 'Prefer not to say'."}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-mutedFg">{isKo ? "연령대" : "Age group"}</label>
+                <p className="text-[11px] text-mutedFg">{profileHelp.age}</p>
                 <select
                   value={profile.age_group}
                   onChange={(e) => setProfile((prev) => ({ ...prev, age_group: e.target.value as ProfilePreferences["age_group"] }))}
@@ -580,6 +608,7 @@ export default function PreferencesPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-mutedFg">{isKo ? "성별" : "Gender"}</label>
+                <p className="text-[11px] text-mutedFg">{profileHelp.gender}</p>
                 <select
                   value={profile.gender}
                   onChange={(e) => setProfile((prev) => ({ ...prev, gender: e.target.value as ProfilePreferences["gender"] }))}
@@ -594,6 +623,7 @@ export default function PreferencesPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-mutedFg">{isKo ? "직군" : "Job family"}</label>
+                <p className="text-[11px] text-mutedFg">{profileHelp.job}</p>
                 <select
                   value={profile.job_family}
                   onChange={(e) => setProfile((prev) => ({ ...prev, job_family: e.target.value as ProfilePreferences["job_family"] }))}
@@ -608,12 +638,28 @@ export default function PreferencesPage() {
               </div>
               <div className="space-y-1.5">
                 <label className="text-xs font-medium text-mutedFg">{isKo ? "근무 형태" : "Work mode"}</label>
+                <p className="text-[11px] text-mutedFg">{profileHelp.mode}</p>
                 <select
                   value={profile.work_mode}
                   onChange={(e) => setProfile((prev) => ({ ...prev, work_mode: e.target.value as ProfilePreferences["work_mode"] }))}
                   className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
                 >
                   {WORK_MODE_OPTIONS.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {isKo ? opt.ko : opt.en}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="space-y-1.5 sm:col-span-2">
+                <label className="text-xs font-medium text-mutedFg">{isKo ? "활동 리듬 타입" : "Chronotype"}</label>
+                <p className="text-[11px] text-mutedFg">{profileHelp.chronotype}</p>
+                <select
+                  value={profile.chronotype}
+                  onChange={(e) => setProfile((prev) => ({ ...prev, chronotype: e.target.value as ProfilePreferences["chronotype"] }))}
+                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                >
+                  {CHRONOTYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {isKo ? opt.ko : opt.en}
                     </option>
