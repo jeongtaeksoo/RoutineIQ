@@ -794,6 +794,100 @@ def _compute_analysis_metrics(
     }
 
 
+def _compute_recent_trends(*, recent_logs: list[dict[str, Any]] | None) -> dict[str, Any]:
+    rows = recent_logs if isinstance(recent_logs, list) else []
+    daily: list[dict[str, Any]] = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        m = _compute_analysis_metrics(activity_log=row, yesterday_plan=None)
+        totals = m.get("totals") if isinstance(m.get("totals"), dict) else {}
+        scores = m.get("scores") if isinstance(m.get("scores"), dict) else {}
+        daily.append(
+            {
+                "date": row.get("date"),
+                "logged_minutes": totals.get("total_logged_minutes"),
+                "weighted_focus_day_0_100": scores.get("weighted_focus_day_0_100"),
+                "switch_rate_per_hour": scores.get("switch_rate_per_hour"),
+            }
+        )
+
+    daily = [d for d in daily if isinstance(d.get("logged_minutes"), (int, float))]
+    if not daily:
+        return {
+            "days_with_logs": 0,
+            "sampled_dates": [],
+            "avg_logged_minutes": None,
+            "avg_weighted_focus_day_0_100": None,
+            "avg_switch_rate_per_hour": None,
+            "focus_trend": "insufficient_data",
+            "switch_trend": "insufficient_data",
+        }
+
+    daily.sort(key=lambda x: str(x.get("date") or ""), reverse=True)
+    sample = daily[:7]
+    focus_vals = [
+        float(d["weighted_focus_day_0_100"])
+        for d in sample
+        if isinstance(d.get("weighted_focus_day_0_100"), (int, float))
+    ]
+    switch_vals = [
+        float(d["switch_rate_per_hour"])
+        for d in sample
+        if isinstance(d.get("switch_rate_per_hour"), (int, float))
+    ]
+    mins_vals = [
+        float(d["logged_minutes"])
+        for d in sample
+        if isinstance(d.get("logged_minutes"), (int, float))
+    ]
+
+    def _avg(values: list[float]) -> float | None:
+        if not values:
+            return None
+        return round(sum(values) / len(values), 2)
+
+    focus_trend = "insufficient_data"
+    switch_trend = "insufficient_data"
+    if len(sample) >= 3:
+        latest = sample[0]
+        oldest = sample[min(len(sample) - 1, 2)]
+        latest_focus = latest.get("weighted_focus_day_0_100")
+        oldest_focus = oldest.get("weighted_focus_day_0_100")
+        if isinstance(latest_focus, (int, float)) and isinstance(
+            oldest_focus, (int, float)
+        ):
+            delta = float(latest_focus) - float(oldest_focus)
+            focus_trend = (
+                "improving" if delta >= 5 else "declining" if delta <= -5 else "stable"
+            )
+
+        latest_switch = latest.get("switch_rate_per_hour")
+        oldest_switch = oldest.get("switch_rate_per_hour")
+        if isinstance(latest_switch, (int, float)) and isinstance(
+            oldest_switch, (int, float)
+        ):
+            delta = float(latest_switch) - float(oldest_switch)
+            switch_trend = (
+                "worsening"
+                if delta >= 0.3
+                else "improving"
+                if delta <= -0.3
+                else "stable"
+            )
+
+    return {
+        "days_with_logs": len(sample),
+        "sampled_dates": [d.get("date") for d in sample],
+        "avg_logged_minutes": _avg(mins_vals),
+        "avg_weighted_focus_day_0_100": _avg(focus_vals),
+        "avg_switch_rate_per_hour": _avg(switch_vals),
+        "focus_trend": focus_trend,
+        "switch_trend": switch_trend,
+        "daily": sample[:3],
+    }
+
+
 def _build_system_prompt(*, plan: str, target_locale: str) -> str:
     pro_hint = ""
     if plan == "pro":
@@ -850,6 +944,8 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- coach_one_liner must be one specific next action tied to evidence (time window/trigger/metric), never generic encouragement.\n"
         "- yesterday_plan_vs_actual.top_deviation must be a human-readable phrase in the target locale; never output machine codes like NO_PREVIOUS_PLAN.\n"
         "- if_then_rules should function as recovery rules for real breakdown moments (not generic advice).\n"
+        "- If recent_trends.days_with_logs >= 3, include at least one explicit multi-day trend insight in summary or failure_patterns.\n"
+        "- Trend insight must cite concrete evidence from recent_trends (for example, focus_trend/switch_trend and sampled dates).\n"
         "- Behavioral evidence style: use implementation intentions for action initiation, reduce switch residue with transition rituals, and use short recovery breaks to protect vigor.\n"
         "\n"
         f"Required output locale: {target_locale} ({_LANG_NAME.get(target_locale, 'Korean')}).\n"
@@ -863,6 +959,7 @@ def _build_user_prompt(
     activity_log: dict[str, Any] | None,
     yesterday_plan: list[dict[str, Any]] | None,
     computed_metrics: dict[str, Any],
+    recent_trends: dict[str, Any],
     allowed_activity_labels: list[str],
     forbidden_activity_names: list[str],
     target_locale: str,
@@ -884,6 +981,9 @@ def _build_user_prompt(
         + "\n\n"
         "Computed metrics derived from the log (JSON; prefer these values for consistency):\n"
         + json.dumps(computed_metrics, ensure_ascii=False)
+        + "\n\n"
+        "Recent multi-day trend summary (JSON; use when days_with_logs >= 3):\n"
+        + json.dumps(recent_trends, ensure_ascii=False)
         + "\n\n"
         "Allowed tomorrow_routine.activity labels (choose ONLY from this list):\n"
         + json.dumps(allowed_activity_labels, ensure_ascii=False)
@@ -1044,6 +1144,19 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
     )
     sanitized_activity_log = sanitize_for_llm(activity_log)
 
+    recent_rows = await sb_rls.select(
+        "activity_logs",
+        bearer_token=auth.access_token,
+        params={
+            "select": "date,entries,note",
+            "user_id": f"eq.{auth.user_id}",
+            "date": f"lte.{body.date.isoformat()}",
+            "order": "date.desc",
+            "limit": 7,
+        },
+    )
+    recent_trends = _compute_recent_trends(recent_logs=sanitize_for_llm(recent_rows))
+
     # Load yesterday's report to compare "plan vs actual"
     yesterday = body.date - timedelta(days=1)
     y_rows = await sb_rls.select(
@@ -1121,6 +1234,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         activity_log=sanitized_activity_log,
         yesterday_plan=sanitized_yesterday_plan,
     )
+    computed_metrics["recent_trends"] = recent_trends
     activity_blacklist = _activity_blacklist(sanitized_activity_log)
     label_library = _label_library(target_locale)
     allowed_labels = [
@@ -1135,6 +1249,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         activity_log=sanitized_activity_log,
         yesterday_plan=sanitized_yesterday_plan,
         computed_metrics=computed_metrics,
+        recent_trends=recent_trends,
         allowed_activity_labels=allowed_labels,
         forbidden_activity_names=activity_blacklist,
         target_locale=target_locale,

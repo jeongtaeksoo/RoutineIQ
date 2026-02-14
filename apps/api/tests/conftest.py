@@ -28,6 +28,7 @@ for _key, _value in _ENV_DEFAULTS.items():
     os.environ.setdefault(_key, _value)
 
 import app.core.rate_limit as rate_limit
+import app.core.idempotency as idempotency
 import app.routes.analyze as analyze_route
 import app.routes.reflect as reflect_route
 import app.routes.suggest as suggest_route
@@ -62,6 +63,7 @@ def build_fake_jwt(*, user_id: str = TEST_USER_ID, email: str = TEST_EMAIL) -> s
 def reset_test_state() -> None:
     app.dependency_overrides.clear()
     rate_limit._counters.clear()  # type: ignore[attr-defined]
+    idempotency._entries.clear()  # type: ignore[attr-defined]
 
 
 @pytest.fixture
