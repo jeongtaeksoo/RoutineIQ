@@ -10,7 +10,7 @@ async function signInAsDemo(page: import("@playwright/test").Page) {
 }
 
 async function signInLive(page: import("@playwright/test").Page) {
-  await page.goto("/login");
+  await page.goto("/login?auth=1");
   const { email, password, accessToken } = await provisionLiveUserCredentials();
   await page.getByRole("button", { name: /로그인|Sign in|Login|ログイン|登录|Iniciar sesión/i }).first().click();
   await page.getByLabel(/이메일|Email|メールアドレス|电子邮件|Correo/i).fill(email);
@@ -128,6 +128,9 @@ test.describe("RutineIQ core flows", () => {
   });
 
   test("F2: Daily Flow save -> analyze -> report render", async ({ page }) => {
+    if (e2eMode === "live") {
+      test.setTimeout(180_000);
+    }
     if (e2eMode === "mock") {
       await installRoutineApiMock(page);
       await signInAsDemo(page);

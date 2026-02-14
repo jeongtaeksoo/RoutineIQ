@@ -794,15 +794,19 @@ def _compute_analysis_metrics(
     }
 
 
-def _compute_recent_trends(*, recent_logs: list[dict[str, Any]] | None) -> dict[str, Any]:
+def _compute_recent_trends(
+    *, recent_logs: list[dict[str, Any]] | None
+) -> dict[str, Any]:
     rows = recent_logs if isinstance(recent_logs, list) else []
     daily: list[dict[str, Any]] = []
     for row in rows:
         if not isinstance(row, dict):
             continue
         m = _compute_analysis_metrics(activity_log=row, yesterday_plan=None)
-        totals = m.get("totals") if isinstance(m.get("totals"), dict) else {}
-        scores = m.get("scores") if isinstance(m.get("scores"), dict) else {}
+        totals_raw = m.get("totals")
+        scores_raw = m.get("scores")
+        totals: dict[str, Any] = totals_raw if isinstance(totals_raw, dict) else {}
+        scores: dict[str, Any] = scores_raw if isinstance(scores_raw, dict) else {}
         daily.append(
             {
                 "date": row.get("date"),
@@ -871,9 +875,7 @@ def _compute_recent_trends(*, recent_logs: list[dict[str, Any]] | None) -> dict[
             switch_trend = (
                 "worsening"
                 if delta >= 0.3
-                else "improving"
-                if delta <= -0.3
-                else "stable"
+                else "improving" if delta <= -0.3 else "stable"
             )
 
     return {

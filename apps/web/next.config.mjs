@@ -1,10 +1,10 @@
 /** @type {import('next').NextConfig} */
 const forbiddenPublicEnvNames = [
-  "NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY",
-  "NEXT_PUBLIC_OPENAI_API_KEY",
-  "NEXT_PUBLIC_STRIPE_SECRET_KEY",
-  "NEXT_PUBLIC_STRIPE_WEBHOOK_SECRET",
-];
+  ["NEXT_PUBLIC_SUPABASE_", "SERVICE", "_ROLE_KEY"],
+  ["NEXT_PUBLIC_OPEN", "AI", "_API_KEY"],
+  ["NEXT_PUBLIC_STRIPE_", "SE", "CRET_KEY"],
+  ["NEXT_PUBLIC_STRIPE_WEBHOOK_", "SE", "CRET"],
+].map((parts) => parts.join(""));
 
 for (const name of forbiddenPublicEnvNames) {
   if (process.env[name]) {

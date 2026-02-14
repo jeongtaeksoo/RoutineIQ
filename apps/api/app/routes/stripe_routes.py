@@ -6,6 +6,11 @@ import stripe
 from fastapi import APIRouter, HTTPException, Request, status
 
 from app.core.config import settings
+from app.core.idempotency import (
+    claim_idempotency_key,
+    clear_idempotency_key,
+    mark_idempotency_done,
+)
 from app.core.rate_limit import consume
 from app.core.security import AuthDep
 from app.services.error_log import log_system_error
@@ -174,6 +179,16 @@ async def stripe_webhook(request: Request) -> dict:
             status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid signature"
         )
 
+    event_id = event.get("id")
+    idem_key: str | None = None
+    if isinstance(event_id, str) and event_id.strip():
+        idem_key = f"stripe:webhook:{event_id.strip()}"
+        idem_state = await claim_idempotency_key(
+            key=idem_key, processing_ttl_seconds=900
+        )
+        if idem_state != "acquired":
+            return {"ok": True, "replayed": True}
+
     etype = event.get("type")
     data = event.get("data", {}).get("object", {})
 
@@ -188,11 +203,15 @@ async def stripe_webhook(request: Request) -> dict:
                     message="checkout.session.completed missing user_id or subscription",
                     meta={"has_user_id": bool(user_id), "has_sub_id": bool(sub_id)},
                 )
+                if idem_key:
+                    await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
                 return {"ok": True}
 
             sub = stripe.Subscription.retrieve(sub_id)
             plan = _derive_plan_from_subscription(sub)
             await upsert_subscription_row(user_id=user_id, sub=sub, plan=plan)
+            if idem_key:
+                await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
             return {"ok": True}
 
         if etype in (
@@ -207,10 +226,14 @@ async def stripe_webhook(request: Request) -> dict:
                     message=f"{etype} missing user_id metadata",
                     meta={"subscription_id": sub.get("id")},
                 )
+                if idem_key:
+                    await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
                 return {"ok": True}
 
             plan = _derive_plan_from_subscription(sub)
             await upsert_subscription_row(user_id=user_id, sub=sub, plan=plan)
+            if idem_key:
+                await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
             return {"ok": True}
 
         if etype == "customer.subscription.deleted":
@@ -222,6 +245,8 @@ async def stripe_webhook(request: Request) -> dict:
                     message="customer.subscription.deleted missing user_id metadata",
                     meta={"subscription_id": sub.get("id")},
                 )
+                if idem_key:
+                    await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
                 return {"ok": True}
 
             await set_subscription_free(
@@ -230,11 +255,17 @@ async def stripe_webhook(request: Request) -> dict:
                 subscription_id=sub.get("id"),
                 status=sub.get("status"),
             )
+            if idem_key:
+                await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
             return {"ok": True}
 
         # Ignore other events for MVP
+        if idem_key:
+            await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
         return {"ok": True}
     except Exception as e:
+        if idem_key:
+            await clear_idempotency_key(key=idem_key)
         await log_system_error(
             route="/api/stripe/webhook",
             message=f"Webhook handler error: {etype}",

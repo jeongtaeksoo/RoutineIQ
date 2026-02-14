@@ -1,4 +1,4 @@
-## RoutineIQ IA (Information Architecture) + UX Constraints
+## RutineIQ IA (Information Architecture) + UX Constraints
 
 ### App Navigation (Must Match Labels)
 - **My Insights** (Dashboard)

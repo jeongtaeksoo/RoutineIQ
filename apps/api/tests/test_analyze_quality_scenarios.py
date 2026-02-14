@@ -109,7 +109,9 @@ def test_analyze_quality_scenarios(
     monkeypatch.setattr(
         analyze_route, "count_daily_analyze_calls", AsyncMock(return_value=0)
     )
-    monkeypatch.setattr(analyze_route, "insert_usage_event", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        analyze_route, "insert_usage_event", AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         analyze_route, "cleanup_expired_reports", AsyncMock(return_value=None)
     )
@@ -141,7 +143,9 @@ def test_analyze_quality_scenarios(
     supabase_mock["select"].side_effect = [
         [{"date": "2026-02-14"}],  # previous_report
         [],  # existing report cache miss
-        [_activity_row(target_date.isoformat(), entries, note=scenario_name)],  # activity log
+        [
+            _activity_row(target_date.isoformat(), entries, note=scenario_name)
+        ],  # activity log
         recent_rows,  # recent trend rows
         yesterday_rows,  # yesterday report
     ]
@@ -152,7 +156,10 @@ def test_analyze_quality_scenarios(
             assert "Yesterday's recommended plan for today" in user_prompt
             assert "09:00" in user_prompt
         if recent_days >= 3:
-            assert '"days_with_logs": 3' in user_prompt or '"days_with_logs": 4' in user_prompt
+            assert (
+                '"days_with_logs": 3' in user_prompt
+                or '"days_with_logs": 4' in user_prompt
+            )
 
         if "locale='ko'" in system_prompt:
             summary = "한국어 리포트 요약"
@@ -184,7 +191,10 @@ def test_analyze_quality_scenarios(
                 }
             ],
             "if_then_rules": [
-                {"if": "When notifications spike", "then": "Enable focus mode for 25 minutes"}
+                {
+                    "if": "When notifications spike",
+                    "then": "Enable focus mode for 25 minutes",
+                }
             ],
             "coach_one_liner": coach,
             "yesterday_plan_vs_actual": {

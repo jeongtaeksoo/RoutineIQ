@@ -1,4 +1,4 @@
--- RoutineIQ cohort preferences + trend aggregation
+-- RutineIQ cohort preferences + trend aggregation
 -- Run this in Supabase SQL Editor.
 
 alter table public.profiles

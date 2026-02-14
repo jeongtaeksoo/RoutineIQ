@@ -1,4 +1,4 @@
--- RoutineIQ P0 security hotfix
+-- RutineIQ P0 security hotfix
 -- 1) usage_events idempotency support
 alter table public.usage_events
   add column if not exists request_id text;

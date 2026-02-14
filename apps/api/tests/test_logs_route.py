@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from fastapi.testclient import TestClient
 
+from app.services.supabase_rest import SupabaseRestError
+
 
 def _log_payload(date_value: str) -> dict:
     return {
@@ -23,15 +25,23 @@ def _log_payload(date_value: str) -> dict:
 def test_post_logs_creates_entry(
     authenticated_client: TestClient, supabase_mock
 ) -> None:
-    supabase_mock["upsert_one"].return_value = {
-        "id": "log-1",
-        "user_id": "00000000-0000-4000-8000-000000000001",
-        "date": "2026-02-15",
-        "entries": _log_payload("2026-02-15")["entries"],
-        "note": "good session",
-        "created_at": "2026-02-15T00:00:00+00:00",
-        "updated_at": "2026-02-15T00:00:00+00:00",
-    }
+    supabase_mock["upsert_one"].side_effect = [
+        {
+            "id": "log-1",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-02-15",
+            "entries": _log_payload("2026-02-15")["entries"],
+            "note": "good session",
+            "created_at": "2026-02-15T00:00:00+00:00",
+            "updated_at": "2026-02-15T00:00:00+00:00",
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
+    ]
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
 
     response = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
 
@@ -39,7 +49,12 @@ def test_post_logs_creates_entry(
     body = response.json()
     assert body["id"] == "log-1"
     assert body["date"] == "2026-02-15"
-    assert supabase_mock["upsert_one"].await_count == 1
+    assert supabase_mock["upsert_one"].await_count == 2
+    profile_call = supabase_mock["upsert_one"].await_args_list[1].kwargs
+    assert profile_call["table"] == "profiles"
+    assert profile_call["on_conflict"] == "id"
+    assert profile_call["row"]["current_streak"] == 1
+    assert profile_call["row"]["longest_streak"] == 1
 
 
 def test_post_logs_duplicate_date_uses_upsert_on_conflict(
@@ -54,13 +69,24 @@ def test_post_logs_duplicate_date_uses_upsert_on_conflict(
             "note": "first",
         },
         {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
+        {
             "id": "log-1",
             "user_id": "00000000-0000-4000-8000-000000000001",
             "date": "2026-02-15",
             "entries": _log_payload("2026-02-15")["entries"],
             "note": "updated",
         },
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
     ]
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
 
     first = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
     second_payload = _log_payload("2026-02-15")
@@ -70,9 +96,13 @@ def test_post_logs_duplicate_date_uses_upsert_on_conflict(
     assert first.status_code == 200
     assert second.status_code == 200
     assert second.json()["note"] == "updated"
-    assert supabase_mock["upsert_one"].await_count == 2
-    last_call = supabase_mock["upsert_one"].await_args_list[-1].kwargs
-    assert last_call["on_conflict"] == "user_id,date"
+    assert supabase_mock["upsert_one"].await_count == 4
+    call_conflicts = [
+        call.kwargs["on_conflict"]
+        for call in supabase_mock["upsert_one"].await_args_list
+    ]
+    assert call_conflicts.count("user_id,date") == 2
+    assert call_conflicts.count("id") == 2
 
 
 def test_get_logs_returns_saved_log(
@@ -98,3 +128,63 @@ def test_get_logs_returns_saved_log(
 def test_logs_requires_auth(client: TestClient) -> None:
     response = client.post("/api/logs", json=_log_payload("2026-02-15"))
     assert response.status_code == 401
+
+
+def test_post_logs_updates_profile_streak_metrics(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    supabase_mock["upsert_one"].side_effect = [
+        {
+            "id": "log-5",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-02-15",
+            "entries": _log_payload("2026-02-15")["entries"],
+            "note": "good session",
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 5,
+            "longest_streak": 5,
+        },
+    ]
+    supabase_mock["select"].return_value = [
+        {"date": "2026-02-11"},
+        {"date": "2026-02-12"},
+        {"date": "2026-02-13"},
+        {"date": "2026-02-14"},
+        {"date": "2026-02-15"},
+    ]
+
+    response = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
+
+    assert response.status_code == 200
+    profile_call = supabase_mock["upsert_one"].await_args_list[1].kwargs
+    assert profile_call["table"] == "profiles"
+    assert profile_call["on_conflict"] == "id"
+    assert profile_call["row"]["current_streak"] == 5
+    assert profile_call["row"]["longest_streak"] == 5
+
+
+def test_post_logs_ignores_missing_streak_columns_until_migration_applied(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    supabase_mock["upsert_one"].side_effect = [
+        {
+            "id": "log-6",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-02-15",
+            "entries": _log_payload("2026-02-15")["entries"],
+            "note": "good session",
+        },
+        SupabaseRestError(
+            status_code=400,
+            code="42703",
+            message='column "current_streak" does not exist',
+        ),
+    ]
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
+
+    response = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
+
+    assert response.status_code == 200
+    assert response.json()["date"] == "2026-02-15"

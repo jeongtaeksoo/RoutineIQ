@@ -46,7 +46,9 @@ def test_analyze_success_returns_report(
     monkeypatch.setattr(
         analyze_route, "count_daily_analyze_calls", AsyncMock(return_value=0)
     )
-    monkeypatch.setattr(analyze_route, "insert_usage_event", AsyncMock(return_value=None))
+    monkeypatch.setattr(
+        analyze_route, "insert_usage_event", AsyncMock(return_value=None)
+    )
     monkeypatch.setattr(
         analyze_route, "cleanup_expired_reports", AsyncMock(return_value=None)
     )
@@ -73,7 +75,9 @@ def test_analyze_success_returns_report(
 def test_analyze_returns_429_on_rate_limit(
     authenticated_client: TestClient, monkeypatch
 ) -> None:
-    async def _consume_rate_limited(*, key: str, limit: int, window_seconds: int) -> None:
+    async def _consume_rate_limited(
+        *, key: str, limit: int, window_seconds: int
+    ) -> None:
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail={"message": "Too many requests."},

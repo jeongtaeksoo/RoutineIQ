@@ -44,7 +44,7 @@ fi
   ./.venv/bin/python -m pip install -q -r requirements.txt
   ./.venv/bin/python -m pip install -q ruff black mypy
   ./.venv/bin/python -m compileall -q app
-  ./.venv/bin/ruff check app
+  ./.venv/bin/python -m ruff check app
   CHANGED_PY="$(
     git -C "$ROOT_DIR" diff --name-only -- '*.py' \
       | awk '/^apps\/api\/app\// {sub(/^apps\/api\//, "", $0); print $0}'
@@ -52,19 +52,19 @@ fi
   if [[ -n "$CHANGED_PY" ]]; then
     # Keep checks focused to touched API files to avoid legacy-style churn.
     # shellcheck disable=SC2086
-    ./.venv/bin/black --check $CHANGED_PY
+    ./.venv/bin/python -m black --check $CHANGED_PY
     # shellcheck disable=SC2086
     if [[ "${STRICT_MYPY:-0}" == "1" ]]; then
-      ./.venv/bin/mypy $CHANGED_PY --ignore-missing-imports
+      ./.venv/bin/python -m mypy $CHANGED_PY --ignore-missing-imports
     else
-      ./.venv/bin/mypy $CHANGED_PY --ignore-missing-imports || true
+      ./.venv/bin/python -m mypy $CHANGED_PY --ignore-missing-imports || true
     fi
   else
-    ./.venv/bin/black --check app
+    ./.venv/bin/python -m black --check app
     if [[ "${STRICT_MYPY:-0}" == "1" ]]; then
-      ./.venv/bin/mypy app --ignore-missing-imports
+      ./.venv/bin/python -m mypy app --ignore-missing-imports
     else
-      ./.venv/bin/mypy app --ignore-missing-imports || true
+      ./.venv/bin/python -m mypy app --ignore-missing-imports || true
     fi
   fi
   ./.venv/bin/python -m uvicorn app.main:app --host 127.0.0.1 --port 8010 >/tmp/routineiq_release_verify_api.log 2>&1 &

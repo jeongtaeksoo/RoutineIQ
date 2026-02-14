@@ -1,4 +1,4 @@
-## RoutineIQ (Hackathon MVP) Architecture
+## RutineIQ (Hackathon MVP) Architecture
 
 ### Goals (MVP)
 - Judges can complete in ~3 minutes:

@@ -20,10 +20,10 @@ def test_estimate_cost_usd_returns_value() -> None:
 
 
 @pytest.mark.asyncio
-async def test_count_daily_analyze_calls_counts_rows(monkeypatch: pytest.MonkeyPatch) -> None:
-    select_mock = AsyncMock(
-        return_value=[{"id": "u1"}, {"id": "u2"}, {"id": "u3"}]
-    )
+async def test_count_daily_analyze_calls_counts_rows(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    select_mock = AsyncMock(return_value=[{"id": "u1"}, {"id": "u2"}, {"id": "u3"}])
     monkeypatch.setattr(SupabaseRest, "select", select_mock)
 
     used = await count_daily_analyze_calls(

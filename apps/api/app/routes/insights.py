@@ -12,9 +12,13 @@ from app.schemas.insights import (
     ConsistencyPayload,
     GoalPrefs,
     InsightsWeeklyResponse,
+    StreakPayload,
+    WeeklyTrendPayload,
+    WeeklyTrendPoint,
     WeeklySeriesPoint,
     WeeklySummaryPayload,
 )
+from app.services.streaks import compute_streaks, extract_log_dates
 from app.services.supabase_rest import SupabaseRest
 
 router = APIRouter()
@@ -65,6 +69,34 @@ def _deep_minutes(entries: list[dict[str, Any]], goal_keyword: str | None) -> in
             continue
         total += end_m - start_m
     return total
+
+
+def _pct_change(*, before: int, after: int) -> float | None:
+    if before == 0:
+        if after == 0:
+            return 0.0
+        return None
+    return round(((after - before) / before) * 100.0, 1)
+
+
+def _weekly_pattern(
+    *,
+    blocks_change_pct: float | None,
+    deep_minutes_change_pct: float | None,
+) -> str:
+    numeric = [
+        x
+        for x in (blocks_change_pct, deep_minutes_change_pct)
+        if isinstance(x, (int, float))
+    ]
+    if not numeric:
+        return "insufficient_data"
+    avg = sum(float(x) for x in numeric) / len(numeric)
+    if avg >= 15:
+        return "improving"
+    if avg <= -15:
+        return "declining"
+    return "stable"
 
 
 @router.get("/insights/weekly", response_model=InsightsWeeklyResponse)
@@ -122,9 +154,16 @@ async def get_weekly_insights(
         },
     )
     days_logged_total = len(until_rows)
+    streak_current, streak_longest = compute_streaks(
+        log_dates=extract_log_dates(until_rows),
+        anchor_date=to_date,
+    )
     if days_logged_total:
         earliest_raw = until_rows[0].get("date")
-        earliest = Date.fromisoformat(str(earliest_raw))
+        try:
+            earliest = Date.fromisoformat(str(earliest_raw))
+        except ValueError:
+            earliest = to_date
         days_total = max(1, (to_date - earliest).days + 1)
     else:
         days_total = window_days
@@ -148,6 +187,7 @@ async def get_weekly_insights(
         by_date[key] = _coerce_entries(row.get("entries"))
 
     series: list[WeeklySeriesPoint] = []
+    trend_series: list[WeeklyTrendPoint] = []
     total_blocks = 0
     deep_minutes = 0
 
@@ -156,8 +196,9 @@ async def get_weekly_insights(
         key = cursor.isoformat()
         entries = by_date.get(key, [])
         blocks = len(entries)
+        deep_mins = _deep_minutes(entries, goal.keyword if goal else None)
         total_blocks += blocks
-        deep_minutes += _deep_minutes(entries, goal.keyword if goal else None)
+        deep_minutes += deep_mins
         series.append(
             WeeklySeriesPoint(
                 date=cursor,
@@ -165,7 +206,34 @@ async def get_weekly_insights(
                 blocks=blocks,
             )
         )
+        trend_series.append(
+            WeeklyTrendPoint(
+                date=cursor,
+                day=cursor.isoformat()[5:],
+                blocks=blocks,
+                deep_minutes=deep_mins,
+            )
+        )
         cursor += timedelta(days=1)
+
+    split_idx = max(1, len(trend_series) // 2)
+    first_half = trend_series[:split_idx]
+    second_half = trend_series[split_idx:]
+    first_blocks = sum(point.blocks for point in first_half)
+    second_blocks = sum(point.blocks for point in second_half)
+    first_deep = sum(point.deep_minutes for point in first_half)
+    second_deep = sum(point.deep_minutes for point in second_half)
+    blocks_change_pct = _pct_change(before=first_blocks, after=second_blocks)
+    deep_minutes_change_pct = _pct_change(before=first_deep, after=second_deep)
+    trend = WeeklyTrendPayload(
+        blocks_change_pct=blocks_change_pct,
+        deep_minutes_change_pct=deep_minutes_change_pct,
+        pattern=_weekly_pattern(
+            blocks_change_pct=blocks_change_pct,
+            deep_minutes_change_pct=deep_minutes_change_pct,
+        ),
+        series=trend_series,
+    )
 
     consistency = ConsistencyPayload(
         score=score,
@@ -173,14 +241,20 @@ async def get_weekly_insights(
         days_total=days_total,
         series=series,
     )
+    weekly_days_logged = sum(1 for row in range_rows if row.get("date"))
     weekly = WeeklySummaryPayload(
-        days_logged=days_logged_total,
-        days_total=days_total,
+        days_logged=weekly_days_logged,
+        days_total=window_days,
         total_blocks=total_blocks,
         deep_minutes=deep_minutes,
         goal=goal,
     )
 
     return InsightsWeeklyResponse(
-        from_date=from_date, to_date=to_date, consistency=consistency, weekly=weekly
+        from_date=from_date,
+        to_date=to_date,
+        consistency=consistency,
+        weekly=weekly,
+        streak=StreakPayload(current=streak_current, longest=streak_longest),
+        trend=trend,
     )

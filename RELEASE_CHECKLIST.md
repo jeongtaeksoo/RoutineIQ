@@ -1,4 +1,4 @@
-# RoutineIQ Release Checklist
+# RutineIQ Release Checklist
 
 Last updated: 2026-02-13
 

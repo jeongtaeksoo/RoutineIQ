@@ -32,7 +32,9 @@ def test_stripe_webhook_accepts_valid_signature(
     assert response.json() == {"ok": True}
 
 
-def test_stripe_webhook_rejects_missing_signature(client: TestClient, monkeypatch) -> None:
+def test_stripe_webhook_rejects_missing_signature(
+    client: TestClient, monkeypatch
+) -> None:
     monkeypatch.setattr(stripe_routes, "stripe_is_configured", lambda: True)
     monkeypatch.setattr(stripe_routes, "init_stripe", lambda: None)
 
@@ -52,9 +54,7 @@ def test_stripe_webhook_rejects_invalid_signature(
     def _raise_invalid(*args, **kwargs):
         raise ValueError("invalid signature")
 
-    monkeypatch.setattr(
-        stripe_routes.stripe.Webhook, "construct_event", _raise_invalid
-    )
+    monkeypatch.setattr(stripe_routes.stripe.Webhook, "construct_event", _raise_invalid)
 
     response = client.post(
         "/api/stripe/webhook",

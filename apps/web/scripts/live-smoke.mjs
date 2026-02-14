@@ -59,6 +59,10 @@ function todayYmd() {
   return `${y}-${m}-${day}`;
 }
 
+function todayUtcYmd() {
+  return new Date().toISOString().slice(0, 10);
+}
+
 function addDaysYmd(ymd, delta) {
   const [y, m, d] = ymd.split("-").map((v) => Number(v));
   const dt = new Date(y, m - 1, d);
@@ -194,7 +198,8 @@ async function main() {
     `${supabaseUrl}/rest/v1/usage_events` +
     `?select=id,user_id,event_type,event_date,tokens_total,cost_usd` +
     `&user_id=eq.${encodeURIComponent(user1Id)}` +
-    `&event_type=eq.analyze&event_date=eq.${encodeURIComponent(date)}` +
+    `&event_type=eq.analyze` +
+    `&event_date=in.(${Array.from(new Set([date, todayUtcYmd()])).map(encodeURIComponent).join(",")})` +
     `&order=created_at.desc&limit=1`;
   const usage = await fetchJson(usageUrl, {
     headers: { apikey: serviceRoleKey, authorization: `Bearer ${serviceRoleKey}` },

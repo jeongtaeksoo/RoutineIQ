@@ -1,4 +1,4 @@
-## RoutineIQ DB Design (Supabase Postgres + RLS)
+## RutineIQ DB Design (Supabase Postgres + RLS)
 
 ### Principles
 - **Default deny**: RLS enabled on all tables; no access unless a policy explicitly allows it.

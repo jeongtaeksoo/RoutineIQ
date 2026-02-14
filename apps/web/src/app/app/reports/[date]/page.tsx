@@ -68,6 +68,16 @@ function addDays(dateStr: string, delta: number) {
   return `${yy}-${mm}-${dd}`;
 }
 
+function toMinutes(hhmm: string): number | null {
+  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
+  if (!m) return null;
+  const h = Number(m[1]);
+  const mm = Number(m[2]);
+  if (!Number.isFinite(h) || !Number.isFinite(mm)) return null;
+  if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
+  return h * 60 + mm;
+}
+
 export default function ReportPage() {
   const router = useRouter();
   const params = useParams<{ date: string }>();
@@ -172,6 +182,29 @@ export default function ReportPage() {
   const [exporting, setExporting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<AIReport | null>(null);
+  const peakTimeline = React.useMemo(() => {
+    if (!report?.productivity_peaks?.length) return [];
+    return report.productivity_peaks
+      .map((p) => {
+        const s = toMinutes(p.start);
+        const e = toMinutes(p.end);
+        if (s == null || e == null || e <= s) return null;
+        return {
+          start: p.start,
+          end: p.end,
+          reason: p.reason,
+          leftPct: (s / 1440) * 100,
+          widthPct: ((e - s) / 1440) * 100,
+        };
+      })
+      .filter(Boolean) as Array<{
+      start: string;
+      end: string;
+      reason: string;
+      leftPct: number;
+      widthPct: number;
+    }>;
+  }, [report]);
 
   async function load() {
     setError(null);
@@ -347,14 +380,33 @@ export default function ReportPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               {report.productivity_peaks.length ? (
-                report.productivity_peaks.map((p, idx) => (
-                  <div key={idx} className="rounded-xl border bg-white/50 p-4">
-                    <p className="text-sm font-semibold">
-                      {p.start}–{p.end}
-                    </p>
-                    <p className="mt-1 text-xs text-mutedFg">{p.reason}</p>
+                <>
+                  <div className="rounded-xl border bg-white/50 p-3">
+                    <div className="relative h-10 rounded-lg bg-[#f4eee6]">
+                      {peakTimeline.map((p, idx) => (
+                        <div
+                          key={`${p.start}-${p.end}-${idx}`}
+                          className="absolute top-1/2 h-5 -translate-y-1/2 rounded-md bg-[#d7a86e]/70 ring-1 ring-[#b9803f]/40"
+                          style={{ left: `${p.leftPct}%`, width: `${Math.max(p.widthPct, 2)}%` }}
+                          title={`${p.start}-${p.end}`}
+                        />
+                      ))}
+                    </div>
+                    <div className="mt-2 flex items-center justify-between text-[10px] text-mutedFg">
+                      <span>00:00</span>
+                      <span>12:00</span>
+                      <span>23:59</span>
+                    </div>
                   </div>
-                ))
+                  {report.productivity_peaks.map((p, idx) => (
+                    <div key={idx} className="rounded-xl border bg-white/50 p-4">
+                      <p className="text-sm font-semibold">
+                        {p.start}–{p.end}
+                      </p>
+                      <p className="mt-1 text-xs text-mutedFg">{p.reason}</p>
+                    </div>
+                  ))}
+                </>
               ) : (
                 <p className="text-sm text-mutedFg">{t.noPowerHours}</p>
               )}

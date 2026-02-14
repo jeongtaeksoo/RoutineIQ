@@ -1,14 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { Bar, BarChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { Sparkles } from "lucide-react";
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+const ConsistencyBarChart = dynamic(
+  () => import("@/components/consistency-bar-chart").then((m) => m.ConsistencyBarChart),
+  { ssr: false }
+);
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { DAILY_FLOW_TEMPLATES, DEFAULT_TEMPLATE_NAME } from "@/lib/daily-flow-templates";
 import { downloadWeeklyShareCard } from "@/lib/share-card";
@@ -44,6 +48,16 @@ type WeeklyInsightsResponse = {
     total_blocks: number;
     deep_minutes: number;
     goal: { keyword: string; minutes_per_day: number } | null;
+  };
+  streak: {
+    current: number;
+    longest: number;
+  };
+  trend: {
+    blocks_change_pct: number | null;
+    deep_minutes_change_pct: number | null;
+    pattern: "improving" | "declining" | "stable" | "insufficient_data";
+    series: { date: string; day: string; blocks: number; deep_minutes: number }[];
   };
 };
 
@@ -135,6 +149,11 @@ export default function InsightsPage() {
         weeklyDesc: "지난 7일간의 나의 모습입니다.",
         totalBlocks7d: "기록한 활동 수",
         deepMinutes7d: "몰입한 시간 (7일)",
+        currentStreak: "현재 스트릭",
+        longestStreak: "최장 스트릭",
+        trendPattern: "주간 변화",
+        trendBlocksDelta: "활동 수 변화",
+        trendDeepDelta: "몰입 시간 변화",
         emptyMetricsTitle: "데이터가 쌓이고 있어요",
         emptyMetricsBody: "오늘 첫 기록을 남겨보세요. 3일만 쌓여도 내 패턴이 보이기 시작합니다.",
         detailsTitle: "주간 지표 더보기",
@@ -193,6 +212,11 @@ export default function InsightsPage() {
       weeklyDesc: "Simple metrics from your last 7 days (no extra AI calls).",
       totalBlocks7d: "Total blocks (7d)",
       deepMinutes7d: "Deep Work Minutes (7d)",
+      currentStreak: "Current streak",
+      longestStreak: "Longest streak",
+      trendPattern: "Weekly pattern",
+      trendBlocksDelta: "Blocks delta",
+      trendDeepDelta: "Deep-work delta",
       emptyMetricsTitle: "Building your baseline",
       emptyMetricsBody: "Your first log starts the score. After 3 days, patterns show up fast.",
       detailsTitle: "More weekly metrics",
@@ -221,6 +245,12 @@ export default function InsightsPage() {
     deepMinutes: number;
     goal: GoalPrefs | null;
   }>({ daysLogged: 0, daysTotal: 0, totalBlocks: 0, deepMinutes: 0, goal: null });
+  const [streak, setStreak] = React.useState<{ current: number; longest: number }>({ current: 0, longest: 0 });
+  const [trend, setTrend] = React.useState<{
+    blocksChangePct: number | null;
+    deepMinutesChangePct: number | null;
+    pattern: "improving" | "declining" | "stable" | "insufficient_data";
+  }>({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
   const [cohortTrend, setCohortTrend] = React.useState<CohortTrend | null>(null);
   const [cohortLoading, setCohortLoading] = React.useState(true);
 
@@ -338,6 +368,8 @@ export default function InsightsPage() {
         ],
       });
       setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
+      setStreak({ current: 0, longest: 0 });
+      setTrend({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
       return;
     }
     try {
@@ -373,9 +405,31 @@ export default function InsightsPage() {
         deepMinutes: Number.isFinite(Number(res.weekly.deep_minutes)) ? Number(res.weekly.deep_minutes) : 0,
         goal: goal && goal.minutesPerDay > 0 ? goal : null,
       });
+      setStreak({
+        current: Number.isFinite(Number(res.streak?.current)) ? Number(res.streak.current) : 0,
+        longest: Number.isFinite(Number(res.streak?.longest)) ? Number(res.streak.longest) : 0,
+      });
+      setTrend({
+        blocksChangePct:
+          res.trend?.blocks_change_pct === null || res.trend?.blocks_change_pct === undefined
+            ? null
+            : Number(res.trend.blocks_change_pct),
+        deepMinutesChangePct:
+          res.trend?.deep_minutes_change_pct === null || res.trend?.deep_minutes_change_pct === undefined
+            ? null
+            : Number(res.trend.deep_minutes_change_pct),
+        pattern:
+          res.trend?.pattern === "improving" ||
+          res.trend?.pattern === "declining" ||
+          res.trend?.pattern === "stable"
+            ? res.trend.pattern
+            : "insufficient_data",
+      });
     } catch {
       setConsistency({ score: 0, series: [] });
       setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
+      setStreak({ current: 0, longest: 0 });
+      setTrend({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
     }
   }
 
@@ -398,6 +452,23 @@ export default function InsightsPage() {
 
   const hasLog = todayLogBlocks > 0;
   const hasReport = Boolean(report);
+  const trendLabel =
+    trend.pattern === "improving"
+      ? isKo
+        ? "개선 중"
+        : "Improving"
+      : trend.pattern === "declining"
+        ? isKo
+          ? "하락 중"
+          : "Declining"
+        : trend.pattern === "stable"
+          ? isKo
+            ? "유지 중"
+            : "Stable"
+          : isKo
+            ? "데이터 부족"
+            : "Insufficient data";
+  const fmtPct = (value: number | null) => (value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -756,17 +827,7 @@ export default function InsightsPage() {
                 </span>
               </div>
               <div className="h-32 rounded-lg border bg-white/40 p-2">
-                <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={consistency.series}>
-                    <XAxis dataKey="day" tick={{ fontSize: 11 }} stroke="rgba(0,0,0,0.35)" />
-                    <YAxis hide />
-                    <Tooltip
-                      cursor={{ fill: "rgba(0,0,0,0.04)" }}
-                      contentStyle={{ borderRadius: 10, border: "1px solid rgba(0,0,0,0.12)" }}
-                    />
-                    <Bar dataKey="blocks" fill="rgba(168,132,98,0.75)" radius={[6, 6, 0, 0]} />
-                  </BarChart>
-                </ResponsiveContainer>
+                <ConsistencyBarChart data={consistency.series} />
               </div>
               <div className="flex flex-wrap items-center gap-2">
                 <Button
@@ -799,7 +860,7 @@ export default function InsightsPage() {
               <CardTitle>{t.weeklyTitle}</CardTitle>
               <CardDescription>{t.weeklyDesc}</CardDescription>
             </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-3">
+            <CardContent className="grid gap-4 md:grid-cols-5">
               <div className="rounded-xl border bg-white/50 p-4">
                 <p className="text-xs text-mutedFg">{t.totalBlocks7d}</p>
                 <p className="title-serif mt-1 text-3xl">{weekly.totalBlocks}</p>
@@ -807,6 +868,14 @@ export default function InsightsPage() {
               <div className="rounded-xl border bg-white/50 p-4">
                 <p className="text-xs text-mutedFg">{t.deepMinutes7d}</p>
                 <p className="title-serif mt-1 text-3xl">{weekly.deepMinutes}</p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.currentStreak}</p>
+                <p className="title-serif mt-1 text-3xl">{streak.current}</p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.longestStreak}</p>
+                <p className="title-serif mt-1 text-3xl">{streak.longest}</p>
               </div>
               <div className="rounded-xl border bg-white/50 p-4">
                 {weekly.daysLogged === 0 ? (
@@ -837,6 +906,18 @@ export default function InsightsPage() {
                     </div>
                   </>
                 )}
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4 md:col-span-5">
+                <p className="text-xs text-mutedFg">{t.trendPattern}</p>
+                <div className="mt-2 flex flex-wrap items-center gap-3">
+                  <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">{trendLabel}</span>
+                  <span className="text-xs text-mutedFg">
+                    {t.trendBlocksDelta}: <strong className="text-foreground">{fmtPct(trend.blocksChangePct)}</strong>
+                  </span>
+                  <span className="text-xs text-mutedFg">
+                    {t.trendDeepDelta}: <strong className="text-foreground">{fmtPct(trend.deepMinutesChangePct)}</strong>
+                  </span>
+                </div>
               </div>
             </CardContent>
           </Card>

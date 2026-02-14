@@ -1,5 +1,6 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
@@ -29,6 +30,11 @@ const navItems: NavItem[] = [
   { key: "preferences", href: "/app/preferences", icon: Settings }
 ];
 
+const ReminderScheduler = dynamic(
+  () => import("@/components/reminder-scheduler").then((m) => m.ReminderScheduler),
+  { ssr: false }
+);
+
 export function AppShell({
   children,
   email,
@@ -48,8 +54,6 @@ export function AppShell({
   const [signingOut, setSigningOut] = React.useState(false);
 
   const strings = React.useMemo(() => getStrings(locale), [locale]);
-  const reminderTimersRef = React.useRef<number[]>([]);
-  const reminderCancelledRef = React.useRef(false);
 
   async function signOut() {
     setSigningOut(true);
@@ -100,106 +104,15 @@ export function AppShell({
     };
   }, []);
 
-  React.useEffect(() => {
-    function clearTimers() {
-      for (const t of reminderTimersRef.current) window.clearTimeout(t);
-      reminderTimersRef.current = [];
-    }
-
-    clearTimers();
-    reminderCancelledRef.current = false;
-
-    if (typeof Notification === "undefined") return;
-    if (Notification.permission !== "granted") return;
-
-    function scheduleDaily(opts: { kind: string; hhmm: string; title: string; body: string; href: string }) {
-      const m = /^(\d{2}):(\d{2})$/.exec(opts.hhmm);
-      if (!m) return;
-      const hh = Number(m[1]);
-      const mm = Number(m[2]);
-      if (!Number.isFinite(hh) || !Number.isFinite(mm)) return;
-      if (hh < 0 || hh > 23 || mm < 0 || mm > 59) return;
-
-      const now = new Date();
-      const target = new Date();
-      target.setHours(hh, mm, 0, 0);
-      if (target.getTime() <= now.getTime() + 1000) target.setDate(target.getDate() + 1);
-      const delay = Math.max(0, target.getTime() - now.getTime());
-
-      const id = window.setTimeout(() => {
-        if (reminderCancelledRef.current) return;
-        try {
-          const n = new Notification(opts.title, { body: opts.body, tag: `routineiq-${opts.kind}` });
-          n.onclick = () => {
-            try {
-              window.focus();
-              window.location.href = opts.href;
-            } finally {
-              n.close();
-            }
-          };
-        } catch {
-          // ignore
-        } finally {
-          // Schedule next day (best-effort; works while tab is open).
-          scheduleDaily(opts);
-        }
-      }, delay);
-      reminderTimersRef.current.push(id);
-    }
-
-    let cancelled = false;
-    (async () => {
-      try {
-        const supabase = createClient();
-        const {
-          data: { user }
-        } = await supabase.auth.getUser();
-        if (!user) return;
-
-        const meta = (user.user_metadata as any) || {};
-        const r = meta["routineiq_reminders_v1"];
-        if (!r || typeof r !== "object") return;
-        if (!Boolean((r as any).enabled)) return;
-
-        const logTime = typeof (r as any).logTime === "string" ? String((r as any).logTime) : "";
-        const planTime = typeof (r as any).planTime === "string" ? String((r as any).planTime) : "";
-        if (cancelled) return;
-
-        scheduleDaily({
-          kind: "log",
-          hhmm: logTime || "21:30",
-          title: strings.reminder_log_title,
-          body: strings.reminder_log_body,
-          href: "/app/daily-flow"
-        });
-        scheduleDaily({
-          kind: "plan",
-          hhmm: planTime || "08:30",
-          title: strings.reminder_plan_title,
-          body: strings.reminder_plan_body,
-          href: "/app/insights"
-        });
-      } catch {
-        // ignore
-      }
-    })();
-
-    return () => {
-      cancelled = true;
-      reminderCancelledRef.current = true;
-      clearTimers();
-    };
-  }, [
-    userMetaVersion,
-    strings.reminder_log_body,
-    strings.reminder_log_title,
-    strings.reminder_plan_body,
-    strings.reminder_plan_title
-  ]);
-
   return (
     <div className="min-h-screen md:flex" style={{ background: "linear-gradient(180deg, hsl(35 30% 96%) 0%, hsl(33 25% 94%) 100%)" }}>
+      <ReminderScheduler
+        userMetaVersion={userMetaVersion}
+        reminderLogTitle={strings.reminder_log_title}
+        reminderLogBody={strings.reminder_log_body}
+        reminderPlanTitle={strings.reminder_plan_title}
+        reminderPlanBody={strings.reminder_plan_body}
+      />
       <aside className="hidden w-72 shrink-0 p-5 md:flex">
         <div className="flex w-full flex-col gap-4 rounded-2xl border p-4 backdrop-blur" style={{ background: "rgba(255,252,248,0.65)", boxShadow: "0 8px 32px -8px rgba(74,63,53,0.08)" }}>
           <div className="flex items-center justify-between">

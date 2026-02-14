@@ -1,4 +1,4 @@
--- RoutineIQ Supabase schema (tables + indexes + triggers + RLS policies)
+-- RutineIQ Supabase schema (tables + indexes + triggers + RLS policies)
 -- Apply in Supabase SQL Editor (in one run, or section-by-section).
 
 -- Extensions
@@ -52,7 +52,9 @@ alter table public.profiles
   add column if not exists trend_opt_in boolean not null default false,
   add column if not exists trend_compare_by text[] not null default array['age_group', 'job_family', 'work_mode']::text[],
   add column if not exists goal_keyword text,
-  add column if not exists goal_minutes_per_day int;
+  add column if not exists goal_minutes_per_day int,
+  add column if not exists current_streak int not null default 0,
+  add column if not exists longest_streak int not null default 0;
 
 do $$
 begin
@@ -85,6 +87,16 @@ begin
     alter table public.profiles
       add constraint profiles_goal_minutes_chk
       check (goal_minutes_per_day is null or goal_minutes_per_day between 10 and 600);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'profiles_current_streak_chk') then
+    alter table public.profiles
+      add constraint profiles_current_streak_chk
+      check (current_streak >= 0);
+  end if;
+  if not exists (select 1 from pg_constraint where conname = 'profiles_longest_streak_chk') then
+    alter table public.profiles
+      add constraint profiles_longest_streak_chk
+      check (longest_streak >= 0);
   end if;
 end $$;
 

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+# ruff: noqa: E402
+
 import base64
 import json
 import os
@@ -95,7 +97,9 @@ def fake_auth_context(fake_jwt_token: str) -> AuthContext:
 
 
 @pytest.fixture
-def authenticated_client(client: TestClient, fake_auth_context: AuthContext) -> TestClient:
+def authenticated_client(
+    client: TestClient, fake_auth_context: AuthContext
+) -> TestClient:
     async def _override_verify_token() -> AuthContext:
         return fake_auth_context
 
@@ -113,8 +117,12 @@ def supabase_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, AsyncMock]:
         "rpc": AsyncMock(return_value=[]),
     }
 
-    async def _select(self: SupabaseRest, table: str, *, bearer_token: str, params: dict[str, Any]) -> list[dict[str, Any]]:
-        return await mocks["select"](table=table, bearer_token=bearer_token, params=params)
+    async def _select(
+        self: SupabaseRest, table: str, *, bearer_token: str, params: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        return await mocks["select"](
+            table=table, bearer_token=bearer_token, params=params
+        )
 
     async def _upsert_one(
         self: SupabaseRest,
@@ -138,9 +146,13 @@ def supabase_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, AsyncMock]:
         bearer_token: str,
         row: dict[str, Any],
     ) -> dict[str, Any]:
-        return await mocks["insert_one"](table=table, bearer_token=bearer_token, row=row)
+        return await mocks["insert_one"](
+            table=table, bearer_token=bearer_token, row=row
+        )
 
-    async def _delete(self: SupabaseRest, table: str, *, bearer_token: str, params: dict[str, Any]) -> None:
+    async def _delete(
+        self: SupabaseRest, table: str, *, bearer_token: str, params: dict[str, Any]
+    ) -> None:
         await mocks["delete"](table=table, bearer_token=bearer_token, params=params)
 
     async def _rpc(
@@ -150,7 +162,9 @@ def supabase_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, AsyncMock]:
         bearer_token: str,
         params: dict[str, Any] | None = None,
     ) -> list[dict[str, Any]]:
-        return await mocks["rpc"](fn_name=fn_name, bearer_token=bearer_token, params=params)
+        return await mocks["rpc"](
+            fn_name=fn_name, bearer_token=bearer_token, params=params
+        )
 
     monkeypatch.setattr(SupabaseRest, "select", _select)
     monkeypatch.setattr(SupabaseRest, "upsert_one", _upsert_one)
@@ -164,9 +178,24 @@ def supabase_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, AsyncMock]:
 def openai_mock(monkeypatch: pytest.MonkeyPatch) -> AsyncMock:
     ai_report = {
         "summary": "테스트 요약",
-        "productivity_peaks": [{"start": "09:00", "end": "11:00", "reason": "집중도 높음"}],
-        "failure_patterns": [{"pattern": "오후 집중 저하", "trigger": "점심 이후 졸림", "fix": "15분 산책"}],
-        "tomorrow_routine": [{"start": "09:00", "end": "10:00", "activity": "핵심 집중 블록", "goal": "핵심 업무 1개 완료"}],
+        "productivity_peaks": [
+            {"start": "09:00", "end": "11:00", "reason": "집중도 높음"}
+        ],
+        "failure_patterns": [
+            {
+                "pattern": "오후 집중 저하",
+                "trigger": "점심 이후 졸림",
+                "fix": "15분 산책",
+            }
+        ],
+        "tomorrow_routine": [
+            {
+                "start": "09:00",
+                "end": "10:00",
+                "activity": "핵심 집중 블록",
+                "goal": "핵심 업무 1개 완료",
+            }
+        ],
         "if_then_rules": [{"if": "졸림이 올 때", "then": "물을 마시고 5분 걷기"}],
         "coach_one_liner": "09:00 집중 블록을 먼저 시작하세요.",
         "yesterday_plan_vs_actual": {

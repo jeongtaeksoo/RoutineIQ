@@ -47,7 +47,9 @@ def test_raise_for_error_uses_text_when_json_missing() -> None:
 
 
 @pytest.mark.asyncio
-async def test_select_wraps_single_object_as_list(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_select_wraps_single_object_as_list(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     sb = SupabaseRest("https://example.supabase.co", "anon")
 
     class _Client:
