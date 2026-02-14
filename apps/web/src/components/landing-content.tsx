@@ -80,7 +80,7 @@ const COPY: Record<LangKey, {
     ko: {
         tagline: "나를 위한 작은 루틴",
         heroTitle: "몰아붙이지 않아요.\n당신의 속도로, 충분합니다.",
-        heroSub: "RoutineIQ는 완벽한 습관을 만드는 앱이 아닙니다.\n오늘 하루를 조용히 돌아보고, 내일을 조금 더 편안하게 준비하는 공간입니다.",
+        heroSub: "RutineIQ는 완벽한 습관을 만드는 앱이 아닙니다.\n오늘 하루를 조용히 돌아보고, 내일을 조금 더 편안하게 준비하는 공간입니다.",
         ctaStart: "시작하기",
         ctaDemo: "먼저 둘러보기",
         card1Title: "기록은 부담 없이",
@@ -90,7 +90,7 @@ const COPY: Record<LangKey, {
         card3Title: "내일은 자연스럽게",
         card3Desc: "무리한 계획이 아닌,\n당신에게 맞는 흐름을 제안합니다.",
         sectionTitle: "당신이 바뀌는 건\n습관이 아니라, 마음입니다",
-        sectionSub: "RoutineIQ를 쓰는 사람들이 느끼는 변화",
+        sectionSub: "RutineIQ를 쓰는 사람들이 느끼는 변화",
         feat1Title: "\"오늘도 못했다\"가 줄어들었어요",
         feat1Desc: "작은 기록이 쌓이면, 생각보다 많은 일을 하고 있다는 걸 알게 됩니다.",
         feat2Title: "내 리듬이 보이기 시작했어요",
@@ -107,7 +107,7 @@ const COPY: Record<LangKey, {
     en: {
         tagline: "A small routine, just for you",
         heroTitle: "No pressure.\nYour pace is enough.",
-        heroSub: "RoutineIQ isn't about building perfect habits.\nIt's a quiet space to reflect on today and gently prepare for tomorrow.",
+        heroSub: "RutineIQ isn't about building perfect habits.\nIt's a quiet space to reflect on today and gently prepare for tomorrow.",
         ctaStart: "Get started",
         ctaDemo: "Explore first",
         card1Title: "Log without pressure",
@@ -117,7 +117,7 @@ const COPY: Record<LangKey, {
         card3Title: "Tomorrow, naturally",
         card3Desc: "Not an aggressive plan.\nA gentle flow that fits you.",
         sectionTitle: "What changes isn't the habit\n— it's how you feel",
-        sectionSub: "What people experience with RoutineIQ",
+        sectionSub: "What people experience with RutineIQ",
         feat1Title: "\"I failed again\" happens less",
         feat1Desc: "Small records add up. You realize you've done more than you thought.",
         feat2Title: "I started seeing my own rhythm",
@@ -134,7 +134,7 @@ const COPY: Record<LangKey, {
     ja: {
         tagline: "自分のための小さなルーティン",
         heroTitle: "追い立てません。\nあなたのペースで、十分です。",
-        heroSub: "RoutineIQは完璧な習慣を作るアプリではありません。\n今日を静かに振り返り、明日を少しだけ楽にする場所です。",
+        heroSub: "RutineIQは完璧な習慣を作るアプリではありません。\n今日を静かに振り返り、明日を少しだけ楽にする場所です。",
         ctaStart: "始める",
         ctaDemo: "まず見てみる",
         card1Title: "気軽に記録",
@@ -144,7 +144,7 @@ const COPY: Record<LangKey, {
         card3Title: "自然に明日へ",
         card3Desc: "無理な計画ではなく、\nあなたに合った流れを提案します。",
         sectionTitle: "変わるのは習慣ではなく、\n気持ちです",
-        sectionSub: "RoutineIQで感じる変化",
+        sectionSub: "RutineIQで感じる変化",
         feat1Title: "「またできなかった」が減りました",
         feat1Desc: "小さな記録が積み重なると、思ったより多くのことをしていたと気づきます。",
         feat2Title: "自分のリズムが見え始めました",
@@ -161,7 +161,7 @@ const COPY: Record<LangKey, {
     zh: {
         tagline: "属于你的小习惯",
         heroTitle: "不催促你。\n你的节奏，就足够了。",
-        heroSub: "RoutineIQ不是打造完美习惯的应用。\n它是一个安静反思今天、温柔准备明天的空间。",
+        heroSub: "RutineIQ不是打造完美习惯的应用。\n它是一个安静反思今天、温柔准备明天的空间。",
         ctaStart: "开始使用",
         ctaDemo: "先看看",
         card1Title: "轻松记录",
@@ -171,7 +171,7 @@ const COPY: Record<LangKey, {
         card3Title: "自然地迎接明天",
         card3Desc: "不是激进的计划，\n而是适合你的节奏。",
         sectionTitle: "改变的不是习惯，\n而是心情",
-        sectionSub: "使用RoutineIQ后感受到的变化",
+        sectionSub: "使用RutineIQ后感受到的变化",
         feat1Title: "\"又没做到\"的想法少了",
         feat1Desc: "小小的记录累积起来，你会发现自己做的比想象中多。",
         feat2Title: "开始看到自己的节奏",
@@ -188,7 +188,7 @@ const COPY: Record<LangKey, {
     es: {
         tagline: "Una pequeña rutina, solo para ti",
         heroTitle: "Sin presión.\nTu ritmo es suficiente.",
-        heroSub: "RoutineIQ no busca crear hábitos perfectos.\nEs un espacio tranquilo para reflexionar sobre tu día y preparar un mañana más amable.",
+        heroSub: "RutineIQ no busca crear hábitos perfectos.\nEs un espacio tranquilo para reflexionar sobre tu día y preparar un mañana más amable.",
         ctaStart: "Comenzar",
         ctaDemo: "Explorar primero",
         card1Title: "Registra sin presión",
@@ -198,7 +198,7 @@ const COPY: Record<LangKey, {
         card3Title: "Mañana, naturalmente",
         card3Desc: "No un plan agresivo.\nUn flujo suave que se adapta a ti.",
         sectionTitle: "Lo que cambia no es el hábito,\nes cómo te sientes",
-        sectionSub: "Lo que la gente experimenta con RoutineIQ",
+        sectionSub: "Lo que la gente experimenta con RutineIQ",
         feat1Title: "\"Fallé otra vez\" ocurre menos",
         feat1Desc: "Los pequeños registros se acumulan. Te das cuenta de que has hecho más de lo que creías.",
         feat2Title: "Empecé a ver mi propio ritmo",
@@ -244,7 +244,7 @@ export function LandingContent() {
                     className="text-xl font-semibold tracking-tight"
                     style={{ fontFamily: "var(--font-serif)", color: "#4a3f35" }}
                 >
-                    RoutineIQ
+                    RutineIQ
                 </Link>
 
                 {/* Language Selector */}
@@ -487,7 +487,7 @@ export function LandingContent() {
 
                     <div className="text-left md:text-right">
                         <p className="text-[11px]" style={{ color: "#a89f92" }}>{t.privacy}</p>
-                        <p className="mt-0.5 text-[11px]" style={{ color: "#c3b9ab" }}>© 2026 RoutineIQ</p>
+                        <p className="mt-0.5 text-[11px]" style={{ color: "#c3b9ab" }}>© 2026 RutineIQ</p>
                     </div>
                 </div>
             </footer>

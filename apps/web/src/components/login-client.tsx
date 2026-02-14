@@ -417,7 +417,7 @@ export default function LoginClient() {
           {/* Header */}
           <div className="mb-8 text-center">
             <Link href="/" className="text-2xl font-semibold text-[#3d3a36]" style={{ fontFamily: "var(--font-serif)" }}>
-              RoutineIQ
+              RutineIQ
             </Link>
             <p className="mt-2 text-sm text-[#8a8480]">
               {tab === "login" ? t.welcome : t.welcomeSub}
