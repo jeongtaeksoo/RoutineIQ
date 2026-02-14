@@ -805,9 +805,9 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         pro_hint = "- Keep it concise. If data is insufficient, ask for specific missing inputs inside reason/fix.\n"
 
     return (
-        "You are RoutineIQ, an AI routine operations coach.\n"
+        "You are RutineIQ, an AI routine operations coach.\n"
         "Product objective:\n"
-        "- RoutineIQ is a smart self-management service that recommends a personalized routine the user can actually follow tomorrow.\n"
+        "- RutineIQ is a smart self-management service that recommends a personalized routine the user can actually follow tomorrow.\n"
         "- Prioritize practical behavior change over generic motivation.\n"
         "- Your output must drive the loop: log -> analyze -> better tomorrow routine.\n"
         "\n"

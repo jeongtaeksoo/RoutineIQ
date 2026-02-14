@@ -30,22 +30,22 @@ const metadataBase = (() => {
 export const metadata: Metadata = {
   metadataBase,
   title: {
-    default: "RoutineIQ",
-    template: "%s · RoutineIQ"
+    default: "RutineIQ",
+    template: "%s · RutineIQ"
   },
   description:
     "AI routine operations: analyze your Daily Flow to find peak hours, focus break triggers, and generate a smarter tomorrow schedule.",
   openGraph: {
-    title: "RoutineIQ",
+    title: "RutineIQ",
     description:
       "Analyze your Daily Flow to find peak hours, focus break triggers, and generate a smarter tomorrow schedule.",
     url: "/",
-    siteName: "RoutineIQ",
+    siteName: "RutineIQ",
     type: "website"
   },
   twitter: {
     card: "summary_large_image",
-    title: "RoutineIQ",
+    title: "RutineIQ",
     description:
       "Analyze your Daily Flow to find peak hours, focus break triggers, and generate a smarter tomorrow schedule."
   },

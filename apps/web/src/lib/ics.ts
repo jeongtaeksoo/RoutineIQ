@@ -39,7 +39,7 @@ export function buildTomorrowRoutineIcs(opts: {
   const lines: string[] = [];
   lines.push("BEGIN:VCALENDAR");
   lines.push("VERSION:2.0");
-  lines.push("PRODID:-//RoutineIQ//RoutineIQ Calendar Export//EN");
+  lines.push("PRODID:-//RutineIQ//RutineIQ Calendar Export//EN");
   lines.push("CALSCALE:GREGORIAN");
 
   for (let i = 0; i < (opts.blocks || []).length; i++) {

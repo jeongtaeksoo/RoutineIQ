@@ -83,7 +83,7 @@ export default async function BillingPage() {
           <CardContent className="space-y-2 text-sm text-mutedFg">
             <ul className="list-disc space-y-1 pl-5">
               <li>{isKo ? "언제든 해지할 수 있어요(다음 결제일 전까지는 그대로 사용)." : "Cancel anytime (keeps access until the next renewal)."}</li>
-              <li>{isKo ? "결제는 Stripe를 통해 안전하게 처리됩니다(카드 정보는 RoutineIQ 서버에 저장되지 않음)." : "Payments are handled by Stripe (we don’t store card details on our servers)."}</li>
+              <li>{isKo ? "결제는 Stripe를 통해 안전하게 처리됩니다(카드 정보는 RutineIQ 서버에 저장되지 않음)." : "Payments are handled by Stripe (we don’t store card details on our servers)."}</li>
               <li>{isKo ? "데이터는 개인 루틴 최적화에만 사용하며, 광고/판매 목적 사용은 없습니다." : "Your data is used only to personalize your routine (no ads, no selling)."}</li>
             </ul>
           </CardContent>
@@ -220,7 +220,7 @@ export default async function BillingPage() {
         <CardContent className="space-y-2 text-sm text-mutedFg">
           <ul className="list-disc space-y-1 pl-5">
             <li>{isKo ? "언제든 해지할 수 있어요(다음 결제일 전까지는 그대로 사용)." : "Cancel anytime (keeps access until the next renewal)."}</li>
-            <li>{isKo ? "결제는 Stripe를 통해 안전하게 처리됩니다(카드 정보는 RoutineIQ 서버에 저장되지 않음)." : "Payments are handled by Stripe (we don’t store card details on our servers)."}</li>
+            <li>{isKo ? "결제는 Stripe를 통해 안전하게 처리됩니다(카드 정보는 RutineIQ 서버에 저장되지 않음)." : "Payments are handled by Stripe (we don’t store card details on our servers)."}</li>
             <li>{isKo ? "데이터는 개인 루틴 최적화에만 사용하며, 광고/판매 목적 사용은 없습니다." : "Your data is used only to personalize your routine (no ads, no selling)."}</li>
           </ul>
         </CardContent>

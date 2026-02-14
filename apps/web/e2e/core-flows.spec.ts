@@ -42,7 +42,7 @@ async function provisionLiveUserCredentials(): Promise<{ email: string; password
   }
 
   const email = `live-e2e-${Date.now()}@routineiq.test`;
-  const password = `RoutineIQ!${Date.now()}X`;
+  const password = `RutineIQ!${Date.now()}X`;
   const res = await fetch(`${supabaseUrl}/auth/v1/admin/users`, {
     method: "POST",
     headers: {
@@ -118,7 +118,7 @@ async function ensureProfileReady(accessToken: string): Promise<void> {
   }
 }
 
-test.describe("RoutineIQ core flows", () => {
+test.describe("RutineIQ core flows", () => {
   test("F1: /login?demo=1 guest flow redirects to insights", async ({ page }) => {
     await installRoutineApiMock(page);
 
@@ -156,8 +156,8 @@ test.describe("RoutineIQ core flows", () => {
     await page.goto("/app/billing");
 
     await page.getByLabel(/이메일|Email/i).fill("demo-user@routineiq.test");
-    await page.getByLabel(/^비밀번호$|^Password$/i).fill("RoutineIQ123!");
-    await page.getByLabel(/비밀번호 확인|Confirm password/i).nth(0).fill("RoutineIQ123!");
+    await page.getByLabel(/^비밀번호$|^Password$/i).fill("RutineIQ123!");
+    await page.getByLabel(/비밀번호 확인|Confirm password/i).nth(0).fill("RutineIQ123!");
     await page.getByRole("button", { name: /계정 만들고 계속하기|Create account to continue/i }).click();
 
     await expect(page.getByTestId("continue-checkout")).toBeVisible();

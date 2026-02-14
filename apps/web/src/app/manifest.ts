@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "RoutineIQ",
-    short_name: "RoutineIQ",
+    name: "RutineIQ",
+    short_name: "RutineIQ",
     description:
       "AI routine operations: analyze your Daily Flow to find peak hours, focus break triggers, and generate a smarter tomorrow schedule.",
     start_url: "/",

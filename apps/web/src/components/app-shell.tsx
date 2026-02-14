@@ -204,7 +204,7 @@ export function AppShell({
         <div className="flex w-full flex-col gap-4 rounded-2xl border p-4 backdrop-blur" style={{ background: "rgba(255,252,248,0.65)", boxShadow: "0 8px 32px -8px rgba(74,63,53,0.08)" }}>
           <div className="flex items-center justify-between">
             <div>
-              <div className="title-serif text-xl leading-none">RoutineIQ</div>
+              <div className="title-serif text-xl leading-none">RutineIQ</div>
               <div className="mt-1 text-xs text-mutedFg">{strings.appTagline}</div>
             </div>
             {role === "admin" ? (

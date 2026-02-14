@@ -32,7 +32,7 @@ async def lifespan(_: FastAPI):
     await close_http()
 
 
-app = FastAPI(title="RoutineIQ API", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="RutineIQ API", version="0.1.0", lifespan=lifespan)
 
 
 def _init_sentry() -> None:

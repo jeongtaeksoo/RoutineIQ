@@ -4,7 +4,7 @@ export default function OfflinePage() {
       <div className="rounded-2xl border bg-white/60 p-6 shadow-soft">
         <h1 className="title-serif text-3xl">오프라인 상태입니다</h1>
         <p className="mt-2 text-sm text-mutedFg">
-          RoutineIQ는 로그 동기화 및 AI 리포트 생성을 위해 네트워크 연결이 필요합니다. 연결을 복구한 뒤 다시 시도해주세요.
+          RutineIQ는 로그 동기화 및 AI 리포트 생성을 위해 네트워크 연결이 필요합니다. 연결을 복구한 뒤 다시 시도해주세요.
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <a

@@ -1,1 +1,1 @@
-# RoutineIQ API package
+# RutineIQ API package

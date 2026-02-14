@@ -28,7 +28,7 @@ export default function OpenGraphImage() {
             }}
           >
             <div style={{ fontSize: 54, fontWeight: 800, letterSpacing: -2, color: "rgb(15,23,42)" }}>
-              RoutineIQ
+              RutineIQ
             </div>
             <div
               style={{
@@ -62,7 +62,7 @@ export default function OpenGraphImage() {
           </div>
 
           <div style={{ fontSize: 22, color: "rgba(15,23,42,0.70)", maxWidth: 940 }}>
-            RoutineIQ turns daily behavior into an improvement loop: Daily Flow → AI analysis → optimized routine → smart recovery rules.
+            RutineIQ turns daily behavior into an improvement loop: Daily Flow → AI analysis → optimized routine → smart recovery rules.
           </div>
         </div>
 
