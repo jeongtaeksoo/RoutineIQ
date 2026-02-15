@@ -46,7 +46,7 @@ class UpsertLogRequest(BaseModel):
 
     date: date
     entries: list[ActivityLogEntry] = Field(default_factory=list)
-    note: str | None = Field(default=None, max_length=1000)
+    note: str | None = Field(default=None, max_length=5000)
     meta: DailySignals | None = None
 
     @model_validator(mode="after")

@@ -208,7 +208,7 @@ function isLocalhostHost(hostname: string): boolean {
 }
 
 function resolveAuthOrigin(): string {
-  const configuredSiteOrigin = safeOriginFromEnv(process.env.NEXT_PUBLIC_SITE_URL) || "https://rutineiq.com";
+  const configuredSiteOrigin = safeOriginFromEnv(process.env.NEXT_PUBLIC_SITE_URL) || (typeof window !== "undefined" ? window.location.origin : "https://rutineiq.com");
   if (typeof window === "undefined") return configuredSiteOrigin;
   const origin = window.location.origin;
   const hostname = window.location.hostname.toLowerCase();

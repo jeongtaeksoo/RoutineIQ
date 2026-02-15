@@ -44,6 +44,7 @@ export async function GET(request: Request) {
       success.cookies.set("routineiq_post_auth_next", "", { path: "/", maxAge: 0 });
       return success;
     }
+    console.error("[auth/callback] exchangeCodeForSession failed:", error.message);
   }
 
   // Return to login on error

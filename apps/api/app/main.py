@@ -15,6 +15,7 @@ from app.routes.analyze import router as analyze_router
 from app.routes.logs import router as logs_router
 from app.routes.insights import router as insights_router
 from app.routes.preferences import router as preferences_router
+from app.routes.parse import router as parse_router
 from app.routes.reports import router as reports_router
 from app.routes.suggest import router as suggest_router
 from app.routes.reflect import router as reflect_router
@@ -201,6 +202,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
 
 
 app.include_router(logs_router, prefix="/api")
+app.include_router(parse_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
 app.include_router(suggest_router, prefix="/api")
