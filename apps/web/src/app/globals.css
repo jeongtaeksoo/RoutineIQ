@@ -20,6 +20,11 @@
   color-scheme: light;
 }
 
+html,
+body {
+  color-scheme: light !important;
+}
+
 * {
   border-color: hsl(var(--border) / 1);
 }
@@ -153,31 +158,6 @@ body {
 .hover-lift:hover {
   transform: translateY(-2px);
   box-shadow: 0 12px 32px -8px rgba(74, 63, 53, 0.1);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: 220 15% 11%;
-    --bg-soft: 220 13% 14%;
-    --fg: 35 25% 92%;
-    --card: 220 14% 16%;
-    --card-fg: 35 25% 92%;
-    --muted: 220 12% 20%;
-    --muted-fg: 35 14% 70%;
-    --border: 220 10% 30%;
-    --ring: 28 60% 58%;
-    --brand: 28 65% 62%;
-    --brand-fg: 220 15% 12%;
-    color-scheme: dark;
-  }
-
-  .template-card:hover {
-    box-shadow: 0 12px 28px -10px rgba(0, 0, 0, 0.45);
-  }
-
-  .hover-lift:hover {
-    box-shadow: 0 14px 32px -12px rgba(0, 0, 0, 0.4);
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
