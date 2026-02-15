@@ -35,18 +35,18 @@ PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
                 "additionalProperties": False,
                 "required": ["start", "end", "activity", "tags", "confidence"],
                 "properties": {
-                    "start": {"type": "string", "pattern": "^\\d{2}:\\d{2}$"},
-                    "end": {"type": "string", "pattern": "^\\d{2}:\\d{2}$"},
+                    "start": {"type": "string"},
+                    "end": {"type": "string"},
                     "activity": {"type": "string"},
                     "energy": {
                         "anyOf": [
-                            {"type": "integer", "minimum": 1, "maximum": 5},
+                            {"type": "integer"},
                             {"type": "null"},
                         ]
                     },
                     "focus": {
                         "anyOf": [
-                            {"type": "integer", "minimum": 1, "maximum": 5},
+                            {"type": "integer"},
                             {"type": "null"},
                         ]
                     },
@@ -80,19 +80,19 @@ PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
                 },
                 "sleep_quality": {
                     "anyOf": [
-                        {"type": "integer", "minimum": 1, "maximum": 5},
+                        {"type": "integer"},
                         {"type": "null"},
                     ]
                 },
                 "sleep_hours": {
                     "anyOf": [
-                        {"type": "number", "minimum": 0, "maximum": 14},
+                        {"type": "number"},
                         {"type": "null"},
                     ]
                 },
                 "stress_level": {
                     "anyOf": [
-                        {"type": "integer", "minimum": 1, "maximum": 5},
+                        {"type": "integer"},
                         {"type": "null"},
                     ]
                 },
