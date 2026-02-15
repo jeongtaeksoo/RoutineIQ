@@ -27,6 +27,14 @@ type AIReport = {
   };
   micro_advice?: { action: string; when: string; reason: string; duration_min: number }[];
   weekly_pattern_insight?: string;
+  analysis_meta?: {
+    input_quality_score?: number;
+    profile_coverage_pct?: number;
+    wellbeing_signals_count?: number;
+    logged_entry_count?: number;
+    schema_retry_count?: number;
+    personalization_tier?: "low" | "medium" | "high" | string;
+  };
 };
 
 const PREVIEW_REPORT_EN: AIReport = {
@@ -128,6 +136,10 @@ function normalizeReport(raw: AIReport, isKo: boolean): AIReport {
       reason: it.reason,
       duration_min: Number.isFinite(Number(it.duration_min)) ? Math.min(20, Math.max(1, Number(it.duration_min))) : 5,
     }));
+  const metaRaw = raw?.analysis_meta && typeof raw.analysis_meta === "object" ? raw.analysis_meta : {};
+  const tierRaw = String(metaRaw?.personalization_tier || "low").toLowerCase();
+  const personalization_tier =
+    tierRaw === "high" || tierRaw === "medium" || tierRaw === "low" ? tierRaw : "low";
   return {
     ...raw,
     schema_version: Number.isFinite(Number(raw?.schema_version)) ? Number(raw?.schema_version) : 1,
@@ -147,6 +159,24 @@ function normalizeReport(raw: AIReport, isKo: boolean): AIReport {
       typeof raw?.weekly_pattern_insight === "string" && raw.weekly_pattern_insight.trim()
         ? raw.weekly_pattern_insight
         : (isKo ? "주간 패턴은 최소 3일 기록 후 정확도가 높아집니다." : "Weekly pattern signal becomes clearer after at least 3 logged days."),
+    analysis_meta: {
+      input_quality_score: Number.isFinite(Number(metaRaw?.input_quality_score))
+        ? Math.max(0, Math.min(100, Number(metaRaw.input_quality_score)))
+        : 0,
+      profile_coverage_pct: Number.isFinite(Number(metaRaw?.profile_coverage_pct))
+        ? Math.max(0, Math.min(100, Number(metaRaw.profile_coverage_pct)))
+        : 0,
+      wellbeing_signals_count: Number.isFinite(Number(metaRaw?.wellbeing_signals_count))
+        ? Math.max(0, Math.min(6, Math.round(Number(metaRaw.wellbeing_signals_count))))
+        : 0,
+      logged_entry_count: Number.isFinite(Number(metaRaw?.logged_entry_count))
+        ? Math.max(0, Math.min(200, Math.round(Number(metaRaw.logged_entry_count))))
+        : 0,
+      schema_retry_count: Number.isFinite(Number(metaRaw?.schema_retry_count))
+        ? Math.max(0, Math.min(3, Math.round(Number(metaRaw.schema_retry_count))))
+        : 0,
+      personalization_tier,
+    },
   };
 }
 
@@ -176,6 +206,17 @@ export default function ReportPage() {
         coachOneLiner: "오늘의 한 마디",
         coachOneLinerDesc: "지금 바로 실행할 한 가지 행동입니다.",
         schemaBadge: "리포트 스키마",
+        qualityTitle: "AI 분석 품질",
+        qualityDesc: "입력 데이터 충실도와 개인화 커버리지를 표시합니다.",
+        qualityScore: "입력 품질 점수",
+        qualityProfile: "프로필 커버리지",
+        qualityTier: "개인화 수준",
+        qualitySignals: "웰빙 신호 수",
+        qualityEntries: "활동 블록 수",
+        qualityRetry: "스키마 재시도",
+        tierLow: "초기",
+        tierMedium: "보통",
+        tierHigh: "높음",
         dayReview: "오늘의 요약",
         dayReviewDesc: "하루의 흐름과 코치의 조언.",
         wellbeingTitle: "웰빙 인사이트",
@@ -230,6 +271,17 @@ export default function ReportPage() {
       coachOneLiner: "Coach Tip of the Day",
       coachOneLinerDesc: "One action you can do right now.",
       schemaBadge: "Report schema",
+      qualityTitle: "AI Analysis Quality",
+      qualityDesc: "Shows input quality and personalization coverage for this report.",
+      qualityScore: "Input quality score",
+      qualityProfile: "Profile coverage",
+      qualityTier: "Personalization tier",
+      qualitySignals: "Wellbeing signals",
+      qualityEntries: "Activity blocks",
+      qualityRetry: "Schema retries",
+      tierLow: "Starter",
+      tierMedium: "Balanced",
+      tierHigh: "High",
       dayReview: "Your Day in Review",
       dayReviewDesc: "Summary + plan vs actual (when available).",
       wellbeingTitle: "Wellbeing Insight",
@@ -295,6 +347,13 @@ export default function ReportPage() {
       : burnoutRisk === "low"
         ? "border-emerald-300 bg-emerald-50 text-emerald-700"
         : "border-amber-300 bg-amber-50 text-amber-700";
+  const personalizationTier = report?.analysis_meta?.personalization_tier || "low";
+  const personalizationTierLabel =
+    personalizationTier === "high"
+      ? t.tierHigh
+      : personalizationTier === "medium"
+        ? t.tierMedium
+        : t.tierLow;
   const peakTimeline = React.useMemo(() => {
     if (!report?.productivity_peaks?.length) return [];
     return report.productivity_peaks
@@ -468,6 +527,47 @@ export default function ReportPage() {
               </p>
             </CardContent>
           </Card>
+
+          {report.analysis_meta ? (
+            <Card className="lg:col-span-12">
+              <CardHeader>
+                <CardTitle>{t.qualityTitle}</CardTitle>
+                <CardDescription>{t.qualityDesc}</CardDescription>
+              </CardHeader>
+              <CardContent className="grid gap-3 md:grid-cols-3">
+                <div className="rounded-xl border bg-white/50 p-4">
+                  <p className="text-xs text-mutedFg">{t.qualityScore}</p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {Math.round(report.analysis_meta.input_quality_score || 0)}
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-white/50 p-4">
+                  <p className="text-xs text-mutedFg">{t.qualityProfile}</p>
+                  <p className="mt-1 text-lg font-semibold">
+                    {Math.round(report.analysis_meta.profile_coverage_pct || 0)}%
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-white/50 p-4">
+                  <p className="text-xs text-mutedFg">{t.qualityTier}</p>
+                  <p className="mt-1 text-lg font-semibold">{personalizationTierLabel}</p>
+                </div>
+                <div className="rounded-xl border bg-white/50 p-4">
+                  <p className="text-xs text-mutedFg">{t.qualitySignals}</p>
+                  <p className="mt-1 text-sm">
+                    {report.analysis_meta.wellbeing_signals_count || 0}/6
+                  </p>
+                </div>
+                <div className="rounded-xl border bg-white/50 p-4">
+                  <p className="text-xs text-mutedFg">{t.qualityEntries}</p>
+                  <p className="mt-1 text-sm">{report.analysis_meta.logged_entry_count || 0}</p>
+                </div>
+                <div className="rounded-xl border bg-white/50 p-4">
+                  <p className="text-xs text-mutedFg">{t.qualityRetry}</p>
+                  <p className="mt-1 text-sm">{report.analysis_meta.schema_retry_count || 0}</p>
+                </div>
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="lg:col-span-12">
             <CardHeader>

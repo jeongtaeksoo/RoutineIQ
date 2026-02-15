@@ -167,9 +167,8 @@ async function main() {
     body: JSON.stringify({
       age_group: "25_34",
       gender: "prefer_not_to_say",
-      job_family: "engineering",
+      job_family: "office_worker",
       work_mode: "fixed",
-      chronotype: "mixed",
       trend_opt_in: true,
       trend_compare_by: ["age_group", "job_family", "work_mode"],
       goal_keyword: "deep work",
@@ -178,12 +177,52 @@ async function main() {
   });
   if (!profilePrime.ok) throw new Error(`profile prime failed (${profilePrime.status})`);
 
-  const analyze = await fetchJson(`${apiBase}/api/analyze`, {
-    method: "POST",
-    headers: { "content-type": "application/json", authorization: `Bearer ${user1Token}` },
-    body: JSON.stringify({ date, force: true }),
-  });
-  if (!analyze.ok) throw new Error(`analyze failed (${analyze.status})`);
+  const waitForReport = async (seconds) => {
+    const tries = Math.max(1, Math.ceil(seconds / 3));
+    for (let i = 0; i < tries; i += 1) {
+      const reportProbe = await fetchJson(`${apiBase}/api/reports?date=${encodeURIComponent(date)}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${user1Token}` },
+      });
+      if (reportProbe.ok) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    return false;
+  };
+
+  let analyzeStatus = 0;
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const analyze = await fetchJson(`${apiBase}/api/analyze`, {
+      method: "POST",
+      headers: { "content-type": "application/json", authorization: `Bearer ${user1Token}` },
+      body: JSON.stringify({ date, force: true }),
+    });
+    if (analyze.ok) {
+      analyzeStatus = 200;
+      break;
+    }
+    analyzeStatus = analyze.status;
+
+    const inProgress = analyze.status === 409 && String(analyze.json?.detail?.code || "").includes("ANALYZE_IN_PROGRESS");
+    if (inProgress) {
+      if (await waitForReport(45)) {
+        analyzeStatus = 200;
+        break;
+      }
+      continue;
+    }
+
+    if ([429, 500, 502, 503, 504].includes(analyze.status) && attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+      continue;
+    }
+    break;
+  }
+  if (analyzeStatus !== 200) {
+    throw new Error(`analyze failed (${analyzeStatus})`);
+  }
 
   const report = await fetchJson(`${apiBase}/api/reports?date=${encodeURIComponent(date)}`, {
     method: "GET",

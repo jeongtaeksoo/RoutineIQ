@@ -33,6 +33,7 @@ AI_REPORT_JSON_SCHEMA: dict[str, Any] = {
         "wellbeing_insight",
         "micro_advice",
         "weekly_pattern_insight",
+        "analysis_meta",
     ],
     "properties": {
         "schema_version": {"type": "integer", "enum": [2]},
@@ -127,6 +128,34 @@ AI_REPORT_JSON_SCHEMA: dict[str, Any] = {
             },
         },
         "weekly_pattern_insight": {"type": "string"},
+        "analysis_meta": {
+            "anyOf": [
+                {
+                    "type": "object",
+                    "additionalProperties": False,
+                    "required": [
+                        "input_quality_score",
+                        "profile_coverage_pct",
+                        "wellbeing_signals_count",
+                        "logged_entry_count",
+                        "schema_retry_count",
+                        "personalization_tier",
+                    ],
+                    "properties": {
+                        "input_quality_score": {"type": "integer"},
+                        "profile_coverage_pct": {"type": "number"},
+                        "wellbeing_signals_count": {"type": "integer"},
+                        "logged_entry_count": {"type": "integer"},
+                        "schema_retry_count": {"type": "integer"},
+                        "personalization_tier": {
+                            "type": "string",
+                            "enum": ["low", "medium", "high"],
+                        },
+                    },
+                },
+                {"type": "null"},
+            ]
+        },
     },
 }
 

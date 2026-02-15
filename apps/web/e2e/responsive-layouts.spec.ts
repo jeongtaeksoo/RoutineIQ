@@ -17,7 +17,7 @@ function todayLocal(): string {
 for (const vp of viewports) {
   test(`responsive layout is stable on ${vp.name}`, async ({ page }) => {
     await page.setViewportSize({ width: vp.width, height: vp.height });
-    await page.goto("/login?demo=1");
+    await page.goto("/app/insights");
     await expect(page).toHaveURL(/\/app\/insights/);
     await expect(page.getByRole("heading", { name: /나의 하루|My Insights/i })).toBeVisible();
 

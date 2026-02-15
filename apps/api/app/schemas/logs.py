@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date
 from typing import Any
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -25,6 +26,7 @@ class ActivityLogEntry(BaseModel):
     activity: str = Field(min_length=1, max_length=120)
     energy: int | None = Field(default=None, ge=1, le=5)
     focus: int | None = Field(default=None, ge=1, le=5)
+    confidence: Literal["high", "medium", "low"] | None = None
     tags: list[str] = Field(default_factory=list, max_length=12)
     note: str | None = Field(default=None, max_length=280)
 
@@ -32,7 +34,9 @@ class ActivityLogEntry(BaseModel):
 class DailySignals(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    mood: str | None = Field(default=None, pattern="^(very_low|low|neutral|good|great)$")
+    mood: str | None = Field(
+        default=None, pattern="^(very_low|low|neutral|good|great)$"
+    )
     sleep_quality: int | None = Field(default=None, ge=1, le=5)
     sleep_hours: float | None = Field(default=None, ge=0, le=14)
     stress_level: int | None = Field(default=None, ge=1, le=5)

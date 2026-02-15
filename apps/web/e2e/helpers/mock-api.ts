@@ -71,6 +71,42 @@ async function handleApiRoute(
     return json(route, 200, { ok: true });
   }
 
+  if (path === "/parse-diary" && method === "POST") {
+    const body = parseJsonSafe(request.postData());
+    const diary = typeof body?.diary_text === "string" ? body.diary_text : "";
+    return json(route, 200, {
+      entries: [
+        {
+          start: "09:30",
+          end: "11:00",
+          activity: "Deep work",
+          energy: 4,
+          focus: 5,
+          note: diary.slice(0, 120) || null,
+          tags: ["focus", "planning"],
+          confidence: "high",
+        },
+        {
+          start: "14:00",
+          end: "15:00",
+          activity: "Coordination",
+          energy: 3,
+          focus: 3,
+          note: null,
+          tags: ["meeting"],
+          confidence: "medium",
+        },
+      ],
+      meta: {
+        mood: "good",
+        sleep_quality: 4,
+        sleep_hours: 7.0,
+        stress_level: 2,
+      },
+      ai_note: "Parsed timeline is ready. Review low-confidence rows before saving.",
+    });
+  }
+
   if (path === "/analyze" && method === "POST") {
     const body = parseJsonSafe(request.postData());
     const date = typeof body?.date === "string" ? body.date : "2026-02-13";

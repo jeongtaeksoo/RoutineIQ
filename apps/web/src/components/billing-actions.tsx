@@ -24,6 +24,13 @@ export function BillingActions({ plan, needsEmailSetup }: { plan: "free" | "pro"
   const [password2, setPassword2] = React.useState("");
   const [converted, setConverted] = React.useState(false);
   const [stripeEnabled, setStripeEnabled] = React.useState<boolean | null>(null);
+  const [minutesRecovered, setMinutesRecovered] = React.useState<number>(20);
+  const [hourlyValue, setHourlyValue] = React.useState<number>(25);
+  const monthlyRecoveredHours = React.useMemo(() => Math.round((minutesRecovered * 30) / 60), [minutesRecovered]);
+  const monthlyEstimatedValue = React.useMemo(
+    () => Math.round(monthlyRecoveredHours * hourlyValue),
+    [hourlyValue, monthlyRecoveredHours],
+  );
 
   React.useEffect(() => {
     if (plan === "pro") {
@@ -152,6 +159,52 @@ export function BillingActions({ plan, needsEmailSetup }: { plan: "free" | "pro"
           <ExternalLink className="h-4 w-4" />
         </Button>
       )}
+      {plan !== "pro" ? (
+        <div className="rounded-xl border bg-white/55 p-3">
+          <p className="text-sm font-semibold">
+            {isKo ? "Pro 가치 계산기" : "Pro value estimator"}
+          </p>
+          <p className="mt-1 text-xs text-mutedFg">
+            {isKo
+              ? "하루에 절약하는 시간과 시간당 가치를 입력해 월간 기대 가치를 계산해 보세요."
+              : "Estimate monthly value by entering daily time saved and your hourly value."}
+          </p>
+          <div className="mt-3 grid gap-3 sm:grid-cols-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="roi-minutes">{isKo ? "하루 절약 시간(분)" : "Minutes saved per day"}</Label>
+              <Input
+                id="roi-minutes"
+                type="number"
+                min={0}
+                max={240}
+                value={minutesRecovered}
+                onChange={(e) => setMinutesRecovered(Math.max(0, Math.min(240, Number(e.target.value) || 0)))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="roi-hourly">{isKo ? "시간당 가치(USD)" : "Hourly value (USD)"}</Label>
+              <Input
+                id="roi-hourly"
+                type="number"
+                min={1}
+                max={500}
+                value={hourlyValue}
+                onChange={(e) => setHourlyValue(Math.max(1, Math.min(500, Number(e.target.value) || 1)))}
+              />
+            </div>
+          </div>
+          <div className="mt-3 rounded-lg border bg-white/70 p-3 text-sm">
+            <p>
+              {isKo ? "월 예상 확보 시간" : "Estimated monthly hours regained"}:{" "}
+              <span className="font-semibold">{monthlyRecoveredHours}h</span>
+            </p>
+            <p className="mt-1">
+              {isKo ? "월 예상 가치" : "Estimated monthly value"}:{" "}
+              <span className="font-semibold">${monthlyEstimatedValue}</span>
+            </p>
+          </div>
+        </div>
+      ) : null}
       {error ? <p className="text-sm text-red-700">{error}</p> : null}
       <p className="text-xs text-mutedFg">
         {isKo

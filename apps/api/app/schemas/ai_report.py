@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 TIME_RE = r"^\d{2}:\d{2}$"
@@ -54,6 +56,16 @@ class MicroAdviceItem(BaseModel):
     duration_min: int = Field(ge=1, le=20)
 
 
+class AnalysisMeta(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    input_quality_score: int = Field(ge=0, le=100)
+    profile_coverage_pct: float = Field(ge=0, le=100)
+    wellbeing_signals_count: int = Field(ge=0, le=6)
+    logged_entry_count: int = Field(ge=0, le=200)
+    schema_retry_count: int = Field(ge=0, le=3)
+    personalization_tier: Literal["low", "medium", "high"]
+
+
 class AIReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -68,3 +80,4 @@ class AIReport(BaseModel):
     wellbeing_insight: WellbeingInsight = Field(default_factory=WellbeingInsight)
     micro_advice: list[MicroAdviceItem] = Field(default_factory=list)
     weekly_pattern_insight: str = ""
+    analysis_meta: AnalysisMeta | None = None

@@ -34,6 +34,14 @@ type AIReport = {
   };
   micro_advice?: { action: string; when: string; reason: string; duration_min: number }[];
   weekly_pattern_insight?: string;
+  analysis_meta?: {
+    input_quality_score?: number;
+    profile_coverage_pct?: number;
+    wellbeing_signals_count?: number;
+    logged_entry_count?: number;
+    schema_retry_count?: number;
+    personalization_tier?: "low" | "medium" | "high" | string;
+  };
 };
 
 type GoalPrefs = {
@@ -109,6 +117,10 @@ function normalizeReport(raw: AIReport | null, isKo: boolean): AIReport | null {
   const riskRaw = String(raw?.wellbeing_insight?.burnout_risk || "medium").toLowerCase();
   const burnout_risk = riskRaw === "low" || riskRaw === "high" ? riskRaw : "medium";
   const microRaw = Array.isArray(raw?.micro_advice) ? raw.micro_advice : [];
+  const metaRaw = raw?.analysis_meta && typeof raw.analysis_meta === "object" ? raw.analysis_meta : {};
+  const tierRaw = String(metaRaw?.personalization_tier || "low").toLowerCase();
+  const personalization_tier =
+    tierRaw === "high" || tierRaw === "medium" || tierRaw === "low" ? tierRaw : "low";
   return {
     ...raw,
     schema_version: Number.isFinite(Number(raw?.schema_version)) ? Number(raw?.schema_version) : 1,
@@ -135,6 +147,24 @@ function normalizeReport(raw: AIReport | null, isKo: boolean): AIReport | null {
       typeof raw?.weekly_pattern_insight === "string" && raw.weekly_pattern_insight.trim()
         ? raw.weekly_pattern_insight
         : (isKo ? "주간 패턴은 최소 3일 기록 후 더 선명해집니다." : "Weekly pattern insight becomes clearer after at least 3 logged days."),
+    analysis_meta: {
+      input_quality_score: Number.isFinite(Number(metaRaw?.input_quality_score))
+        ? Math.max(0, Math.min(100, Number(metaRaw.input_quality_score)))
+        : 0,
+      profile_coverage_pct: Number.isFinite(Number(metaRaw?.profile_coverage_pct))
+        ? Math.max(0, Math.min(100, Number(metaRaw.profile_coverage_pct)))
+        : 0,
+      wellbeing_signals_count: Number.isFinite(Number(metaRaw?.wellbeing_signals_count))
+        ? Math.max(0, Math.min(6, Math.round(Number(metaRaw.wellbeing_signals_count))))
+        : 0,
+      logged_entry_count: Number.isFinite(Number(metaRaw?.logged_entry_count))
+        ? Math.max(0, Math.min(200, Math.round(Number(metaRaw.logged_entry_count))))
+        : 0,
+      schema_retry_count: Number.isFinite(Number(metaRaw?.schema_retry_count))
+        ? Math.max(0, Math.min(3, Math.round(Number(metaRaw.schema_retry_count))))
+        : 0,
+      personalization_tier,
+    },
   };
 }
 
@@ -158,10 +188,10 @@ export default function InsightsPage() {
         coachEmptyBody_hasLog: "기록은 완료됐어요. AI로 정리하면 오늘의 한 마디가 바로 생성됩니다.",
         coachEmptyHint: "오른쪽 '다음 단계'에서 바로 진행할 수 있어요.",
         nextTitle: "다음 단계",
-        nextDesc_noLog: "아직 기록이 없네요. 3분이면 충분합니다. 템플릿으로 오늘을 가볍게 정리해보세요.",
+        nextDesc_noLog: "아직 기록이 없네요. 일기를 3줄만 적어도 첫 분석을 시작할 수 있어요.",
         nextDesc_noReport: "오늘 기록을 바탕으로, 내일 흐름을 같이 잡아봅니다.",
         nextDesc_hasReport: "내일 일정을 미리 보고, 여유가 필요한 곳을 찾아보세요.",
-        cta_start3min: "3분으로 시작하기",
+        cta_start3min: "3분 진단 시작",
       cta_analyzeNow: "AI로 정리하기",
       cta_viewTomorrow: "내일 준비하기",
       cta_editLog: "기록 열기",
@@ -180,6 +210,17 @@ export default function InsightsPage() {
         moreBlocks: (n: number) => `+ ${n}개 더 보기`,
         coachTip: "오늘의 팁",
         coachTipDesc: "부담 없이 실천할 수 있는 한 줄.",
+        aiQuality: "AI 품질",
+        aiQualityDesc: "이번 리포트의 입력 품질과 개인화 수준입니다.",
+        aiQualityScore: "품질 점수",
+        aiQualityTier: "개인화 수준",
+        aiQualityProfile: "프로필 커버리지",
+        tierLow: "초기",
+        tierMedium: "보통",
+        tierHigh: "높음",
+        profileSetupTitle: "개인화 정확도를 올리려면 프로필을 완성하세요",
+        profileSetupBody: "연령대/성별/직군/근무 형태를 설정하면 추천 루틴의 현실성이 높아집니다.",
+        profileSetupCta: "설정 열기",
         peakHours: "집중 잘 되는 시간",
         peakHoursDesc: "몰입이 자연스럽게 일어나는 시간대입니다.",
         peakHoursEmpty: "분석을 실행하면, 집중이 잘 되는 시간대가 표시됩니다.",
@@ -231,10 +272,10 @@ export default function InsightsPage() {
       coachEmptyBody_hasLog: "Your log is ready. Run Analyze to generate today's one-line coaching.",
       coachEmptyHint: "Use the Next Action card on the right to continue.",
       nextTitle: "Next Action",
-      nextDesc_noLog: "No log yet. Start with a template and finish your first analysis in 3 minutes.",
+      nextDesc_noLog: "No log yet. A short 3-line diary is enough to start your first analysis.",
       nextDesc_noReport: "Turn your log into a coached tomorrow plan.",
       nextDesc_hasReport: "Review tomorrow’s plan and add buffers where you usually break.",
-      cta_start3min: "Start in 3 min",
+      cta_start3min: "Start 3-min check",
       cta_analyzeNow: "Analyze my day",
       cta_viewTomorrow: "View tomorrow plan",
       cta_editLog: "Open today log",
@@ -253,6 +294,17 @@ export default function InsightsPage() {
       moreBlocks: (n: number) => `+ ${n} more blocks`,
       coachTip: "Coach Tip of the Day",
       coachTipDesc: "One actionable sentence, no fluff.",
+      aiQuality: "AI quality",
+      aiQualityDesc: "Input quality and personalization level for this report.",
+      aiQualityScore: "Quality score",
+      aiQualityTier: "Personalization",
+      aiQualityProfile: "Profile coverage",
+      tierLow: "Starter",
+      tierMedium: "Balanced",
+      tierHigh: "High",
+      profileSetupTitle: "Complete your profile to improve personalization",
+      profileSetupBody: "Age, gender, job family, and work mode make tomorrow plans more realistic.",
+      profileSetupCta: "Open preferences",
       peakHours: "Peak Performance Hours",
       peakHoursDesc: "When deep work is most likely to stick.",
       peakHoursEmpty: "Run Analyze to see when your focus is strongest.",
@@ -319,6 +371,7 @@ export default function InsightsPage() {
   }>({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
   const [cohortTrend, setCohortTrend] = React.useState<CohortTrend | null>(null);
   const [cohortLoading, setCohortLoading] = React.useState(true);
+  const [profileMissingRequired, setProfileMissingRequired] = React.useState(false);
 
   async function loadTodayLog() {
     try {
@@ -492,8 +545,35 @@ export default function InsightsPage() {
     }
   }
 
+  async function loadProfileHealth() {
+    try {
+      const profile = await apiFetch<{
+        age_group?: string;
+        gender?: string;
+        job_family?: string;
+        work_mode?: string;
+      }>("/preferences/profile");
+      const required = [
+        profile.age_group,
+        profile.gender,
+        profile.job_family,
+        profile.work_mode,
+      ];
+      const missing = required.some((v) => !v || v === "unknown");
+      setProfileMissingRequired(missing);
+    } catch {
+      setProfileMissingRequired(false);
+    }
+  }
+
   React.useEffect(() => {
-    void Promise.all([loadReport(), loadConsistency(), loadTodayLog(), loadCohortTrend()]);
+    void Promise.all([
+      loadReport(),
+      loadConsistency(),
+      loadTodayLog(),
+      loadCohortTrend(),
+      loadProfileHealth(),
+    ]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -538,6 +618,15 @@ export default function InsightsPage() {
           {infoMessage}
         </div>
       ) : null}
+      {profileMissingRequired ? (
+        <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-4">
+          <p className="text-sm font-semibold">{t.profileSetupTitle}</p>
+          <p className="mt-1 text-sm text-mutedFg">{t.profileSetupBody}</p>
+          <Button asChild size="sm" variant="outline" className="mt-3">
+            <Link href="/app/preferences">{t.profileSetupCta}</Link>
+          </Button>
+        </div>
+      ) : null}
 
       <div className="grid gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-7">
@@ -566,6 +655,20 @@ export default function InsightsPage() {
                   </p>
                   <p className="mt-1 text-xs text-mutedFg">
                     {t.weeklyPatternLabel}: {report.weekly_pattern_insight}
+                  </p>
+                  <p className="mt-1 text-xs text-mutedFg">
+                    {t.aiQualityScore}: {Math.round(report.analysis_meta?.input_quality_score || 0)}
+                  </p>
+                  <p className="mt-1 text-xs text-mutedFg">
+                    {t.aiQualityProfile}: {Math.round(report.analysis_meta?.profile_coverage_pct || 0)}%
+                  </p>
+                  <p className="mt-1 text-xs text-mutedFg">
+                    {t.aiQualityTier}:{" "}
+                    {report.analysis_meta?.personalization_tier === "high"
+                      ? t.tierHigh
+                      : report.analysis_meta?.personalization_tier === "medium"
+                        ? t.tierMedium
+                        : t.tierLow}
                   </p>
                   {report.micro_advice?.[0] ? (
                     <p className="mt-2 text-sm">

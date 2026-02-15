@@ -48,6 +48,11 @@ def _is_service_key_failure(exc: SupabaseRestError) -> bool:
     )
 
 
+def _is_missing_meta_column(exc: SupabaseRestError) -> bool:
+    msg = str(exc).lower()
+    return exc.code == "42703" or ("column" in msg and "meta" in msg)
+
+
 _IDEMPOTENCY_KEY_RE = re.compile(r"^[A-Za-z0-9._:\-]{8,128}$")
 _TIME_RE = re.compile(r"^\d{2}:\d{2}$")
 _MODEL_LOCALE_RE = re.compile(r"\|loc=(ko|en|ja|zh|es)$")
@@ -443,6 +448,81 @@ def _profile_prompt_context(row: dict[str, Any] | None) -> dict[str, Any]:
     }
 
 
+def _profile_required_fields_coverage(profile_context: dict[str, Any]) -> float:
+    known = 0
+    total = len(_REQUIRED_PROFILE_FIELDS)
+    for key in _REQUIRED_PROFILE_FIELDS:
+        value = profile_context.get(key)
+        if isinstance(value, str) and value.strip():
+            known += 1
+    if total <= 0:
+        return 0.0
+    return round((known / total) * 100.0, 2)
+
+
+def _analysis_personalization_tier(
+    *,
+    profile_coverage_pct: float,
+    wellbeing_signals_count: int,
+    logged_entry_count: int,
+) -> str:
+    if (
+        profile_coverage_pct >= 75
+        and wellbeing_signals_count >= 3
+        and logged_entry_count >= 3
+    ):
+        return "high"
+    if (
+        profile_coverage_pct >= 40
+        and wellbeing_signals_count >= 2
+        and logged_entry_count >= 2
+    ):
+        return "medium"
+    return "low"
+
+
+def _build_analysis_meta(
+    *,
+    profile_coverage_pct: float,
+    wellbeing_signals_count: int,
+    logged_entry_count: int,
+    schema_retry_count: int,
+) -> dict[str, Any]:
+    clamped_wellbeing = max(0, min(6, int(wellbeing_signals_count)))
+    clamped_entries = max(0, min(200, int(logged_entry_count)))
+    clamped_profile = max(0.0, min(100.0, float(profile_coverage_pct)))
+    clamped_retry = max(0, min(3, int(schema_retry_count)))
+
+    # Score weights:
+    # - profile coverage: 35%
+    # - wellbeing signals: 25%
+    # - entry density: 25%
+    # - schema stability bonus: 15%
+    quality_score = round(
+        (clamped_profile * 0.35)
+        + ((clamped_wellbeing / 6.0) * 100.0 * 0.25)
+        + (min(clamped_entries, 8) / 8.0 * 100.0 * 0.25)
+        + (
+            (100.0 if clamped_retry == 0 else 70.0 if clamped_retry == 1 else 40.0)
+            * 0.15
+        )
+    )
+    quality_score = max(0, min(100, int(quality_score)))
+
+    return {
+        "input_quality_score": quality_score,
+        "profile_coverage_pct": round(clamped_profile, 2),
+        "wellbeing_signals_count": clamped_wellbeing,
+        "logged_entry_count": clamped_entries,
+        "schema_retry_count": clamped_retry,
+        "personalization_tier": _analysis_personalization_tier(
+            profile_coverage_pct=clamped_profile,
+            wellbeing_signals_count=clamped_wellbeing,
+            logged_entry_count=clamped_entries,
+        ),
+    }
+
+
 def _normalize_yesterday_plan_vs_actual(
     *,
     report_dict: dict[str, Any],
@@ -578,7 +658,11 @@ def _normalize_schema_v2_fields(
         wellbeing_obj.get("energy_curve_forecast") or ""
     ).strip()
     if not energy_curve_forecast:
-        peaks = computed_metrics.get("peak_candidates") if isinstance(computed_metrics, dict) else []
+        peaks = (
+            computed_metrics.get("peak_candidates")
+            if isinstance(computed_metrics, dict)
+            else []
+        )
         peak_rows = peaks if isinstance(peaks, list) else []
         if peak_rows and isinstance(peak_rows[0], dict):
             p_start = str(peak_rows[0].get("start") or "").strip()
@@ -587,9 +671,7 @@ def _normalize_schema_v2_fields(
                 if locale == "ko":
                     energy_curve_forecast = f"{p_start}-{p_end} 구간에서 에너지/집중 유지 가능성이 높습니다."
                 else:
-                    energy_curve_forecast = (
-                        f"Energy and focus are likely to hold best around {p_start}-{p_end}."
-                    )
+                    energy_curve_forecast = f"Energy and focus are likely to hold best around {p_start}-{p_end}."
         if not energy_curve_forecast:
             energy_curve_forecast = (
                 "충분한 데이터가 쌓이면 에너지 곡선을 더 정확히 예측할 수 있습니다."
@@ -651,7 +733,9 @@ def _normalize_schema_v2_fields(
             break
 
     if not normalized_advice:
-        flags_raw = computed_metrics.get("flags") if isinstance(computed_metrics, dict) else {}
+        flags_raw = (
+            computed_metrics.get("flags") if isinstance(computed_metrics, dict) else {}
+        )
         flags = flags_raw if isinstance(flags_raw, dict) else {}
         if flags.get("high_switching_risk"):
             fallback = (
@@ -691,10 +775,26 @@ def _normalize_schema_v2_fields(
 
     weekly_pattern_insight = str(out.get("weekly_pattern_insight") or "").strip()
     if not weekly_pattern_insight:
-        days_with_logs = recent_trends.get("days_with_logs") if isinstance(recent_trends, dict) else 0
-        focus_trend = str(recent_trends.get("focus_trend") or "insufficient_data") if isinstance(recent_trends, dict) else "insufficient_data"
-        switch_trend = str(recent_trends.get("switch_trend") or "insufficient_data") if isinstance(recent_trends, dict) else "insufficient_data"
-        dates = recent_trends.get("sampled_dates") if isinstance(recent_trends, dict) else []
+        days_with_logs = (
+            recent_trends.get("days_with_logs")
+            if isinstance(recent_trends, dict)
+            else 0
+        )
+        focus_trend = (
+            str(recent_trends.get("focus_trend") or "insufficient_data")
+            if isinstance(recent_trends, dict)
+            else "insufficient_data"
+        )
+        switch_trend = (
+            str(recent_trends.get("switch_trend") or "insufficient_data")
+            if isinstance(recent_trends, dict)
+            else "insufficient_data"
+        )
+        dates = (
+            recent_trends.get("sampled_dates")
+            if isinstance(recent_trends, dict)
+            else []
+        )
         date_span = ""
         if isinstance(dates, list) and dates:
             head = str(dates[0])
@@ -703,13 +803,9 @@ def _normalize_schema_v2_fields(
                 date_span = f"{tail}~{head}"
         if isinstance(days_with_logs, int) and days_with_logs >= 3:
             if locale == "ko":
-                weekly_pattern_insight = (
-                    f"최근 {days_with_logs}일({date_span}) 기준, 집중 추세는 {focus_trend}, 전환 추세는 {switch_trend}입니다."
-                )
+                weekly_pattern_insight = f"최근 {days_with_logs}일({date_span}) 기준, 집중 추세는 {focus_trend}, 전환 추세는 {switch_trend}입니다."
             else:
-                weekly_pattern_insight = (
-                    f"Across the last {days_with_logs} logged days ({date_span}), focus trend is {focus_trend} and switch trend is {switch_trend}."
-                )
+                weekly_pattern_insight = f"Across the last {days_with_logs} logged days ({date_span}), focus trend is {focus_trend} and switch trend is {switch_trend}."
         else:
             weekly_pattern_insight = (
                 "주간 패턴 분석은 최소 3일 기록 후 더 정확해집니다."
@@ -784,7 +880,9 @@ def _as_int_1_to_5(value: Any) -> int | None:
     return iv
 
 
-def _as_float_in_range(value: Any, *, min_value: float, max_value: float) -> float | None:
+def _as_float_in_range(
+    value: Any, *, min_value: float, max_value: float
+) -> float | None:
     if not isinstance(value, (int, float)):
         return None
     fv = float(value)
@@ -899,7 +997,9 @@ def _compute_analysis_metrics(
         allowed={"very_low", "low", "neutral", "good", "great"},
     )
     sleep_quality = _as_int_1_to_5(meta.get("sleep_quality"))
-    sleep_hours = _as_float_in_range(meta.get("sleep_hours"), min_value=0.0, max_value=14.0)
+    sleep_hours = _as_float_in_range(
+        meta.get("sleep_hours"), min_value=0.0, max_value=14.0
+    )
     stress_level = _as_int_1_to_5(meta.get("stress_level"))
     hydration_level = _normalize_choice(
         meta.get("hydration_level"),
@@ -912,7 +1012,9 @@ def _compute_analysis_metrics(
         else None
     )
     micro_habit_done = (
-        meta.get("micro_habit_done") if isinstance(meta.get("micro_habit_done"), bool) else None
+        meta.get("micro_habit_done")
+        if isinstance(meta.get("micro_habit_done"), bool)
+        else None
     )
 
     raw_entries = (
@@ -1030,7 +1132,9 @@ def _compute_analysis_metrics(
 
     burnout_risk_points = 0
     if sleep_quality is not None:
-        burnout_risk_points += 2 if sleep_quality <= 2 else 1 if sleep_quality == 3 else 0
+        burnout_risk_points += (
+            2 if sleep_quality <= 2 else 1 if sleep_quality == 3 else 0
+        )
     if sleep_hours is not None:
         burnout_risk_points += 2 if sleep_hours < 6 else 1 if sleep_hours < 7 else 0
     if stress_level is not None:
@@ -1352,7 +1456,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         str(settings.supabase_url), settings.supabase_service_role_key
     )
 
-    # Require personal profile fields before the first-ever analysis.
+    # Profile is optional for first analysis; unknown fields are handled in prompt-level personalization.
     previous_report = await sb_rls.select(
         "ai_reports",
         bearer_token=auth.access_token,
@@ -1363,48 +1467,20 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             "order": "date.desc",
         },
     )
-    if not previous_report:
-        profile_rows = await sb_rls.select(
-            "profiles",
-            bearer_token=auth.access_token,
-            params={
-                "select": "age_group,gender,job_family,work_mode,goal_keyword,goal_minutes_per_day",
-                "id": f"eq.{auth.user_id}",
-                "limit": 1,
-            },
-        )
-        missing_fields = _missing_required_profile_fields(
-            profile_rows[0] if profile_rows else None
-        )
-        if missing_fields:
-            if target_locale == "ko":
-                message = "첫 AI 분석 전에 개인 설정 4개 항목을 먼저 완료해 주세요."
-                hint = "설정에서 연령대/성별/직군/근무 형태를 저장하면 바로 분석할 수 있습니다. 성별은 '응답 안함' 선택이 가능합니다."
-            else:
-                message = (
-                    "Please complete your profile fields before your first AI analysis."
-                )
-                hint = "Go to Preferences and save age group, gender, job family, and work mode. Gender supports 'Prefer not to say'."
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail={
-                    "message": message,
-                    "hint": hint,
-                    "code": "PROFILE_SETUP_REQUIRED",
-                    "missing_fields": missing_fields,
-                },
-            )
-    else:
-        profile_rows = await sb_rls.select(
-            "profiles",
-            bearer_token=auth.access_token,
-            params={
-                "select": "age_group,gender,job_family,work_mode,goal_keyword,goal_minutes_per_day",
-                "id": f"eq.{auth.user_id}",
-                "limit": 1,
-            },
-        )
+    profile_rows = await sb_rls.select(
+        "profiles",
+        bearer_token=auth.access_token,
+        params={
+            "select": "age_group,gender,job_family,work_mode,goal_keyword,goal_minutes_per_day",
+            "id": f"eq.{auth.user_id}",
+            "limit": 1,
+        },
+    )
+    missing_profile_fields = _missing_required_profile_fields(
+        profile_rows[0] if profile_rows else None
+    )
     profile_context = _profile_prompt_context(profile_rows[0] if profile_rows else None)
+    profile_required_coverage = _profile_required_fields_coverage(profile_context)
 
     # Cache: if report already exists and not forcing, return it without consuming usage.
     existing = await sb_rls.select(
@@ -1471,34 +1547,68 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         )
 
     # Load activity log for the target date (may be empty).
-    logs = await sb_rls.select(
-        "activity_logs",
-        bearer_token=auth.access_token,
-        params={
-            "select": "date,entries,note,meta",
-            "user_id": f"eq.{auth.user_id}",
-            "date": f"eq.{body.date.isoformat()}",
-            "limit": 1,
-        },
-    )
+    try:
+        logs = await sb_rls.select(
+            "activity_logs",
+            bearer_token=auth.access_token,
+            params={
+                "select": "date,entries,note,meta",
+                "user_id": f"eq.{auth.user_id}",
+                "date": f"eq.{body.date.isoformat()}",
+                "limit": 1,
+            },
+        )
+    except SupabaseRestError as exc:
+        if not _is_missing_meta_column(exc):
+            raise
+        logs = await sb_rls.select(
+            "activity_logs",
+            bearer_token=auth.access_token,
+            params={
+                "select": "date,entries,note",
+                "user_id": f"eq.{auth.user_id}",
+                "date": f"eq.{body.date.isoformat()}",
+                "limit": 1,
+            },
+        )
     activity_log = (
         logs[0]
         if logs
         else {"date": body.date.isoformat(), "entries": [], "note": None, "meta": {}}
     )
+    if not isinstance(activity_log.get("meta"), dict):
+        activity_log["meta"] = {}
     sanitized_activity_log = sanitize_for_llm(activity_log)
 
-    recent_rows = await sb_rls.select(
-        "activity_logs",
-        bearer_token=auth.access_token,
-        params={
-            "select": "date,entries,note,meta",
-            "user_id": f"eq.{auth.user_id}",
-            "date": f"lte.{body.date.isoformat()}",
-            "order": "date.desc",
-            "limit": 7,
-        },
-    )
+    try:
+        recent_rows = await sb_rls.select(
+            "activity_logs",
+            bearer_token=auth.access_token,
+            params={
+                "select": "date,entries,note,meta",
+                "user_id": f"eq.{auth.user_id}",
+                "date": f"lte.{body.date.isoformat()}",
+                "order": "date.desc",
+                "limit": 7,
+            },
+        )
+    except SupabaseRestError as exc:
+        if not _is_missing_meta_column(exc):
+            raise
+        recent_rows = await sb_rls.select(
+            "activity_logs",
+            bearer_token=auth.access_token,
+            params={
+                "select": "date,entries,note",
+                "user_id": f"eq.{auth.user_id}",
+                "date": f"lte.{body.date.isoformat()}",
+                "order": "date.desc",
+                "limit": 7,
+            },
+        )
+    for row in recent_rows:
+        if isinstance(row, dict) and not isinstance(row.get("meta"), dict):
+            row["meta"] = {}
     recent_trends = _compute_recent_trends(recent_logs=sanitize_for_llm(recent_rows))
 
     # Load yesterday's report to compare "plan vs actual"
@@ -1601,6 +1711,8 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
     )
 
     # OpenAI call + schema validation (retry once on validation error)
+    schema_retry_count = 0
+    schema_validation_failed_once = False
     try:
         obj, usage = await call_openai_structured(
             system_prompt=system_prompt, user_prompt=user_prompt
@@ -1618,11 +1730,14 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
                 "model": settings.openai_model,
             },
         )
+        await clear_idempotency_key(key=idempotency_key)
         raise HTTPException(
             status_code=status.HTTP_502_BAD_GATEWAY,
             detail="AI analysis failed. Please try again in a moment.",
         )
     except (ValidationError, json.JSONDecodeError, ValueError):
+        schema_retry_count = 1
+        schema_validation_failed_once = True
         try:
             strict_system = (
                 system_prompt
@@ -1640,6 +1755,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
                 err=e2,
                 meta={"target_date": body.date.isoformat(), "plan": plan},
             )
+            await clear_idempotency_key(key=idempotency_key)
             raise HTTPException(
                 status_code=status.HTTP_502_BAD_GATEWAY,
                 detail="AI analysis failed. Please try again in a moment.",
@@ -1654,6 +1770,28 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             computed_metrics=computed_metrics,
             recent_trends=recent_trends,
         )
+        entries_raw = (
+            sanitized_activity_log.get("entries")
+            if isinstance(sanitized_activity_log, dict)
+            else []
+        )
+        entries = entries_raw if isinstance(entries_raw, list) else []
+        wellbeing_raw = (
+            computed_metrics.get("wellbeing_signals")
+            if isinstance(computed_metrics, dict)
+            else {}
+        )
+        wellbeing = wellbeing_raw if isinstance(wellbeing_raw, dict) else {}
+        analysis_meta = _build_analysis_meta(
+            profile_coverage_pct=profile_required_coverage,
+            wellbeing_signals_count=int(
+                wellbeing.get("completeness_score_0_to_6") or 0
+            ),
+            logged_entry_count=len(entries),
+            schema_retry_count=schema_retry_count,
+        )
+        report_dict["analysis_meta"] = analysis_meta
+        report_dict = AIReport.model_validate(report_dict).model_dump(by_alias=True)
         report_row = {
             "user_id": auth.user_id,
             "date": body.date.isoformat(),
@@ -1700,6 +1838,20 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
                 "plan": plan,
                 "forced": body.force,
                 "locale": target_locale,
+                "first_analysis": not bool(previous_report),
+                "quality": {
+                    "schema_retry_count": schema_retry_count,
+                    "schema_validation_failed_once": schema_validation_failed_once,
+                    "profile_required_fields_coverage_pct": profile_required_coverage,
+                    "missing_profile_fields": missing_profile_fields,
+                    "logged_entry_count": len(entries),
+                    "recent_days_used": recent_trends.get("days_with_logs"),
+                    "wellbeing_signals_coverage": wellbeing.get(
+                        "completeness_score_0_to_6"
+                    ),
+                    "report_schema_version": report_dict.get("schema_version", 1),
+                    "analysis_meta": analysis_meta,
+                },
             },
             access_token=auth.access_token,
         )

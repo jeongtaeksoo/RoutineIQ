@@ -1,22 +1,9 @@
 import type { Metadata } from "next";
-import { Fraunces, Space_Grotesk } from "next/font/google";
 import type { ReactNode } from "react";
 
 import { SWRegister } from "@/components/sw-register";
 
 import "./globals.css";
-
-const sans = Space_Grotesk({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap"
-});
-
-const serif = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  display: "swap"
-});
 
 const metadataBase = (() => {
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
@@ -54,7 +41,7 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" className={`${sans.variable} ${serif.variable}`}>
+    <html lang="en">
       <body className="min-h-screen bg-bg text-fg antialiased">
         <div className="pointer-events-none fixed inset-0 -z-10 bg-[radial-gradient(1100px_circle_at_12%_10%,rgba(217,179,155,0.15),transparent_40%),radial-gradient(900px_circle_at_86%_16%,rgba(200,170,150,0.12),transparent_38%),radial-gradient(950px_circle_at_52%_102%,rgba(180,160,140,0.10),transparent_46%)]" />
         <SWRegister />

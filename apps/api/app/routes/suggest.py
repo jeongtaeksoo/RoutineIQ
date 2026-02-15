@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, HTTPException, status
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
 
 from app.core.config import settings
 from app.core.security import AuthDep
@@ -19,9 +19,16 @@ from app.services.usage import (
 router = APIRouter()
 
 
+_TIME_RE = r"^([01]\d|2[0-3]):[0-5]\d$"
+
+
 class SuggestRequest(BaseModel):
-    current_time: str  # "HH:MM"
-    context: str | None = None  # e.g. "I feel tired", "Just finished meeting"
+    model_config = ConfigDict(extra="forbid")
+
+    current_time: str = Field(pattern=_TIME_RE)  # "HH:MM"
+    context: str | None = Field(
+        default=None, min_length=1, max_length=500
+    )  # e.g. "I feel tired", "Just finished meeting"
 
 
 class SuggestResponse(BaseModel):

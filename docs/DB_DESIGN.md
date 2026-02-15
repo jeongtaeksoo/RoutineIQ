@@ -53,7 +53,7 @@ Columns:
 - `user_id uuid not null` references `profiles(id)` on delete cascade
 - `date date not null`
 - `report jsonb not null` (must match fixed schema; validated server-side)
-- `schema_version int not null default 1`
+- `schema_version int not null default 1` (legacy default; API persists v2 reports)
 - `model text null`
 - `created_at timestamptz default now()`
 - `updated_at timestamptz default now()`
@@ -138,6 +138,7 @@ Stored in `ai_reports.report` and returned to the frontend.
 
 ```json
 {
+  "schema_version": 2,
   "summary": "string",
   "productivity_peaks": [
     { "start": "HH:MM", "end": "HH:MM", "reason": "string" }
@@ -155,6 +156,28 @@ Stored in `ai_reports.report` and returned to the frontend.
   "yesterday_plan_vs_actual": {
     "comparison_note": "string",
     "top_deviation": "string"
+  },
+  "wellbeing_insight": {
+    "burnout_risk": "low|medium|high",
+    "energy_curve_forecast": "string",
+    "note": "string"
+  },
+  "micro_advice": [
+    {
+      "action": "string",
+      "when": "string",
+      "reason": "string",
+      "duration_min": 1
+    }
+  ],
+  "weekly_pattern_insight": "string",
+  "analysis_meta": {
+    "input_quality_score": 0,
+    "profile_coverage_pct": 0,
+    "wellbeing_signals_count": 0,
+    "logged_entry_count": 0,
+    "schema_retry_count": 0,
+    "personalization_tier": "low|medium|high"
   }
 }
 ```
@@ -162,3 +185,4 @@ Stored in `ai_reports.report` and returned to the frontend.
 Validation rules (server):
 - Always present all keys, even if data is insufficient.
 - If insufficient data, fill `reason/fix/...` with explicit "need more input" strings.
+- `analysis_meta` is optional for backward compatibility with legacy reports.

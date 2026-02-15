@@ -4,12 +4,22 @@ import { installRoutineApiMock } from "./helpers/mock-api";
 
 const e2eMode = process.env.E2E_MODE === "live" ? "live" : "mock";
 
-async function signInAsDemo(page: import("@playwright/test").Page) {
-  await page.goto("/login?demo=1");
+async function enterMockApp(page: import("@playwright/test").Page) {
+  await page.goto("/app/insights");
   await expect(page).toHaveURL(/\/app\/insights/);
 }
 
-async function signInLive(page: import("@playwright/test").Page) {
+function todayLocal(): string {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
+
+async function signInLive(
+  page: import("@playwright/test").Page,
+): Promise<{ accessToken: string }> {
   await page.goto("/login?auth=1");
   const { email, password, accessToken } = await provisionLiveUserCredentials();
   await page.getByRole("button", { name: /로그인|Sign in|Login|ログイン|登录|Iniciar sesión/i }).first().click();
@@ -25,6 +35,7 @@ async function signInLive(page: import("@playwright/test").Page) {
   await ensureProfileReady(accessToken);
 
   await expect(page).toHaveURL(/\/app\/insights/);
+  return { accessToken };
 }
 
 async function provisionLiveUserCredentials(): Promise<{ email: string; password: string; accessToken: string }> {
@@ -98,9 +109,8 @@ async function ensureProfileReady(accessToken: string): Promise<void> {
     body: JSON.stringify({
       age_group: "25_34",
       gender: "prefer_not_to_say",
-      job_family: "engineering",
+      job_family: "office_worker",
       work_mode: "fixed",
-      chronotype: "mixed",
       trend_opt_in: true,
       trend_compare_by: ["age_group", "job_family", "work_mode"],
       goal_keyword: "deep work",
@@ -118,11 +128,100 @@ async function ensureProfileReady(accessToken: string): Promise<void> {
   }
 }
 
-test.describe("RutineIQ core flows", () => {
-  test("F1: /login?demo=1 guest flow redirects to insights", async ({ page }) => {
-    await installRoutineApiMock(page);
+async function seedLiveDay({
+  accessToken,
+  date,
+}: {
+  accessToken: string;
+  date: string;
+}): Promise<void> {
+  const apiBaseRaw = process.env.NEXT_PUBLIC_API_BASE_URL || "http://127.0.0.1:8000";
+  const apiBase = apiBaseRaw.replace(/\/+$/, "");
+  const headers = {
+    "content-type": "application/json",
+    authorization: `Bearer ${accessToken}`,
+  };
+  const logRes = await fetch(`${apiBase}/api/logs`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      date,
+      entries: [
+        {
+          start: "09:00",
+          end: "10:00",
+          activity: "Focus block",
+          energy: 4,
+          focus: 4,
+          tags: ["focus"],
+        },
+      ],
+      note: "Live smoke seed log",
+      meta: {
+        mood: "good",
+        sleep_quality: 4,
+        sleep_hours: 7,
+        stress_level: 2,
+      },
+    }),
+  });
+  if (!logRes.ok) {
+    throw new Error(`Failed to seed live log (${logRes.status})`);
+  }
 
-    await signInAsDemo(page);
+  const waitForReport = async (seconds: number): Promise<boolean> => {
+    const tries = Math.max(1, Math.ceil(seconds / 3));
+    for (let i = 0; i < tries; i += 1) {
+      const reportRes = await fetch(`${apiBase}/api/reports?date=${encodeURIComponent(date)}`, {
+        method: "GET",
+        headers: { authorization: `Bearer ${accessToken}` },
+      });
+      if (reportRes.ok) {
+        return true;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+    return false;
+  };
+
+  let lastStatus = 0;
+  let lastDetail = "";
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    const analyzeRes = await fetch(`${apiBase}/api/analyze`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ date, force: true }),
+    });
+    if (analyzeRes.ok) {
+      return;
+    }
+    lastStatus = analyzeRes.status;
+    lastDetail = (await analyzeRes.text()).slice(0, 400);
+
+    if (lastStatus === 409 && lastDetail.includes("ANALYZE_IN_PROGRESS")) {
+      if (await waitForReport(45)) {
+        return;
+      }
+      continue;
+    }
+
+    if ([429, 500, 502, 503, 504].includes(lastStatus) && attempt < 3) {
+      await new Promise((resolve) => setTimeout(resolve, 1200 * (attempt + 1)));
+      continue;
+    }
+    break;
+  }
+  throw new Error(`Failed to seed live report (${lastStatus}): ${lastDetail}`);
+}
+
+test.describe("RutineIQ core flows", () => {
+  test("F1: core app shell loads to insights", async ({ page }) => {
+    await installRoutineApiMock(page);
+    if (e2eMode === "mock") {
+      await enterMockApp(page);
+    } else {
+      await signInLive(page);
+    }
     await expect(page.getByRole("heading", { name: /나의 하루|My Insights/i })).toBeVisible();
     await expect(page.locator("p", { hasText: /오늘의 한 마디|One-line Coaching/i }).first()).toBeVisible();
   });
@@ -133,29 +232,49 @@ test.describe("RutineIQ core flows", () => {
     }
     if (e2eMode === "mock") {
       await installRoutineApiMock(page);
-      await signInAsDemo(page);
+      await enterMockApp(page);
     } else {
-      await signInLive(page);
+      const { accessToken } = await signInLive(page);
+      const date = todayLocal();
+      await seedLiveDay({ accessToken, date });
+      await page.goto(`/app/reports/${date}`);
+      await expect(page).toHaveURL(/\/app\/reports\/\d{4}-\d{2}-\d{2}/, {
+        timeout: 120_000,
+      });
+      await expect(page.getByRole("heading", { name: /나의 하루 리포트|AI Coach Report/i })).toBeVisible();
+      await expect(page.getByText(/내일을 위한 추천 흐름|Tomorrow’s Smart Schedule/i)).toBeVisible();
+      return;
     }
     await page.goto("/app/daily-flow");
-    await page.getByText(/딥워크|Deep Work/i).first().click();
-    await page.getByRole("button", { name: /저장\s*&\s*분석|Save\s*&\s*Analyze/i }).first().click();
+    const diaryText = "09:00부터 집중 코딩을 했고 점심 이후 회의를 진행한 뒤 저녁에 산책했습니다.";
+    const diaryInput = page.locator("textarea");
+    const parseButton = page.getByRole("button", { name: /AI 분석하기|Parse with AI/i }).first();
+    await diaryInput.fill(diaryText);
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      if (await parseButton.isEnabled()) break;
+      await page.waitForTimeout(400);
+      await diaryInput.fill(diaryText);
+    }
+    await expect(diaryInput).toHaveValue(diaryText);
+    await expect(parseButton).toBeEnabled({ timeout: 15_000 });
+    await parseButton.click();
+    await expect(page.getByText(/AI가 이렇게 파악했어요|AI parsed your day like this/i)).toBeVisible();
+    await page.getByRole("button", { name: /확인\s*&\s*저장|Confirm\s*&\s*Save/i }).first().click();
+    await expect(page.getByText(/저장 완료! AI 분석을 시작할까요\?|Saved! Start AI analysis\?/i)).toBeVisible();
+    await page.getByRole("button", { name: /AI 분석|AI Analyze/i }).first().click();
 
     await expect(page).toHaveURL(/\/app\/reports\/\d{4}-\d{2}-\d{2}/, {
-      timeout: e2eMode === "live" ? 120_000 : 8_000,
+      timeout: 8_000,
     });
+    await expect(page.getByRole("heading", { name: /나의 하루 리포트|AI Coach Report/i })).toBeVisible();
     await expect(page.getByText(/오늘의 요약|Your Day in Review/i)).toBeVisible();
-    if (e2eMode === "mock") {
-      await expect(page.getByText("지금은 25분 한 번만 끝내세요.")).toBeVisible();
-    } else {
-      await expect(page.getByText(/내일을 위한 추천 흐름|Tomorrow’s Smart Schedule/i)).toBeVisible();
-    }
+    await expect(page.getByText("지금은 25분 한 번만 끝내세요.")).toBeVisible();
   });
 
   test("F3: Guest billing conversion -> checkout session request", async ({ page }) => {
     const mock = await installRoutineApiMock(page);
 
-    await signInAsDemo(page);
+    await enterMockApp(page);
     await page.goto("/app/billing");
 
     await page.getByLabel(/이메일|Email/i).fill("demo-user@routineiq.test");

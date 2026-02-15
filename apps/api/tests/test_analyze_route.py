@@ -18,6 +18,15 @@ def _profile_row() -> dict:
     }
 
 
+def _incomplete_profile_row() -> dict:
+    return {
+        "age_group": "unknown",
+        "gender": "unknown",
+        "job_family": "unknown",
+        "work_mode": "unknown",
+    }
+
+
 def _activity_log() -> dict:
     return {
         "date": "2026-02-15",
@@ -70,6 +79,13 @@ def test_analyze_success_returns_report(
     assert body["date"] == "2026-02-15"
     assert body["cached"] is False
     assert "report" in body
+    assert isinstance(body["report"]["analysis_meta"], dict)
+    assert body["report"]["analysis_meta"]["personalization_tier"] in {
+        "low",
+        "medium",
+        "high",
+    }
+    assert 0 <= body["report"]["analysis_meta"]["input_quality_score"] <= 100
     assert openai_mock.await_count == 1
 
 
@@ -107,6 +123,8 @@ def test_analyze_openai_failure_returns_502(
         AsyncMock(side_effect=httpx.ConnectError("boom")),
     )
     monkeypatch.setattr(analyze_route, "log_system_error", AsyncMock(return_value=None))
+    clear_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(analyze_route, "clear_idempotency_key", clear_mock)
 
     supabase_mock["select"].side_effect = [
         [{"date": "2026-02-14"}],  # previous_report
@@ -121,8 +139,132 @@ def test_analyze_openai_failure_returns_502(
 
     assert response.status_code == 502
     assert "AI analysis failed" in response.json()["detail"]
+    assert clear_mock.await_count == 1
 
 
 def test_analyze_requires_auth(client: TestClient) -> None:
     response = client.post("/api/analyze", json={"date": "2026-02-15"})
     assert response.status_code == 401
+
+
+def test_analyze_allows_first_run_with_incomplete_profile(
+    authenticated_client: TestClient, supabase_mock, openai_mock, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        analyze_route,
+        "get_subscription_info",
+        AsyncMock(return_value=type("Sub", (), {"plan": "free"})()),
+    )
+    monkeypatch.setattr(
+        analyze_route, "count_daily_analyze_calls", AsyncMock(return_value=0)
+    )
+    usage_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(analyze_route, "insert_usage_event", usage_mock)
+    monkeypatch.setattr(
+        analyze_route, "cleanup_expired_reports", AsyncMock(return_value=None)
+    )
+
+    supabase_mock["select"].side_effect = [
+        [],  # previous_report (first run)
+        [_incomplete_profile_row()],  # profile context (unknown)
+        [],  # existing report for target date
+        [_activity_log()],  # activity log
+        [_activity_log()],  # recent activity logs
+        [],  # yesterday report
+    ]
+    supabase_mock["upsert_one"].return_value = {}
+
+    response = authenticated_client.post("/api/analyze", json={"date": "2026-02-15"})
+
+    assert response.status_code == 200
+    assert response.json()["cached"] is False
+    call_kwargs = usage_mock.await_args.kwargs
+    assert call_kwargs["meta"]["first_analysis"] is True
+    quality = call_kwargs["meta"]["quality"]
+    assert quality["profile_required_fields_coverage_pct"] == 0.0
+    assert set(quality["missing_profile_fields"]) == {
+        "age_group",
+        "gender",
+        "job_family",
+        "work_mode",
+    }
+
+
+def test_analyze_tracks_schema_retry_in_quality_meta(
+    authenticated_client: TestClient, supabase_mock, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        analyze_route,
+        "get_subscription_info",
+        AsyncMock(return_value=type("Sub", (), {"plan": "free"})()),
+    )
+    monkeypatch.setattr(
+        analyze_route, "count_daily_analyze_calls", AsyncMock(return_value=0)
+    )
+    usage_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(analyze_route, "insert_usage_event", usage_mock)
+    monkeypatch.setattr(
+        analyze_route, "cleanup_expired_reports", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        analyze_route,
+        "call_openai_structured",
+        AsyncMock(
+            side_effect=[
+                (
+                    {"summary": "invalid-schema"},
+                    {"input_tokens": 10, "output_tokens": 5, "total_tokens": 15},
+                ),
+                (
+                    {
+                        "summary": "테스트 요약",
+                        "productivity_peaks": [
+                            {"start": "09:00", "end": "10:00", "reason": "집중"}
+                        ],
+                        "failure_patterns": [
+                            {
+                                "pattern": "전환 과다",
+                                "trigger": "연속 회의",
+                                "fix": "5분 리셋",
+                            }
+                        ],
+                        "tomorrow_routine": [
+                            {
+                                "start": "09:00",
+                                "end": "10:00",
+                                "activity": "핵심 집중 블록",
+                                "goal": "핵심 업무 1개 완료",
+                            }
+                        ],
+                        "if_then_rules": [
+                            {"if": "집중이 끊기면", "then": "5분 리셋 후 재시작"}
+                        ],
+                        "coach_one_liner": "09:00 집중 블록부터 시작하세요.",
+                        "yesterday_plan_vs_actual": {
+                            "comparison_note": "비교 데이터 부족",
+                            "top_deviation": "전일 계획 없음",
+                        },
+                    },
+                    {"input_tokens": 120, "output_tokens": 240, "total_tokens": 360},
+                ),
+            ]
+        ),
+    )
+
+    supabase_mock["select"].side_effect = [
+        [{"date": "2026-02-14"}],  # previous_report
+        [_profile_row()],  # profile context
+        [],  # existing report for target date
+        [_activity_log()],  # activity log
+        [_activity_log()],  # recent activity logs
+        [],  # yesterday report
+    ]
+    supabase_mock["upsert_one"].return_value = {}
+
+    response = authenticated_client.post("/api/analyze", json={"date": "2026-02-15"})
+
+    assert response.status_code == 200
+    quality = usage_mock.await_args.kwargs["meta"]["quality"]
+    assert quality["schema_retry_count"] == 1
+    assert quality["schema_validation_failed_once"] is True
+    assert quality["analysis_meta"]["schema_retry_count"] == 1

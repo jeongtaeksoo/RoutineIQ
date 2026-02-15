@@ -229,3 +229,32 @@ def test_post_logs_persists_optional_daily_meta(
     assert first_call["row"]["meta"]["mood"] == "good"
     assert first_call["row"]["meta"]["sleep_quality"] == 4
     assert first_call["row"]["meta"]["hydration_level"] == "ok"
+
+
+def test_post_logs_accepts_optional_entry_confidence(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    payload = _log_payload("2026-02-15")
+    payload["entries"][0]["confidence"] = "low"
+    supabase_mock["upsert_one"].side_effect = [
+        {
+            "id": "log-confidence-1",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-02-15",
+            "entries": payload["entries"],
+            "note": payload["note"],
+            "meta": {},
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
+    ]
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
+
+    response = authenticated_client.post("/api/logs", json=payload)
+
+    assert response.status_code == 200
+    first_call = supabase_mock["upsert_one"].await_args_list[0].kwargs
+    assert first_call["row"]["entries"][0]["confidence"] == "low"
