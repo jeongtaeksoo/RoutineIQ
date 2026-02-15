@@ -192,18 +192,41 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
+function safeOriginFromEnv(raw: string | undefined): string | null {
+  if (!raw) return null;
+  try {
+    const url = new URL(raw.trim());
+    if (url.protocol !== "http:" && url.protocol !== "https:") return null;
+    return url.origin;
+  } catch {
+    return null;
+  }
+}
+
+function isLocalhostHost(hostname: string): boolean {
+  return hostname === "localhost" || hostname === "127.0.0.1";
+}
+
 function resolveAuthOrigin(): string {
-  if (typeof window === "undefined") return "https://rutineiq.com";
+  const configuredSiteOrigin = safeOriginFromEnv(process.env.NEXT_PUBLIC_SITE_URL) || "https://rutineiq.com";
+  if (typeof window === "undefined") return configuredSiteOrigin;
   const origin = window.location.origin;
   const hostname = window.location.hostname.toLowerCase();
-  if (
-    hostname === "rutineiq.com" ||
-    hostname === "www.rutineiq.com" ||
-    hostname.endsWith(".rutineiq.com")
-  ) {
-    return "https://rutineiq.com";
+
+  if (isLocalhostHost(hostname)) {
+    return origin;
   }
-  return origin;
+
+  // Always use the configured production site origin for hosted sessions.
+  // This avoids OAuth falling back to Supabase SITE_URL (which may still point to localhost).
+  return configuredSiteOrigin;
+}
+
+function setPostAuthRedirectCookie(nextPath: string): void {
+  if (typeof document === "undefined") return;
+  const safeNext = nextPath.startsWith("/") ? nextPath : "/app/insights";
+  const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
+  document.cookie = `routineiq_post_auth_next=${encodeURIComponent(safeNext)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
 }
 
 export default function LoginClient() {
@@ -321,11 +344,12 @@ export default function LoginClient() {
     setLoading(true);
     try {
       const authOrigin = resolveAuthOrigin();
+      setPostAuthRedirectCookie(afterAuthRedirect);
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${authOrigin}/auth/callback?next=${encodeURIComponent(afterAuthRedirect)}`,
+          redirectTo: `${authOrigin}/auth/callback`,
         },
       });
       if (error) throw error;

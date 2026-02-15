@@ -3,7 +3,7 @@ import type { MetadataRoute } from "next";
 function siteUrl(): string {
   const raw = process.env.NEXT_PUBLIC_SITE_URL?.trim();
   if (raw) return raw.replace(/\/+$/, "");
-  return "http://localhost:3000";
+  return "https://rutineiq.com";
 }
 
 export default function sitemap(): MetadataRoute.Sitemap {
@@ -30,4 +30,3 @@ export default function sitemap(): MetadataRoute.Sitemap {
     }
   ];
 }
-
