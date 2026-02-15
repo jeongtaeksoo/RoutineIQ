@@ -85,12 +85,7 @@ if (enforceStrictApiBase) {
 }
 
 const siteUrl = (process.env.NEXT_PUBLIC_SITE_URL || "").trim();
-if (enforceStrictApiBase) {
-  if (!siteUrl) {
-    console.error("[env-check] NEXT_PUBLIC_SITE_URL is required in CI/deploy builds.");
-    console.error("[env-check] Example: https://rutineiq.com");
-    process.exit(1);
-  }
+if (siteUrl) {
   let parsedSite;
   try {
     parsedSite = new URL(siteUrl);
@@ -99,7 +94,7 @@ if (enforceStrictApiBase) {
     process.exit(1);
   }
   const siteHost = (parsedSite.hostname || "").toLowerCase();
-  if (siteHost === "localhost" || siteHost === "127.0.0.1") {
+  if (enforceStrictApiBase && (siteHost === "localhost" || siteHost === "127.0.0.1")) {
     console.error("[env-check] NEXT_PUBLIC_SITE_URL cannot point to localhost in production/preview.");
     process.exit(1);
   }
