@@ -50,32 +50,6 @@ const LANG_LABELS: Record<LangKey, string> = {
     es: "Español",
 };
 
-const HERO_VALUE_COPY: Record<
-    LangKey,
-    { quick: string; steps: [string, string, string] }
-> = {
-    ko: {
-        quick: "3분만에 기록 -> AI 분석 -> 내일 루틴",
-        steps: ["1) 오늘 기록", "2) AI 분석", "3) 내일 루틴"],
-    },
-    en: {
-        quick: "3 minutes: Log -> Analyze -> Tomorrow routine",
-        steps: ["1) Log today", "2) AI analyze", "3) Tomorrow plan"],
-    },
-    ja: {
-        quick: "3分で完了: 記録 -> AI分析 -> 明日のルーティン",
-        steps: ["1) 今日を記録", "2) AIで分析", "3) 明日を準備"],
-    },
-    zh: {
-        quick: "3分钟完成: 记录 -> AI分析 -> 明日节奏",
-        steps: ["1) 记录今天", "2) AI分析", "3) 明日计划"],
-    },
-    es: {
-        quick: "3 minutos: Registro -> Analisis AI -> Rutina de manana",
-        steps: ["1) Registrar hoy", "2) Analizar con IA", "3) Plan de manana"],
-    },
-};
-
 const COPY: Record<LangKey, {
     tagline: string;
     heroTitle: string;
@@ -105,7 +79,7 @@ const COPY: Record<LangKey, {
     ko: {
         tagline: "나를 위한 작은 루틴",
         heroTitle: "몰아붙이지 않아요.\n당신의 속도로, 충분합니다.",
-        heroSub: "RutineIQ는 완벽한 습관을 만드는 앱이 아닙니다.\n오늘 하루를 조용히 돌아보고, 내일을 조금 더 편안하게 준비하는 공간입니다.",
+        heroSub: "우리는 'routine'에서 'O'를 뺐다.\n완벽함은 덜고, 행동은 더하자.",
         ctaStart: "시작하기",
         card1Title: "기록은 부담 없이",
         card1Desc: "30초면 충분해요.\n템플릿을 누르면 오늘 하루가 정리됩니다.",
@@ -131,7 +105,7 @@ const COPY: Record<LangKey, {
     en: {
         tagline: "A small routine, just for you",
         heroTitle: "No pressure.\nYour pace is enough.",
-        heroSub: "RutineIQ isn't about building perfect habits.\nIt's a quiet space to reflect on today and gently prepare for tomorrow.",
+        heroSub: "We removed the 'O' from routine.\nLess perfection, more action.",
         ctaStart: "Get started",
         card1Title: "Log without pressure",
         card1Desc: "30 seconds is enough.\nTap a template and your day is organized.",
@@ -157,7 +131,7 @@ const COPY: Record<LangKey, {
     ja: {
         tagline: "自分のための小さなルーティン",
         heroTitle: "追い立てません。\nあなたのペースで、十分です。",
-        heroSub: "RutineIQは完璧な習慣を作るアプリではありません。\n今日を静かに振り返り、明日を少しだけ楽にする場所です。",
+        heroSub: "私たちは'routine'から'O'を取った。\n完璧さを減らし、行動を増やそう。",
         ctaStart: "始める",
         card1Title: "気軽に記録",
         card1Desc: "30秒で十分です。\nテンプレートを押すだけで一日が整理されます。",
@@ -183,7 +157,7 @@ const COPY: Record<LangKey, {
     zh: {
         tagline: "属于你的小习惯",
         heroTitle: "不催促你。\n你的节奏，就足够了。",
-        heroSub: "RutineIQ不是打造完美习惯的应用。\n它是一个安静反思今天、温柔准备明天的空间。",
+        heroSub: "我们从'routine'中去掉了'O'。\n少一点完美，多一点行动。",
         ctaStart: "开始使用",
         card1Title: "轻松记录",
         card1Desc: "30秒就够了。\n点击模板，你的一天就整理好了。",
@@ -209,7 +183,7 @@ const COPY: Record<LangKey, {
     es: {
         tagline: "Una pequeña rutina, solo para ti",
         heroTitle: "Sin presión.\nTu ritmo es suficiente.",
-        heroSub: "RutineIQ no busca crear hábitos perfectos.\nEs un espacio tranquilo para reflexionar sobre tu día y preparar un mañana más amable.",
+        heroSub: "Quitamos la 'O' de routine.\nMenos perfección, más acción.",
         ctaStart: "Comenzar",
         card1Title: "Registra sin presión",
         card1Desc: "30 segundos bastan.\nToca una plantilla y tu día queda organizado.",
@@ -240,7 +214,6 @@ export function LandingContent() {
     const [langOpen, setLangOpen] = React.useState(false);
     const [mounted, setMounted] = React.useState(false);
     const t = COPY[lang];
-    const heroValue = HERO_VALUE_COPY[lang];
     const sponsorSlots = React.useMemo(
         () => [1, 2, 3],
         []
@@ -337,25 +310,6 @@ export function LandingContent() {
                     >
                         {t.heroSub}
                     </p>
-                    <div
-                        className="mx-auto mt-6 max-w-xl rounded-2xl border px-4 py-4"
-                        style={{ borderColor: "#e6ddd3", background: "rgba(255,255,255,0.68)" }}
-                    >
-                        <p className="text-xs font-semibold uppercase tracking-[0.14em]" style={{ color: "#9a8e80" }}>
-                            {heroValue.quick}
-                        </p>
-                        <div className="mt-3 flex flex-wrap justify-center gap-2">
-                            {heroValue.steps.map((step) => (
-                                <span
-                                    key={step}
-                                    className="rounded-full border px-3 py-1 text-xs"
-                                    style={{ borderColor: "#ddd2c4", background: "#fffcf8", color: "#6f6559" }}
-                                >
-                                    {step}
-                                </span>
-                            ))}
-                        </div>
-                    </div>
                 </div>
 
                 <div
