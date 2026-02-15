@@ -487,24 +487,31 @@ def _build_analysis_meta(
     wellbeing_signals_count: int,
     logged_entry_count: int,
     schema_retry_count: int,
+    rich_signal_ratio_pct: float,
+    low_confidence_ratio_pct: float,
 ) -> dict[str, Any]:
     clamped_wellbeing = max(0, min(6, int(wellbeing_signals_count)))
     clamped_entries = max(0, min(200, int(logged_entry_count)))
     clamped_profile = max(0.0, min(100.0, float(profile_coverage_pct)))
     clamped_retry = max(0, min(3, int(schema_retry_count)))
+    clamped_rich_ratio = max(0.0, min(100.0, float(rich_signal_ratio_pct)))
+    clamped_low_conf_ratio = max(0.0, min(100.0, float(low_confidence_ratio_pct)))
+    confidence_reliability = max(0.0, 100.0 - clamped_low_conf_ratio)
 
     # Score weights:
-    # - profile coverage: 35%
-    # - wellbeing signals: 25%
-    # - entry density: 25%
-    # - schema stability bonus: 15%
+    # - profile coverage: 25%
+    # - wellbeing signals: 20%
+    # - entry density: 20%
+    # - signal richness/reliability: 25%
+    # - schema stability bonus: 10%
     quality_score = round(
-        (clamped_profile * 0.35)
-        + ((clamped_wellbeing / 6.0) * 100.0 * 0.25)
-        + (min(clamped_entries, 8) / 8.0 * 100.0 * 0.25)
+        (clamped_profile * 0.25)
+        + ((clamped_wellbeing / 6.0) * 100.0 * 0.20)
+        + (min(clamped_entries, 8) / 8.0 * 100.0 * 0.20)
+        + ((clamped_rich_ratio * 0.7 + confidence_reliability * 0.3) * 0.25)
         + (
             (100.0 if clamped_retry == 0 else 70.0 if clamped_retry == 1 else 40.0)
-            * 0.15
+            * 0.10
         )
     )
     quality_score = max(0, min(100, int(quality_score)))
@@ -624,6 +631,53 @@ def _normalize_coach_one_liner(
         report_dict["coach_one_liner"] = _fallback_coach_one_liner(
             locale=locale,
             computed_metrics=computed_metrics,
+        )
+    return report_dict
+
+
+def _apply_signal_quality_safety(
+    *,
+    report_dict: dict[str, Any],
+    locale: str,
+    computed_metrics: dict[str, Any],
+) -> dict[str, Any]:
+    signal_raw = (
+        computed_metrics.get("signal_quality")
+        if isinstance(computed_metrics, dict)
+        else {}
+    )
+    signal = signal_raw if isinstance(signal_raw, dict) else {}
+    sufficiency = str(signal.get("signal_sufficiency") or "low").lower()
+    if sufficiency not in {"high", "medium", "low"}:
+        sufficiency = "low"
+    low_conf_ratio = float(signal.get("low_confidence_ratio_pct") or 0.0)
+
+    if sufficiency == "high" and low_conf_ratio < 40:
+        return report_dict
+
+    summary = str(report_dict.get("summary") or "").strip()
+    coach = str(report_dict.get("coach_one_liner") or "").strip()
+    conservative_suffix = (
+        "데이터 신호가 제한적이어서 가설 기반 제안입니다. 다음 기록에서 에너지/집중(1-5)을 최소 2개 블록에 남겨주세요."
+        if locale == "ko"
+        else "Signal quality is limited, so this is a tentative recommendation. Log energy/focus (1-5) for at least two blocks next time."
+    )
+    if conservative_suffix not in summary:
+        report_dict["summary"] = (
+            f"{summary} {conservative_suffix}".strip()
+            if summary
+            else conservative_suffix
+        )
+
+    if coach:
+        report_dict["coach_one_liner"] = coach.replace("반드시", "가능하면").replace(
+            "must", "try to"
+        )
+    else:
+        report_dict["coach_one_liner"] = (
+            "내일 첫 2개 블록만이라도 에너지/집중 점수를 함께 남겨 정확도를 높여보세요."
+            if locale == "ko"
+            else "Log energy/focus for your first two blocks tomorrow to raise confidence."
         )
     return report_dict
 
@@ -841,6 +895,11 @@ def _postprocess_report(
         locale=locale,
         computed_metrics=computed_metrics,
     )
+    out = _apply_signal_quality_safety(
+        report_dict=out,
+        locale=locale,
+        computed_metrics=computed_metrics,
+    )
     out = _normalize_schema_v2_fields(
         report_dict=out,
         locale=locale,
@@ -896,6 +955,13 @@ def _normalize_choice(value: Any, *, allowed: set[str]) -> str | None:
         return None
     norm = value.strip().lower()
     return norm if norm in allowed else None
+
+
+def _normalize_confidence(value: Any) -> str | None:
+    if not isinstance(value, str):
+        return None
+    norm = value.strip().lower()
+    return norm if norm in {"high", "medium", "low"} else None
 
 
 def _text_blob(entry: dict[str, Any]) -> str:
@@ -1023,6 +1089,7 @@ def _compute_analysis_metrics(
     entries = raw_entries if isinstance(raw_entries, list) else []
 
     blocks: list[dict[str, Any]] = []
+    confidence_counts = {"high": 0, "medium": 0, "low": 0}
     for entry in entries:
         if not isinstance(entry, dict):
             continue
@@ -1032,8 +1099,11 @@ def _compute_analysis_metrics(
             continue
         energy = _as_int_1_to_5(entry.get("energy"))
         focus = _as_int_1_to_5(entry.get("focus"))
+        confidence = _normalize_confidence(entry.get("confidence"))
         duration = end_m - start_m
         intensity = _compute_block_intensity(energy=energy, focus=focus)
+        if confidence:
+            confidence_counts[confidence] += 1
         blocks.append(
             {
                 "start": entry.get("start"),
@@ -1044,6 +1114,7 @@ def _compute_analysis_metrics(
                 "activity": entry.get("activity"),
                 "energy": energy,
                 "focus": focus,
+                "confidence": confidence,
                 "intensity": intensity,
                 "blob": _text_blob(entry),
             }
@@ -1054,6 +1125,36 @@ def _compute_analysis_metrics(
     total_minutes = sum(int(b["duration_min"]) for b in blocks)
     total_hours = round(total_minutes / 60.0, 3) if total_minutes > 0 else 0.0
     block_count = len(blocks)
+    rich_signal_blocks = sum(
+        1
+        for b in blocks
+        if isinstance(b.get("energy"), int) and isinstance(b.get("focus"), int)
+    )
+    partial_signal_blocks = sum(
+        1
+        for b in blocks
+        if (isinstance(b.get("energy"), int) or isinstance(b.get("focus"), int))
+        and not (isinstance(b.get("energy"), int) and isinstance(b.get("focus"), int))
+    )
+    missing_signal_blocks = max(
+        0, block_count - rich_signal_blocks - partial_signal_blocks
+    )
+    low_confidence_blocks = int(confidence_counts.get("low", 0))
+    low_confidence_ratio = (
+        round((low_confidence_blocks / float(block_count)) * 100.0, 2)
+        if block_count > 0
+        else 0.0
+    )
+    rich_signal_ratio = (
+        round((rich_signal_blocks / float(block_count)) * 100.0, 2)
+        if block_count > 0
+        else 0.0
+    )
+    signal_sufficiency = "low"
+    if rich_signal_ratio >= 60.0 and low_confidence_ratio <= 20.0:
+        signal_sufficiency = "high"
+    elif rich_signal_ratio >= 35.0 and low_confidence_ratio <= 45.0:
+        signal_sufficiency = "medium"
 
     switch_count = 0
     for prev, cur in zip(blocks, blocks[1:], strict=False):
@@ -1207,6 +1308,16 @@ def _compute_analysis_metrics(
             "burnout_risk": burnout_risk,
             "completeness_score_0_to_6": wellbeing_completeness,
         },
+        "signal_quality": {
+            "signal_sufficiency": signal_sufficiency,
+            "rich_signal_blocks": rich_signal_blocks,
+            "partial_signal_blocks": partial_signal_blocks,
+            "missing_signal_blocks": missing_signal_blocks,
+            "rich_signal_ratio_pct": rich_signal_ratio,
+            "low_confidence_blocks": low_confidence_blocks,
+            "low_confidence_ratio_pct": low_confidence_ratio,
+            "confidence_counts": confidence_counts,
+        },
     }
 
 
@@ -1339,6 +1450,8 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- Do not invent metrics. Use only the provided computed_metrics and raw log evidence.\n"
         "- Keep language specific and personal (reference concrete times/activities from the log).\n"
         "- Avoid abstract self-help phrases. Every recommendation should be immediately actionable.\n"
+        "- If signal_quality.signal_sufficiency is low, use cautious wording ('likely', 'tentative') and avoid certainty claims.\n"
+        "- If signal_quality.missing_signal_blocks > 0, request exactly one next-step signal (energy or focus) in summary/fix.\n"
         "- tomorrow_routine is a personalized routine template, NOT a prediction of tomorrow's exact tasks.\n"
         "- Use wellbeing_signals (mood/sleep/stress/hydration/micro_habit) whenever available.\n"
         "- Use profile_context.age_group/gender/job_family/work_mode for personalization when known.\n"
@@ -1369,6 +1482,7 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- If low_focus_windows exist, include at least one micro-recovery action (5-10 minutes) before resuming work.\n"
         "- If wellbeing_signals.burnout_risk is medium/high, include one energy-protection action and one wellbeing micro-advice grounded in the provided signals.\n"
         "- If wellbeing_signals.completeness_score_0_to_6 <= 1, ask for exactly one missing signal (sleep, mood, hydration, or stress) inside summary/fix.\n"
+        "- If signal_quality.low_confidence_ratio_pct >= 40, do not output high-certainty language and include one data-quality improvement step.\n"
         "- coach_one_liner must be one specific next action tied to evidence (time window/trigger/metric), never generic encouragement.\n"
         "- yesterday_plan_vs_actual.top_deviation must be a human-readable phrase in the target locale; never output machine codes like NO_PREVIOUS_PLAN.\n"
         "- if_then_rules should function as recovery rules for real breakdown moments (not generic advice).\n"
@@ -1782,6 +1896,14 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             else {}
         )
         wellbeing = wellbeing_raw if isinstance(wellbeing_raw, dict) else {}
+        signal_quality_raw = (
+            computed_metrics.get("signal_quality")
+            if isinstance(computed_metrics, dict)
+            else {}
+        )
+        signal_quality = (
+            signal_quality_raw if isinstance(signal_quality_raw, dict) else {}
+        )
         analysis_meta = _build_analysis_meta(
             profile_coverage_pct=profile_required_coverage,
             wellbeing_signals_count=int(
@@ -1789,6 +1911,12 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             ),
             logged_entry_count=len(entries),
             schema_retry_count=schema_retry_count,
+            rich_signal_ratio_pct=float(
+                signal_quality.get("rich_signal_ratio_pct") or 0.0
+            ),
+            low_confidence_ratio_pct=float(
+                signal_quality.get("low_confidence_ratio_pct") or 0.0
+            ),
         )
         report_dict["analysis_meta"] = analysis_meta
         report_dict = AIReport.model_validate(report_dict).model_dump(by_alias=True)

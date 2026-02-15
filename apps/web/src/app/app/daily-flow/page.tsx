@@ -341,6 +341,7 @@ export default function DailyFlowPage() {
         activity: e.activity.trim().slice(0, 120),
         energy: e.energy ?? null,
         focus: e.focus ?? null,
+        confidence: e.confidence ?? "high",
         note: (e.note || "").slice(0, 280) || null,
         tags: Array.isArray(e.tags) ? e.tags.slice(0, 12) : [],
       })),

@@ -44,6 +44,67 @@ def _activity_log() -> dict:
     }
 
 
+def _activity_log_signal_rich() -> dict:
+    return {
+        "date": "2026-02-15",
+        "entries": [
+            {
+                "start": "09:00",
+                "end": "10:10",
+                "activity": "Deep work",
+                "energy": 5,
+                "focus": 5,
+                "confidence": "high",
+                "tags": ["focus"],
+            },
+            {
+                "start": "10:20",
+                "end": "11:20",
+                "activity": "Execution",
+                "energy": 4,
+                "focus": 4,
+                "confidence": "high",
+                "tags": ["delivery"],
+            },
+            {
+                "start": "14:00",
+                "end": "14:40",
+                "activity": "Coordination",
+                "energy": 3,
+                "focus": 3,
+                "confidence": "medium",
+                "tags": ["meeting"],
+            },
+        ],
+        "note": "signal-rich day",
+        "meta": {"mood": "good", "sleep_quality": 4, "sleep_hours": 7.0, "stress_level": 2},
+    }
+
+
+def _activity_log_signal_poor() -> dict:
+    return {
+        "date": "2026-02-15",
+        "entries": [
+            {
+                "start": "09:00",
+                "end": "10:00",
+                "activity": "Work block",
+                "confidence": "low",
+                "tags": ["work"],
+            },
+            {
+                "start": "13:00",
+                "end": "14:20",
+                "activity": "Meetings",
+                "confidence": "low",
+                "tags": ["meeting"],
+            },
+        ],
+        "note": "minimal signals",
+        "meta": {},
+    }
+
+
 def test_analyze_success_returns_report(
     authenticated_client: TestClient, supabase_mock, openai_mock, monkeypatch
 ) -> None:
@@ -268,3 +329,88 @@ def test_analyze_tracks_schema_retry_in_quality_meta(
     assert quality["schema_retry_count"] == 1
     assert quality["schema_validation_failed_once"] is True
     assert quality["analysis_meta"]["schema_retry_count"] == 1
+
+
+def test_analyze_signal_rich_quality_score_is_higher_than_signal_poor(
+    authenticated_client: TestClient, supabase_mock, openai_mock, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        analyze_route,
+        "get_subscription_info",
+        AsyncMock(return_value=type("Sub", (), {"plan": "free"})()),
+    )
+    monkeypatch.setattr(
+        analyze_route, "count_daily_analyze_calls", AsyncMock(return_value=0)
+    )
+    monkeypatch.setattr(
+        analyze_route, "insert_usage_event", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        analyze_route, "cleanup_expired_reports", AsyncMock(return_value=None)
+    )
+
+    supabase_mock["upsert_one"].return_value = {}
+    rich_log = _activity_log_signal_rich()
+    poor_log = _activity_log_signal_poor()
+
+    supabase_mock["select"].side_effect = [
+        [{"date": "2026-02-14"}],
+        [_profile_row()],
+        [],
+        [rich_log],
+        [rich_log],
+        [],
+    ]
+    rich_response = authenticated_client.post("/api/analyze", json={"date": "2026-02-15"})
+    assert rich_response.status_code == 200
+
+    supabase_mock["select"].side_effect = [
+        [{"date": "2026-02-14"}],
+        [_profile_row()],
+        [],
+        [poor_log],
+        [poor_log],
+        [],
+    ]
+    poor_response = authenticated_client.post("/api/analyze", json={"date": "2026-02-15", "force": True})
+    assert poor_response.status_code == 200
+
+    rich_score = rich_response.json()["report"]["analysis_meta"]["input_quality_score"]
+    poor_score = poor_response.json()["report"]["analysis_meta"]["input_quality_score"]
+    assert rich_score > poor_score
+    assert rich_score >= 55
+    assert poor_score <= 55
+
+
+def test_analyze_low_signal_data_adds_conservative_guidance(
+    authenticated_client: TestClient, supabase_mock, openai_mock, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        analyze_route,
+        "get_subscription_info",
+        AsyncMock(return_value=type("Sub", (), {"plan": "free"})()),
+    )
+    monkeypatch.setattr(
+        analyze_route, "count_daily_analyze_calls", AsyncMock(return_value=0)
+    )
+    monkeypatch.setattr(
+        analyze_route, "insert_usage_event", AsyncMock(return_value=None)
+    )
+    monkeypatch.setattr(
+        analyze_route, "cleanup_expired_reports", AsyncMock(return_value=None)
+    )
+
+    supabase_mock["select"].side_effect = [
+        [{"date": "2026-02-14"}],
+        [_profile_row()],
+        [],
+        [_activity_log_signal_poor()],
+        [_activity_log_signal_poor()],
+        [],
+    ]
+    supabase_mock["upsert_one"].return_value = {}
+
+    response = authenticated_client.post("/api/analyze", json={"date": "2026-02-15"})
+    assert response.status_code == 200
+    summary = response.json()["report"]["summary"]
+    assert "에너지/집중" in summary or "energy/focus" in summary.lower()

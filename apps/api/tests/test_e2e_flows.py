@@ -349,7 +349,7 @@ def test_new_user_full_flow_save_parse_save_analyze_report(
         {
             k: v
             for k, v in entry.items()
-            if k in {"start", "end", "activity", "energy", "focus", "tags", "note"}
+            if k in {"start", "end", "activity", "energy", "focus", "confidence", "tags", "note"}
         }
         for entry in parsed["entries"]
     ]
@@ -368,6 +368,7 @@ def test_new_user_full_flow_save_parse_save_analyze_report(
     assert save_raw.status_code == 200
     assert parse_resp.status_code == 200
     assert save_parsed.status_code == 200
+    assert save_parsed.json()["entries"][0]["confidence"] == "high"
     assert analyze_resp.status_code == 200
     assert analyze_resp.json()["cached"] is False
     assert report_resp.status_code == 200

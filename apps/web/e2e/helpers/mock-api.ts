@@ -11,6 +11,7 @@ type MockState = {
 };
 
 const REPORT_FIXTURE = {
+  schema_version: 2,
   summary: "오늘은 흐름이 끊기는 구간이 있었어요. 내일은 집중 블록 사이에 짧은 회복 버퍼를 넣어 리듬을 유지합니다.",
   productivity_peaks: [
     { start: "09:30", end: "11:00", reason: "방해가 적고 에너지가 안정적이었습니다." },
@@ -27,6 +28,28 @@ const REPORT_FIXTURE = {
   yesterday_plan_vs_actual: {
     comparison_note: "전일 추천 대비 회의 후 전환 구간에서 이탈이 있었습니다.",
     top_deviation: "버퍼 없는 연속 일정",
+  },
+  wellbeing_insight: {
+    burnout_risk: "medium",
+    energy_curve_forecast: "09:30-11:00 구간의 에너지 유지 가능성이 상대적으로 높습니다.",
+    note: "집중 블록 사이에 5분 회복 버퍼를 고정하세요.",
+  },
+  micro_advice: [
+    {
+      action: "작업 전환 직전 3분 리셋",
+      when: "회의/메시지 확인 전후",
+      reason: "주의 잔여를 줄여 복귀 속도를 높입니다.",
+      duration_min: 3,
+    },
+  ],
+  weekly_pattern_insight: "최근 기록에서는 오전 집중 블록의 유지율이 가장 높았습니다.",
+  analysis_meta: {
+    input_quality_score: 38,
+    profile_coverage_pct: 75,
+    wellbeing_signals_count: 2,
+    logged_entry_count: 2,
+    schema_retry_count: 0,
+    personalization_tier: "medium",
   },
 };
 

@@ -215,6 +215,11 @@ export default function InsightsPage() {
         aiQualityScore: "품질 점수",
         aiQualityTier: "개인화 수준",
         aiQualityProfile: "프로필 커버리지",
+        aiQualitySufficiency: "데이터 충분성",
+        suffLow: "보강 필요",
+        suffMedium: "보통",
+        suffHigh: "충분",
+        lowSignalHint: "신호가 부족해 제안 확신도가 낮습니다. 내일 첫 2개 블록은 에너지/집중(1-5)을 꼭 남겨주세요.",
         tierLow: "초기",
         tierMedium: "보통",
         tierHigh: "높음",
@@ -299,6 +304,11 @@ export default function InsightsPage() {
       aiQualityScore: "Quality score",
       aiQualityTier: "Personalization",
       aiQualityProfile: "Profile coverage",
+      aiQualitySufficiency: "Data sufficiency",
+      suffLow: "Needs more signals",
+      suffMedium: "Moderate",
+      suffHigh: "Sufficient",
+      lowSignalHint: "Signal quality is limited. Log energy/focus (1-5) for your first two blocks tomorrow.",
       tierLow: "Starter",
       tierMedium: "Balanced",
       tierHigh: "High",
@@ -579,6 +589,10 @@ export default function InsightsPage() {
 
   const hasLog = todayLogBlocks > 0;
   const hasReport = Boolean(report);
+  const inputQualityScore = Math.round(report?.analysis_meta?.input_quality_score || 0);
+  const dataSufficiency =
+    inputQualityScore >= 75 ? t.suffHigh : inputQualityScore >= 50 ? t.suffMedium : t.suffLow;
+  const lowSignalMode = hasReport && inputQualityScore < 50;
   const trendLabel =
     trend.pattern === "improving"
       ? isKo
@@ -657,10 +671,13 @@ export default function InsightsPage() {
                     {t.weeklyPatternLabel}: {report.weekly_pattern_insight}
                   </p>
                   <p className="mt-1 text-xs text-mutedFg">
-                    {t.aiQualityScore}: {Math.round(report.analysis_meta?.input_quality_score || 0)}
+                    {t.aiQualityScore}: {inputQualityScore}
                   </p>
                   <p className="mt-1 text-xs text-mutedFg">
                     {t.aiQualityProfile}: {Math.round(report.analysis_meta?.profile_coverage_pct || 0)}%
+                  </p>
+                  <p className="mt-1 text-xs text-mutedFg">
+                    {t.aiQualitySufficiency}: {dataSufficiency}
                   </p>
                   <p className="mt-1 text-xs text-mutedFg">
                     {t.aiQualityTier}:{" "}
@@ -674,6 +691,11 @@ export default function InsightsPage() {
                     <p className="mt-2 text-sm">
                       <span className="font-semibold">{t.microAdviceLabel}:</span>{" "}
                       {report.micro_advice[0].action} ({report.micro_advice[0].duration_min}m)
+                    </p>
+                  ) : null}
+                  {lowSignalMode ? (
+                    <p className="mt-2 rounded-md border border-amber-300 bg-amber-50/90 px-2 py-1 text-xs text-amber-900">
+                      {t.lowSignalHint}
                     </p>
                   ) : null}
                 </div>

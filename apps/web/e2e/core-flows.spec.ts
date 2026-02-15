@@ -224,6 +224,11 @@ test.describe("RutineIQ core flows", () => {
     }
     await expect(page.getByRole("heading", { name: /나의 하루|My Insights/i })).toBeVisible();
     await expect(page.locator("p", { hasText: /오늘의 한 마디|One-line Coaching/i }).first()).toBeVisible();
+    await expect(
+      page
+        .getByText(/아직 오늘 리포트가 없어요|No report for today yet|데이터 충분성|Data sufficiency/i)
+        .first(),
+    ).toBeVisible();
   });
 
   test("F2: Daily Flow save -> analyze -> report render", async ({ page }) => {
@@ -269,6 +274,9 @@ test.describe("RutineIQ core flows", () => {
     await expect(page.getByRole("heading", { name: /나의 하루 리포트|AI Coach Report/i })).toBeVisible();
     await expect(page.getByText(/오늘의 요약|Your Day in Review/i)).toBeVisible();
     await expect(page.getByText("지금은 25분 한 번만 끝내세요.")).toBeVisible();
+    await expect(
+      page.getByText(/신호가 부족해 분석 확신도가 낮습니다|Signal quality is limited/i),
+    ).toBeVisible();
   });
 
   test("F3: Guest billing conversion -> checkout session request", async ({ page }) => {

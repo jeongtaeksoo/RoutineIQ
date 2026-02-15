@@ -214,6 +214,11 @@ export default function ReportPage() {
         qualitySignals: "웰빙 신호 수",
         qualityEntries: "활동 블록 수",
         qualityRetry: "스키마 재시도",
+        qualitySufficiency: "데이터 충분성",
+        suffLow: "보강 필요",
+        suffMedium: "보통",
+        suffHigh: "충분",
+        lowSignalWarning: "신호가 부족해 분석 확신도가 낮습니다. 다음 기록에서 에너지/집중(1-5)을 최소 2개 블록에 입력해 주세요.",
         tierLow: "초기",
         tierMedium: "보통",
         tierHigh: "높음",
@@ -279,6 +284,11 @@ export default function ReportPage() {
       qualitySignals: "Wellbeing signals",
       qualityEntries: "Activity blocks",
       qualityRetry: "Schema retries",
+      qualitySufficiency: "Data sufficiency",
+      suffLow: "Needs more signals",
+      suffMedium: "Moderate",
+      suffHigh: "Sufficient",
+      lowSignalWarning: "Signal quality is limited. Add energy/focus (1-5) for at least two blocks next time.",
       tierLow: "Starter",
       tierMedium: "Balanced",
       tierHigh: "High",
@@ -354,6 +364,10 @@ export default function ReportPage() {
       : personalizationTier === "medium"
         ? t.tierMedium
         : t.tierLow;
+  const inputQualityScore = Math.round(report?.analysis_meta?.input_quality_score || 0);
+  const dataSufficiency =
+    inputQualityScore >= 75 ? t.suffHigh : inputQualityScore >= 50 ? t.suffMedium : t.suffLow;
+  const lowSignalMode = inputQualityScore < 50;
   const peakTimeline = React.useMemo(() => {
     if (!report?.productivity_peaks?.length) return [];
     return report.productivity_peaks
@@ -537,9 +551,7 @@ export default function ReportPage() {
               <CardContent className="grid gap-3 md:grid-cols-3">
                 <div className="rounded-xl border bg-white/50 p-4">
                   <p className="text-xs text-mutedFg">{t.qualityScore}</p>
-                  <p className="mt-1 text-lg font-semibold">
-                    {Math.round(report.analysis_meta.input_quality_score || 0)}
-                  </p>
+                  <p className="mt-1 text-lg font-semibold">{inputQualityScore}</p>
                 </div>
                 <div className="rounded-xl border bg-white/50 p-4">
                   <p className="text-xs text-mutedFg">{t.qualityProfile}</p>
@@ -565,7 +577,18 @@ export default function ReportPage() {
                   <p className="text-xs text-mutedFg">{t.qualityRetry}</p>
                   <p className="mt-1 text-sm">{report.analysis_meta.schema_retry_count || 0}</p>
                 </div>
+                <div className="rounded-xl border bg-white/50 p-4">
+                  <p className="text-xs text-mutedFg">{t.qualitySufficiency}</p>
+                  <p className="mt-1 text-sm font-semibold">{dataSufficiency}</p>
+                </div>
               </CardContent>
+              {lowSignalMode ? (
+                <div className="px-6 pb-6">
+                  <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3 text-sm text-amber-900">
+                    {t.lowSignalWarning}
+                  </div>
+                </div>
+              ) : null}
             </Card>
           ) : null}
 
