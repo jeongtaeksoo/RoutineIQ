@@ -192,6 +192,20 @@ function GoogleIcon({ className }: { className?: string }) {
   );
 }
 
+function resolveAuthOrigin(): string {
+  if (typeof window === "undefined") return "https://rutineiq.com";
+  const origin = window.location.origin;
+  const hostname = window.location.hostname.toLowerCase();
+  if (
+    hostname === "rutineiq.com" ||
+    hostname === "www.rutineiq.com" ||
+    hostname.endsWith(".rutineiq.com")
+  ) {
+    return "https://rutineiq.com";
+  }
+  return origin;
+}
+
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -282,9 +296,10 @@ export default function LoginClient() {
     }
     setLoading(true);
     try {
+      const authOrigin = resolveAuthOrigin();
       const supabase = createClient();
       const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: `${window.location.origin}/reset-password`,
+        redirectTo: `${authOrigin}/reset-password`,
       });
       if (error) throw error;
       setMessage(t.resetSent);
@@ -305,11 +320,12 @@ export default function LoginClient() {
     setMessage(null);
     setLoading(true);
     try {
+      const authOrigin = resolveAuthOrigin();
       const supabase = createClient();
       const { error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(afterAuthRedirect)}`,
+          redirectTo: `${authOrigin}/auth/callback?next=${encodeURIComponent(afterAuthRedirect)}`,
         },
       });
       if (error) throw error;
