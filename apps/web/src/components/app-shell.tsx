@@ -124,7 +124,6 @@ export function AppShell({
           <div className="flex items-center justify-between">
             <div>
               <div className="title-serif text-xl leading-none">RutineIQ</div>
-              <div className="mt-1 text-xs text-mutedFg">{strings.appTagline}</div>
             </div>
             {role === "admin" ? (
               <span className="inline-flex items-center gap-1 rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">

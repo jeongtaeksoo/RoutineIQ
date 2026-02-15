@@ -523,8 +523,8 @@ export default function InsightsPage() {
       <div>
         <h1 className="title-serif text-3xl">{t.title}</h1>
         <p className="mt-1 text-sm text-mutedFg">{t.subtitle}</p>
-        <p className="mt-2 text-xs text-mutedFg">
-          {t.todayLabel}: <span className="font-mono">{today}</span>
+        <p className="mt-2 text-sm text-mutedFg">
+          {t.todayLabel}: <span className="font-semibold tracking-tight">{today}</span>
         </p>
       </div>
 

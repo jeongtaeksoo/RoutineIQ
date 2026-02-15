@@ -6,8 +6,6 @@ export function normalizeLocale(value: unknown): Locale {
 }
 
 export type Strings = {
-  appTagline: string;
-
   nav_insights: string;
   nav_daily_flow: string;
   nav_reports: string;
@@ -38,8 +36,6 @@ export type Strings = {
 };
 
 const EN: Strings = {
-  appTagline: "Log → Analyze → Tomorrow plan",
-
   nav_insights: "My Insights",
   nav_daily_flow: "Daily Flow",
   nav_reports: "AI Coach Report",
@@ -69,8 +65,6 @@ const EN: Strings = {
 };
 
 const KO: Strings = {
-  appTagline: "기록 → 분석 → 내일 계획",
-
   nav_insights: "내 인사이트",
   nav_daily_flow: "데일리 플로우",
   nav_reports: "AI 코치 리포트",
@@ -100,7 +94,6 @@ const KO: Strings = {
 };
 
 const JA: Strings = {
-  appTagline: "記録 → 分析 → 明日の計画",
   nav_insights: "マイ・インサイト",
   nav_daily_flow: "デイリーフロー",
   nav_reports: "AIコーチレポート",
@@ -127,7 +120,6 @@ const JA: Strings = {
 };
 
 const ZH: Strings = {
-  appTagline: "记录 → 分析 → 明日计划",
   nav_insights: "我的洞察",
   nav_daily_flow: "每日流程",
   nav_reports: "AI教练报告",
@@ -154,7 +146,6 @@ const ZH: Strings = {
 };
 
 const ES: Strings = {
-  appTagline: "Registro → Análisis → Plan para mañana",
   nav_insights: "Mis Insights",
   nav_daily_flow: "Flujo Diario",
   nav_reports: "Informe Coach AI",
