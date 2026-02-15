@@ -34,6 +34,11 @@ const T: Record<
     signUp: string;
     signingUp: string;
     forgotPassword: string;
+    or: string;
+    googleLogin: string;
+    googleSignup: string;
+    googleUnavailable: string;
+    googleSetupHint: string;
     back: string;
     privacy: string;
     signupSuccess: string;
@@ -56,6 +61,11 @@ const T: Record<
     signUp: "가입하기",
     signingUp: "가입 중...",
     forgotPassword: "비밀번호를 잊으셨나요?",
+    or: "또는",
+    googleLogin: "Google로 로그인",
+    googleSignup: "Google로 가입",
+    googleUnavailable: "Google 로그인이 아직 활성화되지 않았습니다. 이메일 로그인으로 진행해 주세요.",
+    googleSetupHint: "Supabase Dashboard > Auth > Providers > Google에서 활성화할 수 있습니다.",
     back: "돌아가기",
     privacy: "개인정보는 루틴 분석에만 사용됩니다.",
     signupSuccess: "가입 완료! 이메일을 확인해 주세요.",
@@ -77,6 +87,11 @@ const T: Record<
     signUp: "Create account",
     signingUp: "Creating...",
     forgotPassword: "Forgot password?",
+    or: "or",
+    googleLogin: "Sign in with Google",
+    googleSignup: "Sign up with Google",
+    googleUnavailable: "Google login is not enabled yet. Please continue with email login.",
+    googleSetupHint: "Enable it in Supabase Dashboard > Auth > Providers > Google.",
     back: "Back",
     privacy: "Your data is used only for routine analysis.",
     signupSuccess: "Account created! Please check your email.",
@@ -98,6 +113,11 @@ const T: Record<
     signUp: "アカウント作成",
     signingUp: "作成中...",
     forgotPassword: "パスワードを忘れた場合",
+    or: "または",
+    googleLogin: "Googleでログイン",
+    googleSignup: "Googleで登録",
+    googleUnavailable: "Googleログインはまだ有効化されていません。メールログインで続行してください。",
+    googleSetupHint: "Supabase Dashboard > Auth > Providers > Google で有効化できます。",
     back: "戻る",
     privacy: "個人情報はルーティン分析にのみ使用されます。",
     signupSuccess: "登録完了！メールをご確認ください。",
@@ -119,6 +139,11 @@ const T: Record<
     signUp: "创建账户",
     signingUp: "创建中...",
     forgotPassword: "忘记密码？",
+    or: "或",
+    googleLogin: "使用 Google 登录",
+    googleSignup: "使用 Google 注册",
+    googleUnavailable: "Google 登录尚未启用，请先使用邮箱登录。",
+    googleSetupHint: "可在 Supabase Dashboard > Auth > Providers > Google 启用。",
     back: "返回",
     privacy: "个人信息仅用于习惯分析。",
     signupSuccess: "注册成功！请查看您的邮箱。",
@@ -140,6 +165,11 @@ const T: Record<
     signUp: "Crear cuenta",
     signingUp: "Creando...",
     forgotPassword: "¿Olvidaste tu contraseña?",
+    or: "o",
+    googleLogin: "Iniciar con Google",
+    googleSignup: "Registrarse con Google",
+    googleUnavailable: "El acceso con Google aún no está habilitado. Continúa con correo electrónico.",
+    googleSetupHint: "Actívalo en Supabase Dashboard > Auth > Providers > Google.",
     back: "Volver",
     privacy: "Tus datos se usan solo para analizar rutinas.",
     signupSuccess: "Cuenta creada. Revisa tu correo.",
@@ -150,6 +180,17 @@ const T: Record<
     supabaseSub: "Configura las variables de entorno de Supabase y reinicia el servidor.",
   },
 };
+
+function GoogleIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 0 1-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1Z" fill="#4285F4" />
+      <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23Z" fill="#34A853" />
+      <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18A10.96 10.96 0 0 0 1 12c0 1.77.42 3.45 1.18 4.93l3.66-2.84Z" fill="#FBBC05" />
+      <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53Z" fill="#EA4335" />
+    </svg>
+  );
+}
 
 export default function LoginClient() {
   const router = useRouter();
@@ -163,11 +204,33 @@ export default function LoginClient() {
   const [message, setMessage] = React.useState<string | null>(null);
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
+  const [googleEnabled, setGoogleEnabled] = React.useState(true);
 
   const t = T[lang];
   const redirectedFrom = searchParams.get("redirectedFrom");
   const afterAuthRedirect = redirectedFrom && redirectedFrom.startsWith("/") ? redirectedFrom : "/app/insights";
   const supabaseEnv = getSupabasePublicEnv();
+
+  React.useEffect(() => {
+    if (!supabaseEnv.configured || !supabaseEnv.url || !supabaseEnv.anonKey) return;
+    const anonKey = supabaseEnv.anonKey;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`${supabaseEnv.url}/auth/v1/settings`, {
+          headers: { apikey: anonKey },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { external?: { google?: boolean } };
+        if (!cancelled) setGoogleEnabled(Boolean(data?.external?.google));
+      } catch {
+        // Keep default state when settings endpoint is temporarily unavailable.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [supabaseEnv.anonKey, supabaseEnv.configured, supabaseEnv.url]);
 
   async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -228,6 +291,35 @@ export default function LoginClient() {
     } catch (err) {
       setError(err instanceof Error ? err.message : "Reset failed");
     } finally {
+      setLoading(false);
+    }
+  }
+
+  async function signInWithGoogle() {
+    if (!supabaseEnv.configured) return;
+    if (!googleEnabled) {
+      setError(t.googleUnavailable);
+      return;
+    }
+    setError(null);
+    setMessage(null);
+    setLoading(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(afterAuthRedirect)}`,
+        },
+      });
+      if (error) throw error;
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Google login failed";
+      if (msg.toLowerCase().includes("unsupported provider")) {
+        setError(t.googleUnavailable);
+      } else {
+        setError(msg);
+      }
       setLoading(false);
     }
   }
@@ -319,6 +411,22 @@ export default function LoginClient() {
 
           {message ? <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-800">{message}</div> : null}
           {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm text-red-800">{error}</div> : null}
+
+          <button
+            onClick={signInWithGoogle}
+            disabled={loading || !googleEnabled}
+            className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#e8e4de] bg-white py-3 text-sm font-medium text-[#3d3a36] transition-all hover:bg-[#f5f2ee] hover:shadow-sm disabled:opacity-50"
+          >
+            <GoogleIcon className="h-5 w-5" />
+            {tab === "login" ? t.googleLogin : t.googleSignup}
+          </button>
+          {!googleEnabled ? <p className="mt-2 text-xs text-[#9b7a4a]">{t.googleSetupHint}</p> : null}
+
+          <div className="my-5 flex items-center gap-3">
+            <div className="h-px flex-1 bg-[#e8e4de]" />
+            <span className="text-xs text-[#b5b0a9]">{t.or}</span>
+            <div className="h-px flex-1 bg-[#e8e4de]" />
+          </div>
 
           <form className="space-y-4" onSubmit={tab === "login" ? signInWithPassword : signUp}>
             <div className="space-y-1.5">
