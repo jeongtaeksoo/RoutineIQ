@@ -71,7 +71,7 @@ begin
   if not exists (select 1 from pg_constraint where conname = 'profiles_job_family_chk') then
     alter table public.profiles
       add constraint profiles_job_family_chk
-      check (job_family in ('engineering', 'professional', 'design', 'marketing', 'sales', 'operations', 'student', 'creator', 'other', 'unknown'));
+      check (job_family in ('office_worker', 'professional', 'creator', 'student', 'self_employed', 'other', 'unknown', 'engineering', 'design', 'marketing', 'sales', 'operations', 'freelance'));
   end if;
   if not exists (select 1 from pg_constraint where conname = 'profiles_work_mode_chk') then
     alter table public.profiles

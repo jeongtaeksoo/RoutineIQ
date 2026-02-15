@@ -189,13 +189,12 @@ const MESSAGES: Record<Locale, Record<string, string>> = {
   }
 };
 
-type CompareDimension = "age_group" | "gender" | "job_family" | "work_mode" | "chronotype";
+type CompareDimension = "age_group" | "gender" | "job_family" | "work_mode";
 type ProfilePreferences = {
   age_group: "0_17" | "18_24" | "25_34" | "35_44" | "45_plus" | "unknown";
   gender: "female" | "male" | "nonbinary" | "prefer_not_to_say" | "unknown";
-  job_family: "engineering" | "professional" | "design" | "marketing" | "sales" | "operations" | "student" | "creator" | "other" | "unknown";
+  job_family: "office_worker" | "professional" | "creator" | "student" | "self_employed" | "other" | "unknown";
   work_mode: "fixed" | "flex" | "shift" | "freelance" | "other" | "unknown";
-  chronotype: "morning" | "midday" | "evening" | "mixed" | "unknown";
   trend_opt_in: boolean;
   trend_compare_by: CompareDimension[];
   goal_keyword: string | null;
@@ -207,7 +206,6 @@ const DEFAULT_PROFILE: ProfilePreferences = {
   gender: "unknown",
   job_family: "unknown",
   work_mode: "unknown",
-  chronotype: "unknown",
   trend_opt_in: false,
   trend_compare_by: ["age_group", "job_family", "work_mode"],
   goal_keyword: null,
@@ -232,14 +230,11 @@ const GENDER_OPTIONS = [
 ] as const;
 
 const JOB_OPTIONS = [
-  { value: "engineering", ko: "개발/엔지니어링", en: "Engineering" },
-  { value: "professional", ko: "전문직", en: "Professional" },
-  { value: "design", ko: "디자인", en: "Design" },
-  { value: "marketing", ko: "마케팅", en: "Marketing" },
-  { value: "sales", ko: "영업", en: "Sales" },
-  { value: "operations", ko: "운영", en: "Operations" },
+  { value: "office_worker", ko: "회사원/사무직", en: "Office Worker" },
+  { value: "professional", ko: "전문직 (의사/변호사/회계사 등)", en: "Professional" },
+  { value: "creator", ko: "크리에이터/아티스트", en: "Creator / Artist" },
   { value: "student", ko: "학생", en: "Student" },
-  { value: "creator", ko: "크리에이터", en: "Creator" },
+  { value: "self_employed", ko: "자영업/프리랜서", en: "Self-employed / Freelance" },
   { value: "other", ko: "기타", en: "Other" },
   { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
 ] as const;
@@ -251,14 +246,6 @@ const WORK_MODE_OPTIONS = [
   { value: "freelance", ko: "프리랜서", en: "Freelance" },
   { value: "other", ko: "기타", en: "Other" },
   { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
-] as const;
-
-const CHRONOTYPE_OPTIONS = [
-  { value: "morning", ko: "아침형", en: "Morning type" },
-  { value: "midday", ko: "중간형", en: "Midday type" },
-  { value: "evening", ko: "저녁형", en: "Evening type" },
-  { value: "mixed", ko: "혼합형", en: "Mixed" },
-  { value: "unknown", ko: "잘 모르겠어요 (선택)", en: "Not sure (optional)" },
 ] as const;
 
 export default function PreferencesPage() {
@@ -285,14 +272,12 @@ export default function PreferencesPage() {
             gender: "이 정보로 유사 사용자 패턴 비교 정확도를 높입니다. 원치 않으면 '응답 안함'을 선택하세요.",
             job: "이 정보로 업무 맥락(깊은 집중/협업 비중)을 맞춘 루틴을 제안합니다.",
             mode: "이 정보로 근무 제약(고정/교대/유연)에 맞는 실행 가능한 시간표를 생성합니다.",
-            chronotype: "선택 항목: 하루 에너지 피크 시간 예측 정확도를 높입니다.",
           }
         : {
             age: "Improves age-cohort calibration for realistic focus intensity.",
             gender: "Improves similar-user trend quality. You can choose 'Prefer not to say'.",
             job: "Adapts deep-work vs coordination balance to your work context.",
             mode: "Builds feasible time blocks around schedule constraints.",
-            chronotype: "Optional: improves peak-hour placement using your natural rhythm.",
           },
     [isKo]
   );
@@ -645,21 +630,6 @@ export default function PreferencesPage() {
                   className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
                 >
                   {WORK_MODE_OPTIONS.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {isKo ? opt.ko : opt.en}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className="space-y-1.5 sm:col-span-2">
-                <label className="text-xs font-medium text-mutedFg">{isKo ? "활동 리듬 타입" : "Chronotype"}</label>
-                <p className="text-[11px] text-mutedFg">{profileHelp.chronotype}</p>
-                <select
-                  value={profile.chronotype}
-                  onChange={(e) => setProfile((prev) => ({ ...prev, chronotype: e.target.value as ProfilePreferences["chronotype"] }))}
-                  className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
-                >
-                  {CHRONOTYPE_OPTIONS.map((opt) => (
                     <option key={opt.value} value={opt.value}>
                       {isKo ? opt.ko : opt.en}
                     </option>

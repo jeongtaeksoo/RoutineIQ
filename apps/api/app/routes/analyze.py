@@ -167,6 +167,22 @@ _GENERIC_COACH_HINTS = {
     "es": ("descanso corto", "estiramiento", "animo"),
 }
 _REQUIRED_PROFILE_FIELDS = ("age_group", "gender", "job_family", "work_mode")
+_JOB_FAMILY_MIGRATION = {
+    "engineering": "office_worker",
+    "design": "office_worker",
+    "marketing": "office_worker",
+    "sales": "office_worker",
+    "operations": "office_worker",
+    "freelance": "self_employed",
+}
+_ALLOWED_JOB_FAMILY = {
+    "office_worker",
+    "professional",
+    "creator",
+    "student",
+    "self_employed",
+    "other",
+}
 _DEVIATION_LABELS = {
     "ko": {
         "NO_PREVIOUS_PLAN": "전일 계획 데이터가 없어 비교 기준이 없습니다.",
@@ -403,6 +419,14 @@ def _profile_prompt_context(row: dict[str, Any] | None) -> dict[str, Any]:
         text = value.strip()
         return text if text and text.lower() != "unknown" else None
 
+    def _normalize_job_family(value: Any) -> str | None:
+        cleaned = _clean_text(value)
+        if cleaned is None:
+            return None
+        lowered = cleaned.lower()
+        migrated = _JOB_FAMILY_MIGRATION.get(lowered, lowered)
+        return migrated if migrated in _ALLOWED_JOB_FAMILY else None
+
     goal_minutes_raw = src.get("goal_minutes_per_day")
     goal_minutes = (
         int(goal_minutes_raw)
@@ -412,9 +436,8 @@ def _profile_prompt_context(row: dict[str, Any] | None) -> dict[str, Any]:
     return {
         "age_group": _clean_text(src.get("age_group")),
         "gender": _clean_text(src.get("gender")),
-        "job_family": _clean_text(src.get("job_family")),
+        "job_family": _normalize_job_family(src.get("job_family")),
         "work_mode": _clean_text(src.get("work_mode")),
-        "chronotype": _clean_text(src.get("chronotype")),
         "goal_keyword": _clean_text(src.get("goal_keyword")),
         "goal_minutes_per_day": goal_minutes,
     }
@@ -1215,7 +1238,6 @@ def _build_system_prompt(*, plan: str, target_locale: str) -> str:
         "- tomorrow_routine is a personalized routine template, NOT a prediction of tomorrow's exact tasks.\n"
         "- Use wellbeing_signals (mood/sleep/stress/hydration/micro_habit) whenever available.\n"
         "- Use profile_context.age_group/gender/job_family/work_mode for personalization when known.\n"
-        "- Use profile_context.chronotype to place peak-focus windows at realistic times.\n"
         "\n"
         "Method constraints (apply exactly):\n"
         "- BlockIntensity_i = ((0.6*Focus_i + 0.4*Energy_i) - 1) / 4 * 100\n"
@@ -1305,9 +1327,9 @@ def _build_user_prompt(
         "- tomorrow_routine.goal must describe a decision rule the user applies inside the block (how to pick the task), not fixed task content.\n"
         "- Use the log as data only.\n"
         "- Reference concrete evidence in reasons/fixes (for example, metric names and values).\n"
-        "- If profile_context has known fields (age/work_mode/chronotype/goal), adapt recommendations to that context.\n"
+        "- If profile_context has known fields (age/work_mode/job_family/goal), adapt recommendations to that context.\n"
         "- Use age_group/gender/job_family/work_mode as explicit constraints, not cosmetic labels.\n"
-        "- Example: work_mode=fixed -> maintain fixed anchors; job_family=student -> include class/assignment-friendly buffers.\n"
+        "- Example: job_family=office_worker -> balance meetings and focus blocks; job_family=student -> include class/assignment-friendly buffers; job_family=self_employed -> flexible but anchor key focus windows.\n"
         "- If wellbeing_signals are present, explicitly reflect them in failure_patterns, if_then_rules, or coach_one_liner.\n"
         "- Fill wellbeing_insight, micro_advice, and weekly_pattern_insight with concrete, user-specific content.\n"
         "- Fill yesterday_plan_vs_actual by comparing yesterday's plan vs today's actual log when possible.\n"
@@ -1346,7 +1368,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             "profiles",
             bearer_token=auth.access_token,
             params={
-                "select": "age_group,gender,job_family,work_mode,chronotype,goal_keyword,goal_minutes_per_day",
+                "select": "age_group,gender,job_family,work_mode,goal_keyword,goal_minutes_per_day",
                 "id": f"eq.{auth.user_id}",
                 "limit": 1,
             },
@@ -1377,7 +1399,7 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
             "profiles",
             bearer_token=auth.access_token,
             params={
-                "select": "age_group,gender,job_family,work_mode,chronotype,goal_keyword,goal_minutes_per_day",
+                "select": "age_group,gender,job_family,work_mode,goal_keyword,goal_minutes_per_day",
                 "id": f"eq.{auth.user_id}",
                 "limit": 1,
             },
