@@ -9,10 +9,36 @@ from app.services.supabase_rest import SupabaseRest, SupabaseRestError
 
 router = APIRouter()
 
+_JOB_FAMILY_MIGRATION: dict[str, str] = {
+    "engineering": "office_worker",
+    "design": "office_worker",
+    "marketing": "office_worker",
+    "sales": "office_worker",
+    "operations": "office_worker",
+    "freelance": "self_employed",
+}
+_ALLOWED_JOB_FAMILY: set[str] = {
+    "office_worker",
+    "professional",
+    "creator",
+    "student",
+    "self_employed",
+    "other",
+    "unknown",
+}
+
 
 def _is_rls_write_failure(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
     return exc.code == "42501" or "row-level security policy" in msg
+
+
+def _migrate_job_family(value: object) -> str:
+    if not isinstance(value, str):
+        return "unknown"
+    normalized = value.strip().lower() or "unknown"
+    migrated = _JOB_FAMILY_MIGRATION.get(normalized, normalized)
+    return migrated if migrated in _ALLOWED_JOB_FAMILY else "unknown"
 
 
 def _normalize_compare_by(value: object) -> list[str]:
@@ -22,7 +48,7 @@ def _normalize_compare_by(value: object) -> list[str]:
     for item in value:
         if (
             isinstance(item, str)
-            and item in {"age_group", "gender", "job_family", "work_mode", "chronotype"}
+            and item in {"age_group", "gender", "job_family", "work_mode"}
             and item not in out
         ):
             out.append(item)
@@ -34,9 +60,8 @@ def _to_preferences(row: dict) -> ProfilePreferences:
         {
             "age_group": row.get("age_group") or "unknown",
             "gender": row.get("gender") or "unknown",
-            "job_family": row.get("job_family") or "unknown",
+            "job_family": _migrate_job_family(row.get("job_family")),
             "work_mode": row.get("work_mode") or "unknown",
-            "chronotype": row.get("chronotype") or "unknown",
             "trend_opt_in": bool(row.get("trend_opt_in")),
             "trend_compare_by": _normalize_compare_by(row.get("trend_compare_by")),
             "goal_keyword": row.get("goal_keyword"),
@@ -52,7 +77,7 @@ async def get_profile_preferences(auth: AuthDep) -> ProfilePreferences:
         "profiles",
         bearer_token=auth.access_token,
         params={
-            "select": "id,age_group,gender,job_family,work_mode,chronotype,trend_opt_in,trend_compare_by,goal_keyword,goal_minutes_per_day",
+            "select": "id,age_group,gender,job_family,work_mode,trend_opt_in,trend_compare_by,goal_keyword,goal_minutes_per_day",
             "id": f"eq.{auth.user_id}",
             "limit": 1,
         },
@@ -73,7 +98,6 @@ async def upsert_profile_preferences(
         "gender": body.gender,
         "job_family": body.job_family,
         "work_mode": body.work_mode,
-        "chronotype": body.chronotype,
         "trend_opt_in": body.trend_opt_in,
         "trend_compare_by": body.trend_compare_by,
         "goal_keyword": body.goal_keyword,

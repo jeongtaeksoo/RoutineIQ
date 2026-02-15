@@ -7,22 +7,16 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 AgeGroup = Literal["0_17", "18_24", "25_34", "35_44", "45_plus", "unknown"]
 Gender = Literal["female", "male", "nonbinary", "prefer_not_to_say", "unknown"]
 JobFamily = Literal[
-    "engineering",
+    "office_worker",
     "professional",
-    "design",
-    "marketing",
-    "sales",
-    "operations",
-    "student",
     "creator",
+    "student",
+    "self_employed",
     "other",
     "unknown",
 ]
 WorkMode = Literal["fixed", "flex", "shift", "freelance", "other", "unknown"]
-Chronotype = Literal["morning", "midday", "evening", "mixed", "unknown"]
-CompareDimension = Literal[
-    "age_group", "gender", "job_family", "work_mode", "chronotype"
-]
+CompareDimension = Literal["age_group", "gender", "job_family", "work_mode"]
 
 
 DEFAULT_COMPARE_BY: tuple[CompareDimension, ...] = (
@@ -39,7 +33,6 @@ class ProfilePreferences(BaseModel):
     gender: Gender = "unknown"
     job_family: JobFamily = "unknown"
     work_mode: WorkMode = "unknown"
-    chronotype: Chronotype = "unknown"
     trend_opt_in: bool = False
     trend_compare_by: list[CompareDimension] = Field(
         default_factory=lambda: list(DEFAULT_COMPARE_BY), min_length=1, max_length=5
@@ -96,3 +89,8 @@ class CohortTrendResponse(BaseModel):
     filters: dict[str, str] = Field(default_factory=dict)
     metrics: CohortTrendMetrics
     message: str
+    my_focus_rate: float | None = None
+    my_rebound_rate: float | None = None
+    my_recovery_rate: float | None = None
+    rank_label: str = ""
+    actionable_tip: str = ""

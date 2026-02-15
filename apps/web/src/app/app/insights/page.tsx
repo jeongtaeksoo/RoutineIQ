@@ -90,6 +90,11 @@ type CohortTrend = {
     recovery_day_denominator: number;
   };
   message: string;
+  my_focus_rate: number | null;
+  my_rebound_rate: number | null;
+  my_recovery_rate: number | null;
+  rank_label: string;
+  actionable_tip: string;
 };
 
 function localYYYYMMDD(d = new Date()) {
@@ -200,6 +205,16 @@ export default function InsightsPage() {
         emptyMetricsBody: "오늘 첫 기록을 남겨보세요. 3일만 쌓여도 내 패턴이 보이기 시작합니다.",
         detailsTitle: "주간 지표 더보기",
         detailsSubtitle: "꾸준함 그래프와 주간 요약",
+        cohortTitle: "나와 유사한 사용자 트렌드",
+        cohortDesc: "옵트인한 사용자의 익명 집계입니다. 비교 기준은 설정에서 조정할 수 있습니다.",
+        youVsSimilar: "나 vs 유사 사용자",
+        similarUsers: (n: number) => `유사 사용자 ${n}명`,
+        myFocusRate: "나의 집중 블록 유지율",
+        myReboundRate: "나의 복귀율",
+        myRecoveryRate: "나의 회복 버퍼 사용일",
+        average: "유사 사용자 평균",
+        rank: "나의 위치",
+        actionableTip: "실행 팁",
       };
     }
     return {
@@ -263,6 +278,16 @@ export default function InsightsPage() {
       emptyMetricsBody: "Your first log starts the score. After 3 days, patterns show up fast.",
       detailsTitle: "More weekly metrics",
       detailsSubtitle: "Consistency chart and weekly snapshot",
+      cohortTitle: "Similar Users Trend",
+      cohortDesc: "Anonymized aggregate from opted-in users. You can tune comparison dimensions in Preferences.",
+      youVsSimilar: "You vs Similar Users",
+      similarUsers: (n: number) => `${n} similar users`,
+      myFocusRate: "My focus-window rate",
+      myReboundRate: "My rebound rate",
+      myRecoveryRate: "My recovery-buffer days",
+      average: "Average",
+      rank: "Your rank",
+      actionableTip: "Actionable tip",
     };
   }, [isKo]);
 
@@ -491,6 +516,7 @@ export default function InsightsPage() {
             ? "데이터 부족"
             : "Insufficient data";
   const fmtPct = (value: number | null) => (value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`);
+  const fmtRate = (value: number | null) => (value === null ? "—" : `${Math.round(value)}%`);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -683,12 +709,8 @@ export default function InsightsPage() {
 
         <Card className="lg:col-span-12">
           <CardHeader>
-            <CardTitle>{isKo ? "나와 유사한 사용자 트렌드" : "Similar Users Trend"}</CardTitle>
-            <CardDescription>
-              {isKo
-                ? "옵트인한 사용자의 익명 집계입니다. 비교 기준은 설정에서 조정할 수 있습니다."
-                : "Anonymized aggregate from opted-in users. You can tune comparison dimensions in Preferences."}
-            </CardDescription>
+            <CardTitle>{t.cohortTitle}</CardTitle>
+            <CardDescription>{t.cohortDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             {cohortLoading ? (
@@ -724,33 +746,68 @@ export default function InsightsPage() {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm">{cohortTrend.message}</p>
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border bg-white/50 p-3">
-                    <p className="text-xs text-mutedFg">{isKo ? "집중 블록 유지율" : "Focus-window consistency"}</p>
-                    <p className="title-serif mt-1 text-2xl">{cohortTrend.metrics.focus_window_rate ?? 0}%</p>
-                    <p className="mt-1 text-[11px] text-mutedFg">
-                      n={cohortTrend.metrics.focus_window_numerator}/{cohortTrend.metrics.focus_window_denominator}
-                    </p>
+                <div className="rounded-lg border bg-white/50 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-sm font-semibold">{t.youVsSimilar}</p>
+                    <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
+                      {t.similarUsers(cohortTrend.cohort_size)}
+                    </span>
                   </div>
-                  <div className="rounded-lg border bg-white/50 p-3">
-                    <p className="text-xs text-mutedFg">{isKo ? "집중 붕괴 후 복귀율" : "Rebound rate after drop"}</p>
-                    <p className="title-serif mt-1 text-2xl">{cohortTrend.metrics.rebound_rate ?? 0}%</p>
-                    <p className="mt-1 text-[11px] text-mutedFg">
-                      n={cohortTrend.metrics.rebound_numerator}/{cohortTrend.metrics.rebound_denominator}
-                    </p>
-                  </div>
-                  <div className="rounded-lg border bg-white/50 p-3">
-                    <p className="text-xs text-mutedFg">{isKo ? "회복 버퍼 사용일 비율" : "Recovery-buffer day rate"}</p>
-                    <p className="title-serif mt-1 text-2xl">{cohortTrend.metrics.recovery_buffer_day_rate ?? 0}%</p>
-                    <p className="mt-1 text-[11px] text-mutedFg">
-                      n={cohortTrend.metrics.recovery_day_numerator}/{cohortTrend.metrics.recovery_day_denominator}
-                    </p>
-                  </div>
+
+                  {[
+                    {
+                      key: "focus",
+                      label: t.myFocusRate,
+                      mine: cohortTrend.my_focus_rate,
+                      average: cohortTrend.metrics.focus_window_rate,
+                    },
+                    {
+                      key: "rebound",
+                      label: t.myReboundRate,
+                      mine: cohortTrend.my_rebound_rate,
+                      average: cohortTrend.metrics.rebound_rate,
+                    },
+                    {
+                      key: "recovery",
+                      label: t.myRecoveryRate,
+                      mine: cohortTrend.my_recovery_rate,
+                      average: cohortTrend.metrics.recovery_buffer_day_rate,
+                    },
+                  ]
+                    .filter((row) => row.mine !== null)
+                    .map((row) => (
+                      <div key={row.key} className="mt-3 rounded-lg border bg-white/60 p-3">
+                        <p className="text-xs text-mutedFg">{row.label}</p>
+                        <div className="mt-1 grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="title-serif text-2xl">{fmtRate(row.mine)}</p>
+                            <p className="text-[11px] text-mutedFg">{isKo ? "나" : "You"}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="title-serif text-2xl text-mutedFg">{fmtRate(row.average)}</p>
+                            <p className="text-[11px] text-mutedFg">{t.average}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+
+                  {cohortTrend.rank_label ? (
+                    <div className="mt-3 flex items-center gap-2">
+                      <span className="text-xs text-mutedFg">{t.rank}</span>
+                      <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">
+                        {cohortTrend.rank_label}
+                      </span>
+                    </div>
+                  ) : null}
+
+                  {cohortTrend.actionable_tip ? (
+                    <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
+                      <p className="text-xs font-semibold text-amber-900">{t.actionableTip}</p>
+                      <p className="mt-1 text-sm text-amber-900">{cohortTrend.actionable_tip}</p>
+                    </div>
+                  ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
-                    {isKo ? `코호트 ${cohortTrend.cohort_size}명` : `${cohortTrend.cohort_size} users`}
-                  </span>
                   <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
                     {isKo ? `${cohortTrend.window_days}일 기준` : `${cohortTrend.window_days}-day window`}
                   </span>
