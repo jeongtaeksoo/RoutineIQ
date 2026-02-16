@@ -68,6 +68,9 @@ class Settings(BaseSettings):
     analyze_per_minute_limit: int = Field(default=6, alias="ANALYZE_PER_MINUTE_LIMIT")
     cohort_window_days: int = Field(default=14, alias="COHORT_WINDOW_DAYS")
     cohort_min_sample_size: int = Field(default=50, alias="COHORT_MIN_SAMPLE_SIZE")
+    cohort_preview_sample_size: int = Field(
+        default=20, alias="COHORT_PREVIEW_SAMPLE_SIZE"
+    )
 
     @model_validator(mode="after")
     def validate_runtime_constraints(self) -> "Settings":

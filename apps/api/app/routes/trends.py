@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import date, timedelta
-from typing import Any, cast
+from typing import Any, Literal, cast
 
 from fastapi import APIRouter
 
@@ -281,6 +281,16 @@ def _message_for(
     return f"Among {cohort_size} similar users: {focus_text}, {rebound_text}, {recovery_text}. For tomorrow, lock one recovery buffer first."
 
 
+def _cohort_confidence_level(
+    cohort_size: int, min_n: int
+) -> Literal["low", "medium", "high"]:
+    if cohort_size < min_n:
+        return "low"
+    if cohort_size < (min_n * 2):
+        return "medium"
+    return "high"
+
+
 @router.get("/trends/cohort", response_model=CohortTrendResponse)
 async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
     sb_rls = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
@@ -307,11 +317,17 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
             if isinstance(dim, str) and dim in _DIM_KEYS and dim not in compare_by:
                 compare_by.append(cast(CompareDimension, dim))
 
+    min_n = max(int(settings.cohort_min_sample_size), 1)
+    preview_n = min(max(int(settings.cohort_preview_sample_size), 1), min_n)
+
     if not trend_opt_in:
         return CohortTrendResponse(
             enabled=False,
             insufficient_sample=True,
-            min_sample_size=max(int(settings.cohort_min_sample_size), 1),
+            min_sample_size=min_n,
+            preview_sample_size=preview_n,
+            preview_mode=False,
+            confidence_level="low",
             cohort_size=0,
             active_users=0,
             window_days=max(int(settings.cohort_window_days), 7),
@@ -384,14 +400,21 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
         recovery_day_denominator=_as_int(data.get("recovery_day_denominator")),
     )
 
-    min_n = max(int(settings.cohort_min_sample_size), 1)
-    insufficient = cohort_size < min_n
+    insufficient = cohort_size < preview_n
+    preview_mode = preview_n <= cohort_size < min_n
+    confidence_level = _cohort_confidence_level(cohort_size, min_n)
     if insufficient:
         msg = (
-            f"코호트 표본이 아직 충분하지 않습니다 ({cohort_size}/{min_n}). "
-            "비교 옵션을 줄이거나 조금 더 데이터가 쌓이면 트렌드를 확인할 수 있습니다."
+            f"코호트 표본이 아직 충분하지 않습니다 ({cohort_size}/{preview_n}). "
+            f"참고용 미리보기는 최소 {preview_n}명부터 제공됩니다."
             if auth.locale == "ko"
-            else f"Cohort sample is still small ({cohort_size}/{min_n}). Narrow fewer filters or wait for more data."
+            else f"Cohort sample is still small ({cohort_size}/{preview_n}). Preview becomes available at {preview_n}+ users."
+        )
+    elif preview_mode:
+        msg = (
+            f"참고용 미리보기입니다 ({cohort_size}/{min_n}). 표본이 더 쌓이면 정식 비교를 제공합니다."
+            if auth.locale == "ko"
+            else f"Preview only ({cohort_size}/{min_n}). Full comparison unlocks after more samples."
         )
     else:
         msg = _message_for(
@@ -402,21 +425,32 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
             cohort_size=cohort_size,
         )
 
-    rank_label = _rank_label(auth.locale, my_focus_rate, metrics.focus_window_rate)
-    actionable_tip = _actionable_tip(
-        auth.locale,
-        my_focus=my_focus_rate,
-        my_rebound=my_rebound_rate,
-        my_recovery=my_recovery_rate,
-        cohort_focus=metrics.focus_window_rate,
-        cohort_rebound=metrics.rebound_rate,
-        cohort_recovery=metrics.recovery_buffer_day_rate,
+    rank_label = (
+        ""
+        if preview_mode
+        else _rank_label(auth.locale, my_focus_rate, metrics.focus_window_rate)
+    )
+    actionable_tip = (
+        ""
+        if preview_mode
+        else _actionable_tip(
+            auth.locale,
+            my_focus=my_focus_rate,
+            my_rebound=my_rebound_rate,
+            my_recovery=my_recovery_rate,
+            cohort_focus=metrics.focus_window_rate,
+            cohort_rebound=metrics.rebound_rate,
+            cohort_recovery=metrics.recovery_buffer_day_rate,
+        )
     )
 
     return CohortTrendResponse(
         enabled=True,
         insufficient_sample=insufficient,
         min_sample_size=min_n,
+        preview_sample_size=preview_n,
+        preview_mode=preview_mode,
+        confidence_level=confidence_level,
         cohort_size=cohort_size,
         active_users=active_users,
         window_days=max(int(settings.cohort_window_days), 7),

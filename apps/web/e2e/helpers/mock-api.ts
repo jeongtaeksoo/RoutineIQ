@@ -150,7 +150,10 @@ async function handleApiRoute(
     return json(route, 200, {
       enabled: false,
       insufficient_sample: false,
-      min_sample_size: 20,
+      min_sample_size: 50,
+      preview_sample_size: 20,
+      preview_mode: false,
+      confidence_level: "low",
       cohort_size: 0,
       active_users: 0,
       window_days: 28,

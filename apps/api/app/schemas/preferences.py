@@ -17,6 +17,7 @@ JobFamily = Literal[
 ]
 WorkMode = Literal["fixed", "flex", "shift", "freelance", "other", "unknown"]
 CompareDimension = Literal["age_group", "gender", "job_family", "work_mode"]
+CohortConfidenceLevel = Literal["low", "medium", "high"]
 
 
 DEFAULT_COMPARE_BY: tuple[CompareDimension, ...] = (
@@ -82,6 +83,9 @@ class CohortTrendResponse(BaseModel):
     enabled: bool
     insufficient_sample: bool
     min_sample_size: int
+    preview_sample_size: int
+    preview_mode: bool = False
+    confidence_level: CohortConfidenceLevel = "low"
     cohort_size: int
     active_users: int
     window_days: int

@@ -81,6 +81,9 @@ type CohortTrend = {
   enabled: boolean;
   insufficient_sample: boolean;
   min_sample_size: number;
+  preview_sample_size: number;
+  preview_mode: boolean;
+  confidence_level: "low" | "medium" | "high" | string;
   cohort_size: number;
   active_users: number;
   window_days: number;
@@ -261,6 +264,11 @@ export default function InsightsPage() {
         average: "유사 사용자 평균",
         rank: "나의 위치",
         actionableTip: "실행 팁",
+        confidence: "데이터 신뢰도",
+        confidenceLow: "낮음",
+        confidenceMedium: "보통",
+        confidenceHigh: "충분",
+        previewOnly: "참고용 미리보기",
       };
     }
     return {
@@ -350,6 +358,11 @@ export default function InsightsPage() {
       average: "Average",
       rank: "Your rank",
       actionableTip: "Actionable tip",
+      confidence: "Data confidence",
+      confidenceLow: "Low",
+      confidenceMedium: "Moderate",
+      confidenceHigh: "High",
+      previewOnly: "Preview only",
     };
   }, [isKo]);
 
@@ -611,6 +624,18 @@ export default function InsightsPage() {
             : "Insufficient data";
   const fmtPct = (value: number | null) => (value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`);
   const fmtRate = (value: number | null) => (value === null ? "—" : `${Math.round(value)}%`);
+  const confidenceLabel =
+    cohortTrend?.confidence_level === "high"
+      ? t.confidenceHigh
+      : cohortTrend?.confidence_level === "medium"
+        ? t.confidenceMedium
+        : t.confidenceLow;
+  const confidenceBadgeClass =
+    cohortTrend?.confidence_level === "high"
+      ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+      : cohortTrend?.confidence_level === "medium"
+        ? "border-amber-200 bg-amber-50 text-amber-800"
+        : "border-rose-200 bg-rose-50 text-rose-800";
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -861,8 +886,8 @@ export default function InsightsPage() {
                 <p className="text-sm">{cohortTrend.message}</p>
                 <p className="mt-1 text-xs text-mutedFg">
                   {isKo
-                    ? `현재 표본 ${cohortTrend.cohort_size}명 / 최소 ${cohortTrend.min_sample_size}명`
-                    : `Current sample ${cohortTrend.cohort_size} / minimum ${cohortTrend.min_sample_size}`}
+                    ? `현재 표본 ${cohortTrend.cohort_size}명 / 미리보기 최소 ${cohortTrend.preview_sample_size}명`
+                    : `Current sample ${cohortTrend.cohort_size} / preview minimum ${cohortTrend.preview_sample_size}`}
                 </p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
                   <Link href="/app/preferences">{isKo ? "비교 기준 조정" : "Adjust filters"}</Link>
@@ -874,9 +899,19 @@ export default function InsightsPage() {
                 <div className="rounded-lg border bg-white/50 p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold">{t.youVsSimilar}</p>
-                    <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
-                      {t.similarUsers(cohortTrend.cohort_size)}
-                    </span>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
+                        {t.similarUsers(cohortTrend.cohort_size)}
+                      </span>
+                      <span className={`rounded-full border px-2 py-1 text-[11px] ${confidenceBadgeClass}`}>
+                        {t.confidence}: {confidenceLabel}
+                      </span>
+                      {cohortTrend.preview_mode ? (
+                        <span className="rounded-full border border-amber-200 bg-amber-50 px-2 py-1 text-[11px] text-amber-800">
+                          {t.previewOnly}
+                        </span>
+                      ) : null}
+                    </div>
                   </div>
 
                   {[
@@ -916,7 +951,7 @@ export default function InsightsPage() {
                       </div>
                     ))}
 
-                  {cohortTrend.rank_label ? (
+                  {!cohortTrend.preview_mode && cohortTrend.rank_label ? (
                     <div className="mt-3 flex items-center gap-2">
                       <span className="text-xs text-mutedFg">{t.rank}</span>
                       <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">
@@ -925,7 +960,7 @@ export default function InsightsPage() {
                     </div>
                   ) : null}
 
-                  {cohortTrend.actionable_tip ? (
+                  {!cohortTrend.preview_mode && cohortTrend.actionable_tip ? (
                     <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 p-3">
                       <p className="text-xs font-semibold text-amber-900">{t.actionableTip}</p>
                       <p className="mt-1 text-sm text-amber-900">{cohortTrend.actionable_tip}</p>
