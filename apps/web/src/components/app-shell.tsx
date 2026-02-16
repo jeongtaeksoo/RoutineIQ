@@ -53,13 +53,32 @@ export function AppShell({
   const [userMetaVersion, setUserMetaVersion] = React.useState(0);
   const [signingOut, setSigningOut] = React.useState(false);
 
+  const supabaseRef = React.useRef<ReturnType<typeof createClient>>(undefined!);
+  if (!supabaseRef.current) {
+    supabaseRef.current = createClient();
+  }
   const strings = React.useMemo(() => getStrings(locale), [locale]);
+
+  const navLabels = React.useMemo(() => ({
+    insights: strings.nav_insights,
+    daily_flow: strings.nav_daily_flow,
+    reports: strings.nav_reports,
+    billing: strings.nav_billing,
+    preferences: strings.nav_preferences,
+  }), [strings]);
+
+  const navShortLabels = React.useMemo(() => ({
+    insights: strings.nav_short_insights,
+    daily_flow: strings.nav_short_daily_flow,
+    reports: strings.nav_short_reports,
+    billing: strings.nav_short_billing,
+    preferences: strings.nav_short_preferences,
+  }), [strings]);
 
   async function signOut() {
     setSigningOut(true);
     try {
-      const supabase = createClient();
-      await supabase.auth.signOut();
+      await supabaseRef.current.auth.signOut();
       router.replace("/login");
     } finally {
       setSigningOut(false);
@@ -70,10 +89,9 @@ export function AppShell({
     let cancelled = false;
     (async () => {
       try {
-        const supabase = createClient();
         const {
           data: { user }
-        } = await supabase.auth.getUser();
+        } = await supabaseRef.current.auth.getUser();
         if (!user) return;
         const meta = (user.user_metadata as any) || {};
         const loc = meta["routineiq_locale"];
@@ -88,8 +106,7 @@ export function AppShell({
   }, []);
 
   React.useEffect(() => {
-    const supabase = createClient();
-    const { data } = supabase.auth.onAuthStateChange((event, session) => {
+    const { data } = supabaseRef.current.auth.onAuthStateChange((event, session) => {
       if (event === "USER_UPDATED" || event === "SIGNED_IN") {
         const loc = (session?.user?.user_metadata as any)?.routineiq_locale;
         setLocale(loc ? normalizeLocale(loc) : "ko");
@@ -137,22 +154,13 @@ export function AppShell({
             {navItems.map((it) => {
               const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
               const Icon = it.icon;
-              const label =
-                it.key === "insights"
-                  ? strings.nav_insights
-                  : it.key === "daily_flow"
-                    ? strings.nav_daily_flow
-                    : it.key === "reports"
-                      ? strings.nav_reports
-                      : it.key === "billing"
-                        ? strings.nav_billing
-                        : strings.nav_preferences;
+              const label = navLabels[it.key];
               return (
                 <Link
                   key={it.href}
                   href={it.href}
                   className={cn(
-                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
+                    "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200",
                     active
                       ? "bg-[hsl(var(--muted)/0.85)] text-fg shadow-sm font-medium"
                       : "text-mutedFg hover:bg-[hsl(var(--muted)/0.55)] hover:text-fg"
@@ -168,7 +176,7 @@ export function AppShell({
               <Link
                 href="/admin"
                 className={cn(
-                  "mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-all duration-200",
+                  "mt-2 flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200",
                   pathname === "/admin" || pathname.startsWith("/admin/")
                     ? "bg-[hsl(var(--muted)/0.85)] text-fg shadow-sm font-medium"
                     : "text-mutedFg hover:bg-[hsl(var(--muted)/0.55)] hover:text-fg"
@@ -207,16 +215,7 @@ export function AppShell({
           {navItems.map((it) => {
             const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
             const Icon = it.icon;
-            const short =
-              it.key === "insights"
-                ? strings.nav_short_insights
-                : it.key === "daily_flow"
-                  ? strings.nav_short_daily_flow
-                  : it.key === "reports"
-                    ? strings.nav_short_reports
-                    : it.key === "billing"
-                      ? strings.nav_short_billing
-                      : strings.nav_short_preferences;
+            const short = navShortLabels[it.key];
             return (
               <Link
                 key={it.href}

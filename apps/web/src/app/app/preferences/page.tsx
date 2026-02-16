@@ -268,17 +268,17 @@ export default function PreferencesPage() {
     () =>
       isKo
         ? {
-            age: "이 정보로 연령대별 집중 시간대를 참고해 루틴 강도를 조절합니다.",
-            gender: "이 정보로 유사 사용자 패턴 비교 정확도를 높입니다. 원치 않으면 '응답 안함'을 선택하세요.",
-            job: "이 정보로 업무 맥락(깊은 집중/협업 비중)을 맞춘 루틴을 제안합니다.",
-            mode: "이 정보로 근무 제약(고정/교대/유연)에 맞는 실행 가능한 시간표를 생성합니다.",
-          }
+          age: "이 정보로 연령대별 집중 시간대를 참고해 루틴 강도를 조절합니다.",
+          gender: "이 정보로 유사 사용자 패턴 비교 정확도를 높입니다. 원치 않으면 '응답 안함'을 선택하세요.",
+          job: "이 정보로 업무 맥락(깊은 집중/협업 비중)을 맞춘 루틴을 제안합니다.",
+          mode: "이 정보로 근무 제약(고정/교대/유연)에 맞는 실행 가능한 시간표를 생성합니다.",
+        }
         : {
-            age: "Improves age-cohort calibration for realistic focus intensity.",
-            gender: "Improves similar-user trend quality. You can choose 'Prefer not to say'.",
-            job: "Adapts deep-work vs coordination balance to your work context.",
-            mode: "Builds feasible time blocks around schedule constraints.",
-          },
+          age: "Improves age-cohort calibration for realistic focus intensity.",
+          gender: "Improves similar-user trend quality. You can choose 'Prefer not to say'.",
+          job: "Adapts deep-work vs coordination balance to your work context.",
+          mode: "Builds feasible time blocks around schedule constraints.",
+        },
     [isKo]
   );
 
@@ -471,7 +471,7 @@ export default function PreferencesPage() {
       </div>
 
       {message ? (
-        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 transition-all">
+        <div className="rounded-xl border border-emerald-300 bg-emerald-50 p-4 text-sm text-emerald-900 transition-opacity">
           {message}
         </div>
       ) : null}
