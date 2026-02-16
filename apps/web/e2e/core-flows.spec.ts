@@ -279,6 +279,77 @@ test.describe("RutineIQ core flows", () => {
     ).toBeVisible();
   });
 
+  test("F2b: parse-diary 502 shows retry, then succeeds", async ({ page }) => {
+    test.skip(e2eMode === "live", "Mock-only API error handling scenario");
+    await installRoutineApiMock(page);
+    let parseAttempt = 0;
+    await page.route("**/api/parse-diary", async (route) => {
+      parseAttempt += 1;
+      if (parseAttempt === 1) {
+        await route.fulfill({
+          status: 502,
+          contentType: "application/json",
+          body: JSON.stringify({
+            detail: {
+              code: "PARSE_UPSTREAM_TIMEOUT",
+              message: "AI diary parsing timed out. Please try again.",
+              hint: "Reference ID: e2e-timeout. Please retry once in a few seconds.",
+              retryable: true,
+            },
+          }),
+        });
+        return;
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          entries: [
+            {
+              start: "09:30",
+              end: "11:00",
+              activity: "Deep work",
+              energy: 4,
+              focus: 5,
+              note: null,
+              tags: ["focus"],
+              confidence: "high",
+            },
+          ],
+          meta: {
+            mood: "good",
+            sleep_quality: 4,
+            sleep_hours: 7.0,
+            stress_level: 2,
+          },
+          ai_note: "Parsed timeline is ready.",
+        }),
+      });
+    });
+
+    await enterMockApp(page);
+    await page.goto("/app/daily-flow");
+    await page.locator("textarea").fill("09:30부터 집중 코딩을 했고 오후에는 회의 후 정리했습니다.");
+    await page.getByRole("button", { name: /AI 분석하기|Parse with AI/i }).first().click();
+
+    await expect(
+      page.getByText(/AI 응답이 지연되고 있어요|AI response timed out/i),
+    ).toBeVisible();
+    await expect(page.getByRole("button", { name: /다시 시도|Retry parse/i })).toBeVisible();
+
+    await page.getByRole("button", { name: /다시 시도|Retry parse/i }).click();
+    await expect(page.getByText(/AI가 이렇게 파악했어요|AI parsed your day like this/i)).toBeVisible();
+  });
+
+  test("F2c: report 404 renders empty-state card, not error banner", async ({ page }) => {
+    test.skip(e2eMode === "live", "Mock-only empty-state scenario");
+    await installRoutineApiMock(page);
+    await enterMockApp(page);
+    await page.goto(`/app/reports/${todayLocal()}`);
+    await expect(page.getByText(/리포트를 만들 준비가 되었나요\?|No report yet/i)).toBeVisible();
+    await expect(page.getByText(/리포트를 불러오지 못했습니다|Failed to load report/i)).toHaveCount(0);
+  });
+
   test("F3: Guest billing conversion -> checkout session request", async ({ page }) => {
     const mock = await installRoutineApiMock(page);
 

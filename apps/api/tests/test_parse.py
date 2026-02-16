@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock
 
+import httpx
 from fastapi.testclient import TestClient
 
 import app.routes.parse as parse_route
@@ -83,3 +84,59 @@ def test_parse_diary_requires_auth(client: TestClient) -> None:
         },
     )
     assert response.status_code == 401
+
+
+def test_parse_diary_timeout_maps_to_coded_502(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        parse_route,
+        "call_openai_structured",
+        AsyncMock(side_effect=httpx.TimeoutException("upstream timeout")),
+    )
+    monkeypatch.setattr(parse_route, "log_system_error", AsyncMock(return_value=None))
+
+    response = authenticated_client.post(
+        "/api/parse-diary",
+        json={
+            "date": "2026-02-15",
+            "diary_text": "09시부터 집중해서 기능 개발을 했고, 오후에는 회의가 있었습니다.",
+        },
+    )
+
+    assert response.status_code == 502
+    body = response.json()
+    assert isinstance(body.get("detail"), dict)
+    assert body["detail"]["code"] == "PARSE_UPSTREAM_TIMEOUT"
+    assert body["detail"]["retryable"] is True
+    assert "Reference ID:" in body["detail"]["hint"]
+
+
+def test_parse_diary_invalid_schema_maps_to_coded_502(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        parse_route,
+        "call_openai_structured",
+        AsyncMock(
+            return_value=(
+                {"entries": "broken-shape", "meta": {}, "ai_note": "bad"},
+                {"input_tokens": 20, "output_tokens": 20, "total_tokens": 40},
+            )
+        ),
+    )
+    monkeypatch.setattr(parse_route, "log_system_error", AsyncMock(return_value=None))
+
+    response = authenticated_client.post(
+        "/api/parse-diary",
+        json={
+            "date": "2026-02-15",
+            "diary_text": "09시부터 집중해서 기능 개발을 했고, 오후에는 회의가 있었습니다.",
+        },
+    )
+
+    assert response.status_code == 502
+    body = response.json()
+    assert isinstance(body.get("detail"), dict)
+    assert body["detail"]["code"] == "PARSE_SCHEMA_INVALID"
+    assert body["detail"]["retryable"] is True

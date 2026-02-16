@@ -197,9 +197,13 @@ export default function DailyFlowPage() {
         analyze: "AI 분석",
         analyzing: "분석 중...",
         failedLoad: "불러오기 실패",
-        parseFailed: "일기 파싱 실패",
-        saveFailed: "저장 실패",
-        analyzeFailed: "분석 실패",
+      parseFailed: "일기 파싱 실패",
+      parseTimeout: "AI 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
+      parseSchemaInvalid: "AI 응답 형식이 불안정했습니다. 다시 시도하면 대부분 해결됩니다.",
+      parseUnavailable: "AI 파싱 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해 주세요.",
+      parseRetry: "다시 시도",
+      saveFailed: "저장 실패",
+      analyzeFailed: "분석 실패",
         needDiary: "일기를 10자 이상 입력해 주세요",
         needEntries: "저장할 파싱 결과가 없습니다",
         noEntries: "파싱된 활동이 없습니다. 일기를 조금 더 구체적으로 작성해 주세요.",
@@ -234,6 +238,10 @@ export default function DailyFlowPage() {
       analyzing: "Analyzing...",
       failedLoad: "Failed to load",
       parseFailed: "Diary parsing failed",
+      parseTimeout: "AI response timed out. Please retry in a moment.",
+      parseSchemaInvalid: "AI returned an invalid format. Retrying usually fixes this.",
+      parseUnavailable: "AI parsing service is temporarily unavailable. Please retry shortly.",
+      parseRetry: "Retry parse",
       saveFailed: "Save failed",
       analyzeFailed: "Analyze failed",
       needDiary: "Please enter at least 10 characters",
@@ -260,6 +268,7 @@ export default function DailyFlowPage() {
   const [saving, setSaving] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [showParseRetry, setShowParseRetry] = React.useState(false);
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
   const diaryRef = React.useRef<HTMLTextAreaElement | null>(null);
 
@@ -300,6 +309,7 @@ export default function DailyFlowPage() {
     setParsedMeta({});
     setAiNote("");
     setError(null);
+    setShowParseRetry(false);
     setEditingIdx(null);
   }
 
@@ -357,6 +367,7 @@ export default function DailyFlowPage() {
 
   async function parseDiary(): Promise<void> {
     setError(null);
+    setShowParseRetry(false);
     if (diaryText.trim().length < 10) {
       setError(t.needDiary);
       return;
@@ -376,7 +387,18 @@ export default function DailyFlowPage() {
       setStep("confirm");
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setError(err instanceof Error ? `${t.parseFailed}: ${err.message}${hint}` : t.parseFailed);
+      const parseCode = isApiFetchError(err) ? err.code : undefined;
+      const retryable = isApiFetchError(err) && (err.code === "PARSE_UPSTREAM_TIMEOUT" || err.code === "PARSE_UPSTREAM_HTTP_ERROR" || err.code === "PARSE_SCHEMA_INVALID");
+      setShowParseRetry(Boolean(retryable));
+      if (parseCode === "PARSE_UPSTREAM_TIMEOUT") {
+        setError(`${t.parseTimeout}${hint}`);
+      } else if (parseCode === "PARSE_SCHEMA_INVALID") {
+        setError(`${t.parseSchemaInvalid}${hint}`);
+      } else if (parseCode === "PARSE_UPSTREAM_HTTP_ERROR") {
+        setError(`${t.parseUnavailable}${hint}`);
+      } else {
+        setError(err instanceof Error ? `${t.parseFailed}: ${err.message}${hint}` : t.parseFailed);
+      }
     } finally {
       setParsing(false);
     }
@@ -384,6 +406,7 @@ export default function DailyFlowPage() {
 
   async function save(): Promise<void> {
     setError(null);
+    setShowParseRetry(false);
     if (!parsedEntries.length) {
       setError(t.needEntries);
       return;
@@ -410,6 +433,7 @@ export default function DailyFlowPage() {
 
   async function saveAndAnalyze(options?: { skipSave?: boolean }): Promise<void> {
     setError(null);
+    setShowParseRetry(false);
 
     if (!options?.skipSave) {
       if (!parsedEntries.length) {
@@ -501,8 +525,16 @@ export default function DailyFlowPage() {
       </div>
 
       {error ? (
-        <div className="whitespace-pre-line rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
-          {error}
+        <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="whitespace-pre-line">{error}</p>
+          {showParseRetry ? (
+            <div className="mt-3 flex justify-end">
+              <Button variant="outline" size="sm" onClick={() => void parseDiary()} disabled={isBusy}>
+                <Sparkles className={`mr-1.5 h-4 w-4 ${parsing ? "animate-pulse" : ""}`} />
+                {parsing ? t.parsing : t.parseRetry}
+              </Button>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

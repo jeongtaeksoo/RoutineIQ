@@ -203,6 +203,9 @@ def test_parse_diary_malformed_openai_output_returns_502(
     )
 
     assert response.status_code == 502
+    body = response.json()
+    assert isinstance(body.get("detail"), dict)
+    assert body["detail"]["code"] == "PARSE_SCHEMA_INVALID"
 
 
 def test_reflect_malformed_openai_output_returns_502(

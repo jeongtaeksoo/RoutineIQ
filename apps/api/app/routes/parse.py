@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import hashlib
 import json
+from json import JSONDecodeError
 from typing import Any
+from uuid import uuid4
 
+import httpx
 from fastapi import APIRouter, HTTPException
+from pydantic import ValidationError
 
 from app.core.rate_limit import consume
 from app.core.security import AuthDep
@@ -103,6 +108,24 @@ PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
 }
 
 
+def _error_payload(
+    *,
+    code: str,
+    message: str,
+    request_id: str,
+    retryable: bool = False,
+) -> dict[str, Any]:
+    hint = f"Reference ID: {request_id}"
+    if retryable:
+        hint = f"{hint}. Please retry once in a few seconds."
+    return {
+        "code": code,
+        "message": message,
+        "hint": hint,
+        "retryable": retryable,
+    }
+
+
 @router.post("/parse-diary", response_model=ParseDiaryResponse)
 async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryResponse:
     await consume(key=f"parse-diary:{auth.user_id}", limit=5, window_seconds=60)
@@ -128,6 +151,15 @@ async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryRespo
         f"locale: {auth.locale}\n"
         f"diary_text: {json.dumps(safe_diary_text, ensure_ascii=False)}"
     )
+    request_id = uuid4().hex[:12]
+    diary_digest = hashlib.sha256(body.diary_text.encode("utf-8")).hexdigest()[:16]
+    request_meta = {
+        "request_id": request_id,
+        "locale": auth.locale,
+        "date": body.date.isoformat(),
+        "diary_chars": len(body.diary_text),
+        "diary_digest": diary_digest,
+    }
 
     try:
         obj, _usage = await call_openai_structured(
@@ -136,16 +168,97 @@ async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryRespo
             response_schema=PARSE_DIARY_JSON_SCHEMA,
             schema_name="parse_diary_response",
         )
-        return ParseDiaryResponse.model_validate(obj)
     except HTTPException:
         raise
+    except httpx.TimeoutException as exc:
+        await log_system_error(
+            route="/api/parse-diary",
+            message="AI diary parsing timed out",
+            user_id=auth.user_id,
+            err=exc,
+            meta={**request_meta, "code": "PARSE_UPSTREAM_TIMEOUT"},
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=_error_payload(
+                code="PARSE_UPSTREAM_TIMEOUT",
+                message="AI diary parsing timed out. Please try again.",
+                request_id=request_id,
+                retryable=True,
+            ),
+        )
+    except httpx.HTTPStatusError as exc:
+        await log_system_error(
+            route="/api/parse-diary",
+            message="AI diary parsing upstream HTTP error",
+            user_id=auth.user_id,
+            err=exc,
+            meta={
+                **request_meta,
+                "code": "PARSE_UPSTREAM_HTTP_ERROR",
+                "status_code": exc.response.status_code,
+            },
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=_error_payload(
+                code="PARSE_UPSTREAM_HTTP_ERROR",
+                message="AI diary parsing service is temporarily unavailable. Please retry.",
+                request_id=request_id,
+                retryable=True,
+            ),
+        )
     except Exception as exc:
+        if isinstance(exc, (ValidationError, JSONDecodeError, ValueError)):
+            await log_system_error(
+                route="/api/parse-diary",
+                message="AI diary parsing schema validation failed",
+                user_id=auth.user_id,
+                err=exc,
+                meta={**request_meta, "code": "PARSE_SCHEMA_INVALID"},
+            )
+            raise HTTPException(
+                status_code=502,
+                detail=_error_payload(
+                    code="PARSE_SCHEMA_INVALID",
+                    message="AI diary parsing returned an invalid response. Please retry.",
+                    request_id=request_id,
+                    retryable=True,
+                ),
+            )
         await log_system_error(
             route="/api/parse-diary",
             message="AI diary parsing failed",
             user_id=auth.user_id,
             err=exc,
+            meta={**request_meta, "code": "PARSE_UPSTREAM_FAILURE"},
         )
         raise HTTPException(
-            status_code=502, detail="AI diary parsing failed. Please try again."
+            status_code=502,
+            detail=_error_payload(
+                code="PARSE_UPSTREAM_FAILURE",
+                message="AI diary parsing failed. Please try again.",
+                request_id=request_id,
+                retryable=False,
+            ),
+        )
+
+    try:
+        return ParseDiaryResponse.model_validate(obj)
+    except ValidationError as exc:
+        await log_system_error(
+            route="/api/parse-diary",
+            message="AI diary parsing schema validation failed",
+            user_id=auth.user_id,
+            err=exc,
+            meta={**request_meta, "code": "PARSE_SCHEMA_INVALID"},
+        )
+        raise HTTPException(
+            status_code=502,
+            detail=_error_payload(
+                code="PARSE_SCHEMA_INVALID",
+                message="AI diary parsing returned an invalid response. Please retry.",
+                request_id=request_id,
+                retryable=True,
+            ),
         )
