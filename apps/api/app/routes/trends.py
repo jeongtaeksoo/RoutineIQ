@@ -1,7 +1,8 @@
 from __future__ import annotations
 
+import hashlib
 from datetime import date, timedelta
-from typing import Any, Literal, cast
+from typing import Any, Literal, NamedTuple, cast
 
 from fastapi import APIRouter
 
@@ -9,10 +10,13 @@ from app.core.config import settings
 from app.core.security import AuthDep
 from app.schemas.preferences import (
     CompareDimension,
+    CohortTrendEventRequest,
     CohortTrendMetrics,
     CohortTrendResponse,
+    CohortThresholdVariant,
 )
 from app.services.supabase_rest import SupabaseRest
+from app.services.usage import insert_usage_event
 
 router = APIRouter()
 
@@ -36,6 +40,13 @@ _RECOVERY_ACTIVITY_KEYWORDS: tuple[str, ...] = (
     "拉伸",
     "descanso",
 )
+
+
+class ThresholdPolicy(NamedTuple):
+    variant: CohortThresholdVariant
+    preview_n: int
+    min_n: int
+    high_n: int
 
 
 def _as_int(value: Any) -> int:
@@ -62,6 +73,83 @@ def _as_float(value: Any) -> float | None:
         except ValueError:
             return None
     return None
+
+
+def _clamp_thresholds(preview_n: int, min_n: int, high_n: int) -> tuple[int, int, int]:
+    min_sample = max(int(min_n), 1)
+    preview_sample = min(max(int(preview_n), 1), min_sample)
+    high_sample = max(int(high_n), min_sample)
+    return preview_sample, min_sample, high_sample
+
+
+def _threshold_policy_for_user(user_id: str) -> ThresholdPolicy:
+    control_preview, control_min, control_high = _clamp_thresholds(
+        settings.cohort_preview_sample_size,
+        settings.cohort_min_sample_size,
+        settings.cohort_high_confidence_sample_size,
+    )
+    if not settings.cohort_threshold_experiment_enabled:
+        return ThresholdPolicy(
+            variant="control",
+            preview_n=control_preview,
+            min_n=control_min,
+            high_n=control_high,
+        )
+
+    exp_preview, exp_min, exp_high = _clamp_thresholds(
+        settings.cohort_experiment_preview_sample_size,
+        settings.cohort_experiment_min_sample_size,
+        settings.cohort_experiment_high_confidence_sample_size,
+    )
+    rollout = max(0, min(int(settings.cohort_threshold_experiment_rollout_pct), 100))
+    bucket = hashlib.sha256(user_id.encode("utf-8")).digest()[0] % 100
+    if bucket < rollout:
+        return ThresholdPolicy(
+            variant="candidate",
+            preview_n=exp_preview,
+            min_n=exp_min,
+            high_n=exp_high,
+        )
+    return ThresholdPolicy(
+        variant="control",
+        preview_n=control_preview,
+        min_n=control_min,
+        high_n=control_high,
+    )
+
+
+def _to_date(value: Any) -> date | None:
+    if not isinstance(value, str):
+        return None
+    try:
+        return date.fromisoformat(value)
+    except ValueError:
+        return None
+
+
+def _split_rows_by_weeks(
+    rows: list[dict[str, Any]],
+    *,
+    current_start: date,
+    previous_start: date,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    current_rows: list[dict[str, Any]] = []
+    previous_rows: list[dict[str, Any]] = []
+    for row in rows:
+        row_day = _to_date(row.get("date"))
+        if row_day is None:
+            continue
+        if row_day >= current_start:
+            current_rows.append(row)
+        elif row_day >= previous_start:
+            previous_rows.append(row)
+    return current_rows, previous_rows
+
+
+def _delta(cur: float | None, prev: float | None) -> float | None:
+    if cur is None or prev is None:
+        return None
+    return round(cur - prev, 2)
 
 
 def _to_scale_1_5(value: Any) -> int | None:
@@ -282,11 +370,11 @@ def _message_for(
 
 
 def _cohort_confidence_level(
-    cohort_size: int, min_n: int
+    cohort_size: int, min_n: int, high_n: int
 ) -> Literal["low", "medium", "high"]:
     if cohort_size < min_n:
         return "low"
-    if cohort_size < (min_n * 2):
+    if cohort_size < high_n:
         return "medium"
     return "high"
 
@@ -317,8 +405,10 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
             if isinstance(dim, str) and dim in _DIM_KEYS and dim not in compare_by:
                 compare_by.append(cast(CompareDimension, dim))
 
-    min_n = max(int(settings.cohort_min_sample_size), 1)
-    preview_n = min(max(int(settings.cohort_preview_sample_size), 1), min_n)
+    threshold_policy = _threshold_policy_for_user(auth.user_id)
+    min_n = threshold_policy.min_n
+    preview_n = threshold_policy.preview_n
+    high_n = threshold_policy.high_n
 
     if not trend_opt_in:
         return CohortTrendResponse(
@@ -326,6 +416,8 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
             insufficient_sample=True,
             min_sample_size=min_n,
             preview_sample_size=preview_n,
+            high_confidence_sample_size=high_n,
+            threshold_variant=threshold_policy.variant,
             preview_mode=False,
             confidence_level="low",
             cohort_size=0,
@@ -348,18 +440,31 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
         "work_mode": str(own.get("work_mode") or "unknown"),
     }
 
-    seven_days_ago = (date.today() - timedelta(days=6)).isoformat()
+    today = date.today()
+    current_week_start = today - timedelta(days=6)
+    previous_week_start = today - timedelta(days=13)
     my_rows = await sb_rls.select(
         "activity_logs",
         bearer_token=auth.access_token,
         params={
             "select": "date,entries",
             "user_id": f"eq.{auth.user_id}",
-            "date": f"gte.{seven_days_ago}",
+            "date": f"gte.{previous_week_start.isoformat()}",
             "order": "date.asc",
         },
     )
-    my_focus_rate, my_rebound_rate, my_recovery_rate = _compute_my_rates(my_rows)
+    current_rows, previous_rows = _split_rows_by_weeks(
+        my_rows,
+        current_start=current_week_start,
+        previous_start=previous_week_start,
+    )
+    my_focus_rate, my_rebound_rate, my_recovery_rate = _compute_my_rates(current_rows)
+    prev_focus_rate, prev_rebound_rate, prev_recovery_rate = _compute_my_rates(
+        previous_rows
+    )
+    my_focus_delta = _delta(my_focus_rate, prev_focus_rate)
+    my_rebound_delta = _delta(my_rebound_rate, prev_rebound_rate)
+    my_recovery_delta = _delta(my_recovery_rate, prev_recovery_rate)
 
     effective_compare_by: list[CompareDimension] = []
     filters: dict[str, str] = {}
@@ -402,7 +507,7 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
 
     insufficient = cohort_size < preview_n
     preview_mode = preview_n <= cohort_size < min_n
-    confidence_level = _cohort_confidence_level(cohort_size, min_n)
+    confidence_level = _cohort_confidence_level(cohort_size, min_n, high_n)
     if insufficient:
         msg = (
             f"코호트 표본이 아직 충분하지 않습니다 ({cohort_size}/{preview_n}). "
@@ -449,6 +554,8 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
         insufficient_sample=insufficient,
         min_sample_size=min_n,
         preview_sample_size=preview_n,
+        high_confidence_sample_size=high_n,
+        threshold_variant=threshold_policy.variant,
         preview_mode=preview_mode,
         confidence_level=confidence_level,
         cohort_size=cohort_size,
@@ -461,6 +568,38 @@ async def get_cohort_trend(auth: AuthDep) -> CohortTrendResponse:
         my_focus_rate=my_focus_rate,
         my_rebound_rate=my_rebound_rate,
         my_recovery_rate=my_recovery_rate,
+        my_focus_delta_7d=my_focus_delta,
+        my_rebound_delta_7d=my_rebound_delta,
+        my_recovery_delta_7d=my_recovery_delta,
         rank_label=rank_label,
         actionable_tip=actionable_tip,
     )
+
+
+@router.post("/trends/cohort/event")
+async def track_cohort_event(
+    payload: CohortTrendEventRequest, auth: AuthDep
+) -> dict[str, bool]:
+    try:
+        await insert_usage_event(
+            user_id=auth.user_id,
+            event_date=date.today(),
+            event_type=f"cohort_{payload.event_type}",
+            model="cohort-card",
+            tokens_prompt=None,
+            tokens_completion=None,
+            tokens_total=None,
+            cost_usd=None,
+            meta={
+                "threshold_variant": payload.threshold_variant,
+                "confidence_level": payload.confidence_level,
+                "preview_mode": payload.preview_mode,
+                "cohort_size": payload.cohort_size,
+                "window_days": payload.window_days,
+                "compare_by": payload.compare_by,
+            },
+            access_token=auth.access_token,
+        )
+        return {"ok": True}
+    except Exception:
+        return {"ok": False}

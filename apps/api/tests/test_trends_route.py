@@ -1,7 +1,26 @@
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 import pytest
 from fastapi.testclient import TestClient
+
+import app.routes.trends as trends_route
+
+
+def _iso(days_ago: int) -> str:
+    return (date.today() - timedelta(days=days_ago)).isoformat()
+
+
+@pytest.fixture(autouse=True)
+def _force_control_threshold_policy(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(
+        trends_route,
+        "_threshold_policy_for_user",
+        lambda _uid: trends_route.ThresholdPolicy(
+            variant="control", preview_n=20, min_n=50, high_n=100
+        ),
+    )
 
 
 def _opted_in_profile(**overrides) -> dict:
@@ -74,7 +93,7 @@ def test_trends_cohort_happy_path_includes_cohort_and_personal_metrics(
 ) -> None:
     supabase_mock["select"].side_effect = [
         [_opted_in_profile()],
-        [_my_log_row("2026-02-15"), _my_log_row("2026-02-14")],
+        [_my_log_row(_iso(1)), _my_log_row(_iso(2)), _my_log_row(_iso(8))],
     ]
     supabase_mock["rpc"].return_value = [_cohort_rpc_row(60)]
 
@@ -85,6 +104,8 @@ def test_trends_cohort_happy_path_includes_cohort_and_personal_metrics(
     assert body["enabled"] is True
     assert body["cohort_size"] == 60
     assert body["preview_sample_size"] == 20
+    assert body["high_confidence_sample_size"] == 100
+    assert body["threshold_variant"] == "control"
     assert body["preview_mode"] is False
     assert body["confidence_level"] == "medium"
     assert isinstance(body["metrics"], dict)
@@ -101,7 +122,7 @@ def test_trends_cohort_preview_mode_hides_rank_label(
 ) -> None:
     supabase_mock["select"].side_effect = [
         [_opted_in_profile()],
-        [_my_log_row("2026-02-15"), _my_log_row("2026-02-14")],
+        [_my_log_row(_iso(1)), _my_log_row(_iso(2))],
     ]
     supabase_mock["rpc"].return_value = [_cohort_rpc_row(30)]
 
@@ -138,7 +159,7 @@ def test_trends_cohort_boundary_cases(
 ) -> None:
     supabase_mock["select"].side_effect = [
         [_opted_in_profile()],
-        [_my_log_row("2026-02-15"), _my_log_row("2026-02-14")],
+        [_my_log_row(_iso(1)), _my_log_row(_iso(2))],
     ]
     supabase_mock["rpc"].return_value = [_cohort_rpc_row(cohort_size)]
 
@@ -149,6 +170,8 @@ def test_trends_cohort_boundary_cases(
     assert body["cohort_size"] == cohort_size
     assert body["min_sample_size"] == 50
     assert body["preview_sample_size"] == 20
+    assert body["high_confidence_sample_size"] == 100
+    assert body["threshold_variant"] == "control"
     assert body["insufficient_sample"] is expected_insufficient
     assert body["preview_mode"] is expected_preview_mode
     assert body["confidence_level"] == expected_confidence
@@ -244,3 +267,66 @@ def test_trends_cohort_uses_profile_filters_in_rpc_call(
     assert rpc_params["p_job_family"] == "professional"
     assert rpc_params["p_work_mode"] == "flex"
     assert rpc_params["p_compare_by"] == ["age_group", "job_family"]
+
+
+def test_trends_cohort_candidate_variant_policy_is_applied(
+    authenticated_client: TestClient, supabase_mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        trends_route,
+        "_threshold_policy_for_user",
+        lambda _uid: trends_route.ThresholdPolicy(
+            variant="candidate", preview_n=30, min_n=80, high_n=150
+        ),
+    )
+    supabase_mock["select"].side_effect = [
+        [_opted_in_profile()],
+        [_my_log_row(_iso(1)), _my_log_row(_iso(2))],
+    ]
+    supabase_mock["rpc"].return_value = [_cohort_rpc_row(60)]
+
+    response = authenticated_client.get("/api/trends/cohort")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["threshold_variant"] == "candidate"
+    assert body["preview_sample_size"] == 30
+    assert body["min_sample_size"] == 80
+    assert body["high_confidence_sample_size"] == 150
+    assert body["preview_mode"] is True
+    assert body["rank_label"] == ""
+    assert body["actionable_tip"] == ""
+
+
+def test_trends_cohort_event_tracking_persists_usage_event(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    response = authenticated_client.post(
+        "/api/trends/cohort/event",
+        json={
+            "event_type": "card_view",
+            "threshold_variant": "candidate",
+            "confidence_level": "low",
+            "preview_mode": True,
+            "cohort_size": 30,
+            "window_days": 14,
+            "compare_by": ["age_group", "job_family"],
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["ok"] is True
+    assert supabase_mock["insert_one"].await_count == 1
+    inserted = supabase_mock["insert_one"].await_args.kwargs["row"]
+    assert inserted["event_type"] == "cohort_card_view"
+    assert inserted["model"] == "cohort-card"
+    assert inserted["meta"]["threshold_variant"] == "candidate"
+    assert inserted["meta"]["preview_mode"] is True
+
+
+def test_trends_cohort_event_tracking_requires_auth(client: TestClient) -> None:
+    response = client.post(
+        "/api/trends/cohort/event",
+        json={"event_type": "card_view"},
+    )
+    assert response.status_code == 401

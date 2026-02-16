@@ -23,6 +23,8 @@ for (const vp of previewViewports) {
           insufficient_sample: false,
           min_sample_size: 50,
           preview_sample_size: 20,
+          high_confidence_sample_size: 100,
+          threshold_variant: "control",
           preview_mode: true,
           confidence_level: "low",
           cohort_size: 30,
@@ -45,6 +47,9 @@ for (const vp of previewViewports) {
           my_focus_rate: 60,
           my_rebound_rate: 39,
           my_recovery_rate: 22,
+          my_focus_delta_7d: 4,
+          my_rebound_delta_7d: -2,
+          my_recovery_delta_7d: 0,
           rank_label: "",
           actionable_tip: "",
         }),
@@ -56,6 +61,8 @@ for (const vp of previewViewports) {
 
     await expect(page.locator("span", { hasText: /참고용 미리보기|Preview only/i })).toBeVisible();
     await expect(page.getByText(/데이터 신뢰도:\s*낮음|Data confidence:\s*Low/i)).toBeVisible();
+    await expect(page.locator("p", { hasText: /비교 기준:|Compared by:/i }).first()).toBeVisible();
+    await expect(page.locator("p", { hasText: /전주 대비|vs last week/i }).first()).toBeVisible();
     await expect(page.getByText(/14일 기준|14-day window/i)).toBeVisible();
 
     await expect(page.getByText(/나의 위치|Your rank/i)).toHaveCount(0);

@@ -71,6 +71,24 @@ class Settings(BaseSettings):
     cohort_preview_sample_size: int = Field(
         default=20, alias="COHORT_PREVIEW_SAMPLE_SIZE"
     )
+    cohort_high_confidence_sample_size: int = Field(
+        default=100, alias="COHORT_HIGH_CONFIDENCE_SAMPLE_SIZE"
+    )
+    cohort_threshold_experiment_enabled: bool = Field(
+        default=True, alias="COHORT_THRESHOLD_EXPERIMENT_ENABLED"
+    )
+    cohort_threshold_experiment_rollout_pct: int = Field(
+        default=50, alias="COHORT_THRESHOLD_EXPERIMENT_ROLLOUT_PCT"
+    )
+    cohort_experiment_min_sample_size: int = Field(
+        default=80, alias="COHORT_EXPERIMENT_MIN_SAMPLE_SIZE"
+    )
+    cohort_experiment_preview_sample_size: int = Field(
+        default=30, alias="COHORT_EXPERIMENT_PREVIEW_SAMPLE_SIZE"
+    )
+    cohort_experiment_high_confidence_sample_size: int = Field(
+        default=150, alias="COHORT_EXPERIMENT_HIGH_CONFIDENCE_SAMPLE_SIZE"
+    )
 
     @model_validator(mode="after")
     def validate_runtime_constraints(self) -> "Settings":
@@ -93,6 +111,31 @@ class Settings(BaseSettings):
             )
         if is_prod and self.stripe_smoke_fake:
             raise ValueError("STRIPE_SMOKE_FAKE must be disabled in production.")
+
+        if not (0 <= self.cohort_threshold_experiment_rollout_pct <= 100):
+            raise ValueError("COHORT_THRESHOLD_EXPERIMENT_ROLLOUT_PCT must be 0..100")
+        if self.cohort_preview_sample_size > self.cohort_min_sample_size:
+            raise ValueError(
+                "COHORT_PREVIEW_SAMPLE_SIZE must be <= COHORT_MIN_SAMPLE_SIZE"
+            )
+        if self.cohort_min_sample_size > self.cohort_high_confidence_sample_size:
+            raise ValueError(
+                "COHORT_MIN_SAMPLE_SIZE must be <= COHORT_HIGH_CONFIDENCE_SAMPLE_SIZE"
+            )
+        if (
+            self.cohort_experiment_preview_sample_size
+            > self.cohort_experiment_min_sample_size
+        ):
+            raise ValueError(
+                "COHORT_EXPERIMENT_PREVIEW_SAMPLE_SIZE must be <= COHORT_EXPERIMENT_MIN_SAMPLE_SIZE"
+            )
+        if (
+            self.cohort_experiment_min_sample_size
+            > self.cohort_experiment_high_confidence_sample_size
+        ):
+            raise ValueError(
+                "COHORT_EXPERIMENT_MIN_SAMPLE_SIZE must be <= COHORT_EXPERIMENT_HIGH_CONFIDENCE_SAMPLE_SIZE"
+            )
 
         return self
 

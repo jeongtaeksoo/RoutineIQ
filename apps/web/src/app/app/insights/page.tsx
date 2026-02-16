@@ -82,6 +82,8 @@ type CohortTrend = {
   insufficient_sample: boolean;
   min_sample_size: number;
   preview_sample_size: number;
+  high_confidence_sample_size: number;
+  threshold_variant: "control" | "candidate" | string;
   preview_mode: boolean;
   confidence_level: "low" | "medium" | "high" | string;
   cohort_size: number;
@@ -104,6 +106,9 @@ type CohortTrend = {
   my_focus_rate: number | null;
   my_rebound_rate: number | null;
   my_recovery_rate: number | null;
+  my_focus_delta_7d: number | null;
+  my_rebound_delta_7d: number | null;
+  my_recovery_delta_7d: number | null;
   rank_label: string;
   actionable_tip: string;
 };
@@ -269,6 +274,13 @@ export default function InsightsPage() {
         confidenceMedium: "보통",
         confidenceHigh: "충분",
         previewOnly: "참고용 미리보기",
+        compareBy: "비교 기준",
+        trendVsLastWeek: "전주 대비",
+        noPrevWeek: "전주 데이터 없음",
+        dim_age_group: "연령대",
+        dim_gender: "성별",
+        dim_job_family: "직군",
+        dim_work_mode: "근무 형태",
       };
     }
     return {
@@ -363,6 +375,13 @@ export default function InsightsPage() {
       confidenceMedium: "Moderate",
       confidenceHigh: "High",
       previewOnly: "Preview only",
+      compareBy: "Compared by",
+      trendVsLastWeek: "vs last week",
+      noPrevWeek: "No prior-week data",
+      dim_age_group: "Age group",
+      dim_gender: "Gender",
+      dim_job_family: "Job family",
+      dim_work_mode: "Work mode",
     };
   }, [isKo]);
 
@@ -600,6 +619,77 @@ export default function InsightsPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const trackedCohortEventsRef = React.useRef<Set<string>>(new Set());
+  const trackCohortEvent = React.useCallback(
+    async (
+      eventType: "card_view" | "preview_badge_seen" | "rank_seen" | "tip_seen" | "preferences_click",
+      payload: {
+        threshold_variant: string;
+        confidence_level: string;
+        preview_mode: boolean;
+        cohort_size: number;
+        window_days: number;
+        compare_by: string[];
+      },
+    ) => {
+      const key = `${eventType}:${payload.threshold_variant}:${payload.preview_mode ? "1" : "0"}`;
+      if (trackedCohortEventsRef.current.has(key)) return;
+      trackedCohortEventsRef.current.add(key);
+      try {
+        await apiFetch<{ ok: boolean }>("/trends/cohort/event", {
+          method: "POST",
+          body: JSON.stringify({
+            event_type: eventType,
+            threshold_variant: payload.threshold_variant,
+            confidence_level: payload.confidence_level,
+            preview_mode: payload.preview_mode,
+            cohort_size: payload.cohort_size,
+            window_days: payload.window_days,
+            compare_by: payload.compare_by,
+          }),
+        });
+      } catch {
+        // Ignore telemetry failures to keep UX path deterministic.
+      }
+    },
+    [],
+  );
+
+  React.useEffect(() => {
+    if (!cohortTrend || !cohortTrend.enabled || cohortTrend.insufficient_sample) return;
+    const basePayload = {
+      threshold_variant: cohortTrend.threshold_variant || "control",
+      confidence_level: cohortTrend.confidence_level || "low",
+      preview_mode: Boolean(cohortTrend.preview_mode),
+      cohort_size: Number(cohortTrend.cohort_size || 0),
+      window_days: Number(cohortTrend.window_days || 14),
+      compare_by: Array.isArray(cohortTrend.compare_by) ? cohortTrend.compare_by : [],
+    };
+    void trackCohortEvent("card_view", basePayload);
+    if (cohortTrend.preview_mode) {
+      void trackCohortEvent("preview_badge_seen", basePayload);
+      return;
+    }
+    if (cohortTrend.rank_label) {
+      void trackCohortEvent("rank_seen", basePayload);
+    }
+    if (cohortTrend.actionable_tip) {
+      void trackCohortEvent("tip_seen", basePayload);
+    }
+  }, [cohortTrend, trackCohortEvent]);
+
+  const onCohortPreferencesClick = React.useCallback(() => {
+    if (!cohortTrend) return;
+    void trackCohortEvent("preferences_click", {
+      threshold_variant: cohortTrend.threshold_variant || "control",
+      confidence_level: cohortTrend.confidence_level || "low",
+      preview_mode: Boolean(cohortTrend.preview_mode),
+      cohort_size: Number(cohortTrend.cohort_size || 0),
+      window_days: Number(cohortTrend.window_days || 14),
+      compare_by: Array.isArray(cohortTrend.compare_by) ? cohortTrend.compare_by : [],
+    });
+  }, [cohortTrend, trackCohortEvent]);
+
   const hasLog = todayLogBlocks > 0;
   const hasReport = Boolean(report);
   const inputQualityScore = Math.round(report?.analysis_meta?.input_quality_score || 0);
@@ -624,6 +714,24 @@ export default function InsightsPage() {
             : "Insufficient data";
   const fmtPct = (value: number | null) => (value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`);
   const fmtRate = (value: number | null) => (value === null ? "—" : `${Math.round(value)}%`);
+  const fmtDelta = (value: number | null) => {
+    if (value === null) return t.noPrevWeek;
+    const arrow = value > 0 ? "↑" : value < 0 ? "↓" : "→";
+    const sign = value > 0 ? "+" : value < 0 ? "-" : "";
+    const abs = Math.abs(value);
+    const rounded = Number.isInteger(abs) ? `${abs}` : abs.toFixed(1);
+    return `${arrow} ${sign}${rounded}%p ${t.trendVsLastWeek}`;
+  };
+  const compareByLabels = React.useMemo(() => {
+    if (!cohortTrend?.compare_by?.length) return [] as string[];
+    const dimMap: Record<string, string> = {
+      age_group: t.dim_age_group,
+      gender: t.dim_gender,
+      job_family: t.dim_job_family,
+      work_mode: t.dim_work_mode,
+    };
+    return cohortTrend.compare_by.map((dim) => dimMap[dim] || dim);
+  }, [cohortTrend?.compare_by, t.dim_age_group, t.dim_gender, t.dim_job_family, t.dim_work_mode]);
   const confidenceLabel =
     cohortTrend?.confidence_level === "high"
       ? t.confidenceHigh
@@ -887,7 +995,9 @@ export default function InsightsPage() {
               <div className="inset-block p-4">
                 <p className="text-sm">{cohortTrend.message}</p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
-                  <Link href="/app/preferences">{isKo ? "설정 열기" : "Open Preferences"}</Link>
+                  <Link href="/app/preferences" onClick={onCohortPreferencesClick}>
+                    {isKo ? "설정 열기" : "Open Preferences"}
+                  </Link>
                 </Button>
               </div>
             ) : cohortTrend.insufficient_sample ? (
@@ -899,7 +1009,9 @@ export default function InsightsPage() {
                     : `Current sample ${cohortTrend.cohort_size} / preview minimum ${cohortTrend.preview_sample_size}`}
                 </p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
-                  <Link href="/app/preferences">{isKo ? "비교 기준 조정" : "Adjust filters"}</Link>
+                  <Link href="/app/preferences" onClick={onCohortPreferencesClick}>
+                    {isKo ? "비교 기준 조정" : "Adjust filters"}
+                  </Link>
                 </Button>
               </div>
             ) : (
@@ -922,24 +1034,32 @@ export default function InsightsPage() {
                       ) : null}
                     </div>
                   </div>
+                  {compareByLabels.length ? (
+                    <p className="mt-2 text-xs text-mutedFg">
+                      {t.compareBy}: {compareByLabels.join(" · ")}
+                    </p>
+                  ) : null}
 
                   {[
                     {
                       key: "focus",
                       label: t.myFocusRate,
                       mine: cohortTrend.my_focus_rate,
+                      delta: cohortTrend.my_focus_delta_7d,
                       average: cohortTrend.metrics.focus_window_rate,
                     },
                     {
                       key: "rebound",
                       label: t.myReboundRate,
                       mine: cohortTrend.my_rebound_rate,
+                      delta: cohortTrend.my_rebound_delta_7d,
                       average: cohortTrend.metrics.rebound_rate,
                     },
                     {
                       key: "recovery",
                       label: t.myRecoveryRate,
                       mine: cohortTrend.my_recovery_rate,
+                      delta: cohortTrend.my_recovery_delta_7d,
                       average: cohortTrend.metrics.recovery_buffer_day_rate,
                     },
                   ]
@@ -951,6 +1071,19 @@ export default function InsightsPage() {
                           <div>
                             <p className="title-serif text-2xl">{fmtRate(row.mine)}</p>
                             <p className="text-[11px] text-mutedFg">{isKo ? "나" : "You"}</p>
+                            <p
+                              className={
+                                row.delta === null
+                                  ? "text-[11px] text-mutedFg"
+                                  : row.delta > 0
+                                    ? "text-[11px] text-emerald-700"
+                                    : row.delta < 0
+                                      ? "text-[11px] text-rose-700"
+                                      : "text-[11px] text-mutedFg"
+                              }
+                            >
+                              {fmtDelta(row.delta)}
+                            </p>
                           </div>
                           <div className="text-right">
                             <p className="title-serif text-2xl text-mutedFg">{fmtRate(row.average)}</p>
@@ -981,7 +1114,9 @@ export default function InsightsPage() {
                     {isKo ? `${cohortTrend.window_days}일 기준` : `${cohortTrend.window_days}-day window`}
                   </span>
                   <Button asChild variant="outline" size="sm">
-                    <Link href="/app/preferences">{isKo ? "비교 기준 변경" : "Change dimensions"}</Link>
+                    <Link href="/app/preferences" onClick={onCohortPreferencesClick}>
+                      {isKo ? "비교 기준 변경" : "Change dimensions"}
+                    </Link>
                   </Button>
                 </div>
               </div>

@@ -152,6 +152,8 @@ async function handleApiRoute(
       insufficient_sample: false,
       min_sample_size: 50,
       preview_sample_size: 20,
+      high_confidence_sample_size: 100,
+      threshold_variant: "control",
       preview_mode: false,
       confidence_level: "low",
       cohort_size: 0,
@@ -171,7 +173,19 @@ async function handleApiRoute(
         recovery_day_denominator: 0,
       },
       message: "테스트 모드: 코호트 데이터를 비활성화했습니다.",
+      my_focus_rate: null,
+      my_rebound_rate: null,
+      my_recovery_rate: null,
+      my_focus_delta_7d: null,
+      my_rebound_delta_7d: null,
+      my_recovery_delta_7d: null,
+      rank_label: "",
+      actionable_tip: "",
     });
+  }
+
+  if (path === "/trends/cohort/event" && method === "POST") {
+    return json(route, 200, { ok: true });
   }
 
   if (path === "/insights/weekly" && method === "GET") {

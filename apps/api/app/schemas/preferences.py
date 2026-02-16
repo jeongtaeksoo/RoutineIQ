@@ -18,6 +18,14 @@ JobFamily = Literal[
 WorkMode = Literal["fixed", "flex", "shift", "freelance", "other", "unknown"]
 CompareDimension = Literal["age_group", "gender", "job_family", "work_mode"]
 CohortConfidenceLevel = Literal["low", "medium", "high"]
+CohortThresholdVariant = Literal["control", "candidate"]
+CohortEventType = Literal[
+    "card_view",
+    "preview_badge_seen",
+    "rank_seen",
+    "tip_seen",
+    "preferences_click",
+]
 
 
 DEFAULT_COMPARE_BY: tuple[CompareDimension, ...] = (
@@ -84,6 +92,8 @@ class CohortTrendResponse(BaseModel):
     insufficient_sample: bool
     min_sample_size: int
     preview_sample_size: int
+    high_confidence_sample_size: int
+    threshold_variant: CohortThresholdVariant = "control"
     preview_mode: bool = False
     confidence_level: CohortConfidenceLevel = "low"
     cohort_size: int
@@ -96,5 +106,20 @@ class CohortTrendResponse(BaseModel):
     my_focus_rate: float | None = None
     my_rebound_rate: float | None = None
     my_recovery_rate: float | None = None
+    my_focus_delta_7d: float | None = None
+    my_rebound_delta_7d: float | None = None
+    my_recovery_delta_7d: float | None = None
     rank_label: str = ""
     actionable_tip: str = ""
+
+
+class CohortTrendEventRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    event_type: CohortEventType
+    threshold_variant: CohortThresholdVariant = "control"
+    confidence_level: CohortConfidenceLevel | None = None
+    preview_mode: bool | None = None
+    cohort_size: int | None = Field(default=None, ge=0)
+    window_days: int | None = Field(default=None, ge=1)
+    compare_by: list[CompareDimension] = Field(default_factory=list)
