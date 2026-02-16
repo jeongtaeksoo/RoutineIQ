@@ -50,7 +50,7 @@ export default async function BillingPage() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="shadow-elevated border-brand/20">
             <CardHeader>
               <CardTitle>{isKo ? "Pro (Growth)" : "Pro (Growth)"}</CardTitle>
               <CardDescription>
@@ -187,7 +187,7 @@ export default async function BillingPage() {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className="shadow-elevated border-brand/20">
           <CardHeader>
             <CardTitle>{isKo ? "Pro (Growth)" : "Pro (Growth)"}</CardTitle>
             <CardDescription>

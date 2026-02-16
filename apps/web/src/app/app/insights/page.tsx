@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles } from "lucide-react";
+import { Sparkles, FileText, Clock, AlertTriangle, BookOpen, CheckCircle2 } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -195,12 +195,12 @@ export default function InsightsPage() {
         nextDesc_noReport: "오늘 기록을 바탕으로, 내일 흐름을 같이 잡아봅니다.",
         nextDesc_hasReport: "내일 일정을 미리 보고, 여유가 필요한 곳을 찾아보세요.",
         cta_start3min: "3분 진단 시작",
-      cta_analyzeNow: "AI로 정리하기",
-      cta_viewTomorrow: "내일 준비하기",
-      cta_editLog: "기록 열기",
-      cta_openReport: "리포트 전체보기",
-      cta_reload: "새로고침",
-      progress: "진행 상황",
+        cta_analyzeNow: "AI로 정리하기",
+        cta_viewTomorrow: "내일 준비하기",
+        cta_editLog: "기록 열기",
+        cta_openReport: "리포트 전체보기",
+        cta_reload: "새로고침",
+        progress: "진행 상황",
         step_log: "기록",
         step_analyze: "정리",
         step_plan: "내일 준비",
@@ -505,20 +505,20 @@ export default function InsightsPage() {
         score: Math.max(0, Math.min(100, Math.round(Number(res.consistency.score) || 0))),
         series: Array.isArray(res.consistency.series)
           ? res.consistency.series.map((s) => ({
-              day: String(s.day || "").slice(0, 5),
-              blocks: Number.isFinite(Number(s.blocks)) ? Number(s.blocks) : 0,
-            }))
+            day: String(s.day || "").slice(0, 5),
+            blocks: Number.isFinite(Number(s.blocks)) ? Number(s.blocks) : 0,
+          }))
           : [],
       });
 
       const goal: GoalPrefs | null =
         res.weekly.goal && typeof res.weekly.goal.keyword === "string"
           ? {
-              keyword: res.weekly.goal.keyword,
-              minutesPerDay: Number.isFinite(Number(res.weekly.goal.minutes_per_day))
-                ? Math.round(Number(res.weekly.goal.minutes_per_day))
-                : 0,
-            }
+            keyword: res.weekly.goal.keyword,
+            minutesPerDay: Number.isFinite(Number(res.weekly.goal.minutes_per_day))
+              ? Math.round(Number(res.weekly.goal.minutes_per_day))
+              : 0,
+          }
           : null;
 
       setWeekly({
@@ -543,8 +543,8 @@ export default function InsightsPage() {
             : Number(res.trend.deep_minutes_change_pct),
         pattern:
           res.trend?.pattern === "improving" ||
-          res.trend?.pattern === "declining" ||
-          res.trend?.pattern === "stable"
+            res.trend?.pattern === "declining" ||
+            res.trend?.pattern === "stable"
             ? res.trend.pattern
             : "insufficient_data",
       });
@@ -638,7 +638,7 @@ export default function InsightsPage() {
         : "border-rose-200 bg-rose-50 text-rose-800";
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5">
+    <div className="mx-auto w-full max-w-6xl space-y-5 stagger-children">
       <div>
         <h1 className="title-serif text-3xl">{t.title}</h1>
         <p className="mt-1 text-sm text-mutedFg">{t.subtitle}</p>
@@ -667,8 +667,8 @@ export default function InsightsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-12">
-        <Card className="lg:col-span-7">
+      <div className="grid gap-4 lg:grid-cols-12 stagger-children">
+        <Card className="lg:col-span-7 shadow-soft">
           <CardHeader>
             <CardTitle>{t.coachTitle}</CardTitle>
             <CardDescription>{t.coachDesc}</CardDescription>
@@ -688,7 +688,7 @@ export default function InsightsPage() {
               <div className="space-y-3">
                 <p className="title-serif text-2xl leading-snug">{report.coach_one_liner}</p>
                 <p className="text-sm text-mutedFg">{report.summary}</p>
-                <div className="rounded-xl border bg-white/55 p-3">
+                <div className="inset-block">
                   <p className="text-xs text-mutedFg">
                     {t.schemaLabel}: v{report.schema_version ?? 1}
                   </p>
@@ -734,16 +734,19 @@ export default function InsightsPage() {
                 </div>
               </div>
             ) : (
-              <div className="space-y-2 rounded-xl border bg-white/55 p-4">
+              <div className="flex flex-col items-center py-4 text-center">
+                <div className="empty-state-icon">
+                  <FileText className="h-5 w-5" />
+                </div>
                 <p className="text-sm font-semibold">{t.coachEmptyTitle}</p>
-                <p className="text-sm text-mutedFg">{hasLog ? t.coachEmptyBody_hasLog : t.coachEmptyBody_noLog}</p>
-                <p className="text-xs text-mutedFg">{t.coachEmptyHint}</p>
+                <p className="mt-1 text-sm text-mutedFg">{hasLog ? t.coachEmptyBody_hasLog : t.coachEmptyBody_noLog}</p>
+                <p className="mt-1 text-xs text-mutedFg">{t.coachEmptyHint}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-5 border-brand/30 bg-white/70 shadow-soft">
+        <Card className="lg:col-span-5 border-brand/30 bg-white/70 shadow-elevated">
           <CardHeader>
             <CardTitle>{t.nextTitle}</CardTitle>
             <CardDescription>
@@ -752,25 +755,25 @@ export default function InsightsPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              <div className="rounded-xl border bg-white/60 p-3">
+              <div className="inset-block">
                 <p className="text-xs text-mutedFg">{t.progress}</p>
                 <div className="mt-2 grid grid-cols-3 gap-2 text-xs">
-                  <div className="rounded-lg border bg-white/70 p-2 text-center">
+                  <div className="rounded-lg bg-white/70 p-2 text-center">
                     <div className="font-semibold">{t.step_log}</div>
-                    <div className={hasLog ? "mt-1 text-emerald-700" : "mt-1 text-mutedFg"}>
-                      {hasLog ? (isKo ? "완료" : "OK") : "—"}
+                    <div className={hasLog ? "mt-1 flex items-center justify-center gap-1 text-emerald-700" : "mt-1 text-mutedFg"}>
+                      {hasLog ? <><CheckCircle2 className="h-3.5 w-3.5" />{isKo ? "완료" : "OK"}</> : <span className="text-lg">·</span>}
                     </div>
                   </div>
-                  <div className="rounded-lg border bg-white/70 p-2 text-center">
+                  <div className="rounded-lg bg-white/70 p-2 text-center">
                     <div className="font-semibold">{t.step_analyze}</div>
-                    <div className={hasReport ? "mt-1 text-emerald-700" : "mt-1 text-mutedFg"}>
-                      {hasReport ? (isKo ? "완료" : "OK") : "—"}
+                    <div className={hasReport ? "mt-1 flex items-center justify-center gap-1 text-emerald-700" : "mt-1 text-mutedFg"}>
+                      {hasReport ? <><CheckCircle2 className="h-3.5 w-3.5" />{isKo ? "완료" : "OK"}</> : <span className="text-lg">·</span>}
                     </div>
                   </div>
-                  <div className="rounded-lg border bg-white/70 p-2 text-center">
+                  <div className="rounded-lg bg-white/70 p-2 text-center">
                     <div className="font-semibold">{t.step_plan}</div>
-                    <div className={hasReport ? "mt-1 text-emerald-700" : "mt-1 text-mutedFg"}>
-                      {hasReport ? (isKo ? "완료" : "OK") : "—"}
+                    <div className={hasReport ? "mt-1 flex items-center justify-center gap-1 text-emerald-700" : "mt-1 text-mutedFg"}>
+                      {hasReport ? <><CheckCircle2 className="h-3.5 w-3.5" />{isKo ? "완료" : "OK"}</> : <span className="text-lg">·</span>}
                     </div>
                   </div>
                 </div>
@@ -833,7 +836,7 @@ export default function InsightsPage() {
             ) : report?.tomorrow_routine?.length ? (
               <div className="space-y-3">
                 {report.tomorrow_routine.slice(0, 6).map((it, idx) => (
-                  <div key={idx} className="rounded-lg border bg-white/50 p-3">
+                  <div key={idx} className="inset-block">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold">
                         {it.start}–{it.end} · {it.activity}
@@ -849,7 +852,10 @@ export default function InsightsPage() {
                 ) : null}
               </div>
             ) : (
-              <div className="rounded-lg border bg-white/55 p-4">
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="empty-state-icon">
+                  <Clock className="h-5 w-5" />
+                </div>
                 <p className="text-sm font-semibold">{t.scheduleEmptyTitle}</p>
                 <p className="mt-1 text-sm text-mutedFg">{t.scheduleEmptyBody}</p>
               </div>
@@ -869,20 +875,23 @@ export default function InsightsPage() {
                 <Skeleton className="h-24 w-full rounded-lg" />
               </div>
             ) : !cohortTrend ? (
-              <div className="rounded-lg border bg-white/55 p-4">
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="empty-state-icon">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
                 <p className="text-sm">
                   {isKo ? "코호트 트렌드를 불러오지 못했습니다." : "Failed to load cohort trend."}
                 </p>
               </div>
             ) : !cohortTrend.enabled ? (
-              <div className="rounded-lg border bg-white/55 p-4">
+              <div className="inset-block p-4">
                 <p className="text-sm">{cohortTrend.message}</p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
                   <Link href="/app/preferences">{isKo ? "설정 열기" : "Open Preferences"}</Link>
                 </Button>
               </div>
             ) : cohortTrend.insufficient_sample ? (
-              <div className="rounded-lg border bg-white/55 p-4">
+              <div className="inset-block p-4">
                 <p className="text-sm">{cohortTrend.message}</p>
                 <p className="mt-1 text-xs text-mutedFg">
                   {isKo
@@ -896,7 +905,7 @@ export default function InsightsPage() {
             ) : (
               <div className="space-y-3">
                 <p className="text-sm">{cohortTrend.message}</p>
-                <div className="rounded-lg border bg-white/50 p-4">
+                <div className="inset-block p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
                     <p className="text-sm font-semibold">{t.youVsSimilar}</p>
                     <div className="flex flex-wrap items-center gap-2">
@@ -936,7 +945,7 @@ export default function InsightsPage() {
                   ]
                     .filter((row) => row.mine !== null)
                     .map((row) => (
-                      <div key={row.key} className="mt-3 rounded-lg border bg-white/60 p-3">
+                      <div key={row.key} className="mt-3 rounded-lg bg-white/60 p-3">
                         <p className="text-xs text-mutedFg">{row.label}</p>
                         <div className="mt-1 grid grid-cols-2 gap-2">
                           <div>
@@ -994,7 +1003,7 @@ export default function InsightsPage() {
             ) : report?.productivity_peaks?.length ? (
               <div className="space-y-3">
                 {report.productivity_peaks.slice(0, 4).map((p, idx) => (
-                  <div key={idx} className="rounded-lg border bg-white/50 p-3">
+                  <div key={idx} className="inset-block">
                     <p className="text-sm font-semibold">
                       {p.start}–{p.end}
                     </p>
@@ -1003,7 +1012,10 @@ export default function InsightsPage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border bg-white/55 p-4">
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="empty-state-icon">
+                  <Clock className="h-5 w-5" />
+                </div>
                 <p className="text-sm text-mutedFg">{t.peakHoursEmpty}</p>
               </div>
             )}
@@ -1023,7 +1035,7 @@ export default function InsightsPage() {
             ) : report?.failure_patterns?.length ? (
               <div className="space-y-3">
                 {report.failure_patterns.slice(0, 3).map((f, idx) => (
-                  <div key={idx} className="rounded-lg border bg-white/50 p-3">
+                  <div key={idx} className="inset-block">
                     <p className="text-sm font-semibold">{f.pattern}</p>
                     <p className="mt-1 text-xs text-mutedFg">
                       {isKo ? "트리거" : "Trigger"}: {f.trigger}
@@ -1035,7 +1047,10 @@ export default function InsightsPage() {
                 ))}
               </div>
             ) : (
-              <div className="rounded-lg border bg-white/55 p-4">
+              <div className="flex flex-col items-center py-6 text-center">
+                <div className="empty-state-icon">
+                  <AlertTriangle className="h-5 w-5" />
+                </div>
                 <p className="text-sm text-mutedFg">{t.breakTriggersEmpty}</p>
               </div>
             )}
@@ -1070,13 +1085,13 @@ export default function InsightsPage() {
                 <p className="title-serif text-4xl">{consistency.score}</p>
                 <p className="text-sm text-mutedFg">/ 100</p>
               </div>
-              <div className="flex items-center justify-between rounded-lg border bg-white/50 p-3 text-sm">
+              <div className="flex items-center justify-between rounded-lg bg-white/50 p-3 text-sm">
                 <span className="text-mutedFg">{t.daysLogged}</span>
                 <span className="font-semibold">
                   {weekly.daysLogged}/{weekly.daysTotal}
                 </span>
               </div>
-              <div className="h-32 rounded-lg border bg-white/40 p-2">
+              <div className="h-32 rounded-lg bg-white/40 p-2">
                 <ConsistencyBarChart data={consistency.series} />
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1111,7 +1126,7 @@ export default function InsightsPage() {
               <CardDescription>{t.weeklyDesc}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-5">
-              <div className="rounded-xl border bg-white/50 p-4">
+              <div className="rounded-xl bg-white/50 p-4">
                 <p className="text-xs text-mutedFg">{t.totalBlocks7d}</p>
                 <p className="title-serif mt-1 text-3xl">{weekly.totalBlocks}</p>
               </div>
@@ -1157,7 +1172,7 @@ export default function InsightsPage() {
                   </>
                 )}
               </div>
-              <div className="rounded-xl border bg-white/50 p-4 md:col-span-5">
+              <div className="rounded-xl bg-white/50 p-4 md:col-span-5">
                 <p className="text-xs text-mutedFg">{t.trendPattern}</p>
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">{trendLabel}</span>

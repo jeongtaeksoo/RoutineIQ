@@ -162,6 +162,41 @@ body {
   box-shadow: 0 12px 32px -8px rgba(74, 63, 53, 0.1);
 }
 
+/* ─── Card depth hierarchy ─── */
+.shadow-soft {
+  box-shadow: 0 2px 12px -4px rgba(74, 63, 53, 0.08);
+}
+
+.shadow-elevated {
+  box-shadow: 0 8px 32px -8px rgba(74, 63, 53, 0.12);
+}
+
+/* Inset block – replaces nested border-on-border cards */
+.inset-block {
+  background: hsl(var(--bg-soft));
+  border-radius: 0.75rem;
+  padding: 0.75rem;
+  border: none;
+}
+
+/* Empty state placeholder */
+.empty-state-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 3rem;
+  height: 3rem;
+  border-radius: 50%;
+  background: hsl(var(--muted));
+  color: hsl(var(--muted-fg));
+  margin-bottom: 0.75rem;
+}
+
+/* Writing area warm gradient */
+.write-area-bg {
+  background: linear-gradient(160deg, hsl(35 30% 97%) 0%, hsl(33 25% 95%) 100%);
+}
+
 @media (prefers-reduced-motion: reduce) {
 
   *,

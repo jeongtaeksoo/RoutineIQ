@@ -222,13 +222,19 @@ export function AppShell({
                 href={it.href}
                 aria-current={active ? "page" : undefined}
                 className={cn(
-                  "flex min-h-[68px] flex-col items-center justify-center gap-1 px-2 pt-2 text-[11px] transition-colors",
+                  "flex min-h-[68px] flex-col items-center justify-center gap-1 px-2 pt-2 text-[11px] transition-colors duration-200",
                   active ? "text-fg" : "text-mutedFg"
                 )}
                 style={{ paddingBottom: "calc(0.55rem + env(safe-area-inset-bottom))" }}
               >
-                <Icon className={cn("h-5 w-5", active ? "text-brand" : "text-mutedFg")} />
+                <span className={cn(
+                  "flex items-center justify-center rounded-full p-1.5 transition-colors duration-200",
+                  active ? "bg-brand/10 text-brand" : "text-mutedFg"
+                )}>
+                  <Icon className={cn("h-5 w-5", active ? "text-brand" : "text-mutedFg")} />
+                </span>
                 <span className="line-clamp-1">{short}</span>
+                {active ? <span className="h-1 w-1 rounded-full bg-brand" /> : null}
               </Link>
             );
           })}

@@ -197,13 +197,13 @@ export default function DailyFlowPage() {
         analyze: "AI 분석",
         analyzing: "분석 중...",
         failedLoad: "불러오기 실패",
-      parseFailed: "일기 파싱 실패",
-      parseTimeout: "AI 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
-      parseSchemaInvalid: "AI 응답 형식이 불안정했습니다. 다시 시도하면 대부분 해결됩니다.",
-      parseUnavailable: "AI 파싱 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해 주세요.",
-      parseRetry: "다시 시도",
-      saveFailed: "저장 실패",
-      analyzeFailed: "분석 실패",
+        parseFailed: "일기 파싱 실패",
+        parseTimeout: "AI 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
+        parseSchemaInvalid: "AI 응답 형식이 불안정했습니다. 다시 시도하면 대부분 해결됩니다.",
+        parseUnavailable: "AI 파싱 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해 주세요.",
+        parseRetry: "다시 시도",
+        saveFailed: "저장 실패",
+        analyzeFailed: "분석 실패",
         needDiary: "일기를 10자 이상 입력해 주세요",
         needEntries: "저장할 파싱 결과가 없습니다",
         noEntries: "파싱된 활동이 없습니다. 일기를 조금 더 구체적으로 작성해 주세요.",
@@ -539,14 +539,15 @@ export default function DailyFlowPage() {
       ) : null}
 
       {step === "write" ? (
-        <div className="space-y-3 rounded-xl border bg-white/60 p-4">
-          <Label className="text-sm font-medium">{t.writeTitle}</Label>
+        <div className="space-y-3 rounded-xl border bg-white/60 p-4 write-area-bg">
           <Textarea
+            id="diary-input"
             ref={diaryRef}
             value={diaryText}
             onChange={(e) => setDiaryText(e.target.value)}
+            aria-label={t.writeTitle}
             placeholder={isKo ? "오늘 하루를 돌아보며 자유롭게 적어주세요..." : "Write freely about your day..."}
-            className="min-h-[200px] resize-none bg-white"
+            className="min-h-[200px] resize-none bg-white/80"
           />
           <p className="text-xs text-mutedFg">{t.writeHint}</p>
           <div className="flex justify-end">
