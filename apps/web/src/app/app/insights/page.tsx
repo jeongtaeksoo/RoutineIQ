@@ -638,7 +638,7 @@ export default function InsightsPage() {
         : "border-rose-200 bg-rose-50 text-rose-800";
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-5 stagger-children">
+    <div className="mx-auto w-full max-w-6xl space-y-5">
       <div>
         <h1 className="title-serif text-3xl">{t.title}</h1>
         <p className="mt-1 text-sm text-mutedFg">{t.subtitle}</p>
@@ -667,7 +667,7 @@ export default function InsightsPage() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 lg:grid-cols-12 stagger-children">
+      <div className="grid gap-4 lg:grid-cols-12">
         <Card className="lg:col-span-7 shadow-soft">
           <CardHeader>
             <CardTitle>{t.coachTitle}</CardTitle>
