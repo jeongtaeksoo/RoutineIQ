@@ -10,6 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { buildTomorrowRoutineIcs } from "@/lib/ics";
+import { Skeleton } from "@/components/ui/skeleton";
 
 type AIReport = {
   schema_version?: number;
@@ -384,12 +385,12 @@ export default function ReportPage() {
         };
       })
       .filter(Boolean) as Array<{
-      start: string;
-      end: string;
-      reason: string;
-      leftPct: number;
-      widthPct: number;
-    }>;
+        start: string;
+        end: string;
+        reason: string;
+        leftPct: number;
+        widthPct: number;
+      }>;
   }, [report]);
 
   async function load() {
@@ -487,7 +488,40 @@ export default function ReportPage() {
         </div>
       ) : null}
 
-      {loading ? <p className="text-sm text-mutedFg">{t.loading}</p> : null}
+      {loading ? (
+        <div role="status" aria-live="polite" className="grid gap-4 lg:grid-cols-12">
+          <span className="sr-only">{t.loading}</span>
+          <Card className="lg:col-span-12">
+            <CardHeader>
+              <Skeleton className="h-5 w-48" />
+              <Skeleton className="h-4 w-72 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-4 w-full" />
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-6">
+            <CardHeader>
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-14 w-full rounded-lg" />
+              <Skeleton className="h-14 w-full rounded-lg" />
+            </CardContent>
+          </Card>
+          <Card className="lg:col-span-6">
+            <CardHeader>
+              <Skeleton className="h-5 w-40" />
+              <Skeleton className="h-4 w-56 mt-1" />
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Skeleton className="h-20 w-full rounded-lg" />
+            </CardContent>
+          </Card>
+        </div>
+      ) : null}
 
       {!loading && !report ? (
         <Card>

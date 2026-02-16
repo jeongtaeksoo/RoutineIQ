@@ -61,7 +61,7 @@ function LevelBar({
                             key={n}
                             type="button"
                             onClick={() => onChange(n)}
-                            className={`h-5 w-5 rounded-full border-2 transition-all duration-150 ${filled
+                            className={`h-5 w-5 rounded-full border-2 transition-[transform,background-color,border-color] duration-150 ${filled
                                 ? `${colorClass} border-transparent scale-110`
                                 : "border-gray-300 bg-transparent hover:border-gray-400 hover:scale-110"
                                 }`}

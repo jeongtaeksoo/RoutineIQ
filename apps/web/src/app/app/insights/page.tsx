@@ -1162,10 +1162,10 @@ export default function InsightsPage() {
                 <div className="mt-2 flex flex-wrap items-center gap-3">
                   <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">{trendLabel}</span>
                   <span className="text-xs text-mutedFg">
-                    {t.trendBlocksDelta}: <strong className="text-foreground">{fmtPct(trend.blocksChangePct)}</strong>
+                    {t.trendBlocksDelta}: <strong className="text-fg">{fmtPct(trend.blocksChangePct)}</strong>
                   </span>
                   <span className="text-xs text-mutedFg">
-                    {t.trendDeepDelta}: <strong className="text-foreground">{fmtPct(trend.deepMinutesChangePct)}</strong>
+                    {t.trendDeepDelta}: <strong className="text-fg">{fmtPct(trend.deepMinutesChangePct)}</strong>
                   </span>
                 </div>
               </div>
