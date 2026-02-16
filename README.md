@@ -12,7 +12,7 @@ RutineIQ helps users log a day quickly, analyze behavior with AI, and generate a
 - `apps/web`: frontend (App Router)
 - `apps/api`: backend API
 - `supabase`: schema and SQL patches
-- `docs`: architecture and product/design references
+- `docs`: unified project notes
 
 ### Local Development
 1. API
@@ -45,7 +45,5 @@ npm run dev
 - API: Render
 
 ### Key Docs
-- `docs/ARCHITECTURE.md`
-- `docs/IA.md`
-- `docs/DB_DESIGN.md`
+- `docs/CTO_AUTONOMOUS_RUN.md`
 - `RELEASE_CHECKLIST.md`
