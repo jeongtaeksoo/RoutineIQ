@@ -86,7 +86,7 @@ def test_parse_diary_requires_auth(client: TestClient) -> None:
     assert response.status_code == 401
 
 
-def test_parse_diary_timeout_maps_to_coded_502(
+def test_parse_diary_timeout_returns_fallback_response(
     authenticated_client: TestClient, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -104,15 +104,15 @@ def test_parse_diary_timeout_maps_to_coded_502(
         },
     )
 
-    assert response.status_code == 502
+    assert response.status_code == 200
     body = response.json()
-    assert isinstance(body.get("detail"), dict)
-    assert body["detail"]["code"] == "PARSE_UPSTREAM_TIMEOUT"
-    assert body["detail"]["retryable"] is True
-    assert "Reference ID:" in body["detail"]["hint"]
+    assert isinstance(body.get("entries"), list)
+    assert len(body["entries"]) >= 1
+    assert body["entries"][0]["confidence"] in {"low", "medium", "high"}
+    assert isinstance(body.get("ai_note"), str) and body["ai_note"].strip()
 
 
-def test_parse_diary_invalid_schema_maps_to_coded_502(
+def test_parse_diary_invalid_schema_returns_fallback_response(
     authenticated_client: TestClient, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -135,8 +135,41 @@ def test_parse_diary_invalid_schema_maps_to_coded_502(
         },
     )
 
-    assert response.status_code == 502
+    assert response.status_code == 200
     body = response.json()
-    assert isinstance(body.get("detail"), dict)
-    assert body["detail"]["code"] == "PARSE_SCHEMA_INVALID"
-    assert body["detail"]["retryable"] is True
+    assert isinstance(body.get("entries"), list)
+    assert len(body["entries"]) >= 1
+    assert body["entries"][0]["confidence"] in {"low", "medium", "high"}
+    assert isinstance(body.get("ai_note"), str) and body["ai_note"].strip()
+
+
+def test_parse_diary_http_status_error_returns_fallback_response(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    request = httpx.Request("POST", "https://api.openai.com/v1/responses")
+    response = httpx.Response(status_code=502, request=request)
+    monkeypatch.setattr(
+        parse_route,
+        "call_openai_structured",
+        AsyncMock(
+            side_effect=httpx.HTTPStatusError(
+                "Bad Gateway",
+                request=request,
+                response=response,
+            )
+        ),
+    )
+    monkeypatch.setattr(parse_route, "log_system_error", AsyncMock(return_value=None))
+
+    res = authenticated_client.post(
+        "/api/parse-diary",
+        json={
+            "date": "2026-02-15",
+            "diary_text": "09:00 to 10:00 deep work, then meetings all afternoon.",
+        },
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert isinstance(body.get("entries"), list)
+    assert len(body["entries"]) >= 1

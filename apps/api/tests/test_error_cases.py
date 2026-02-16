@@ -182,7 +182,7 @@ def test_analyze_with_old_date_is_handled(
     assert response.json()["date"] == "2025-01-01"
 
 
-def test_parse_diary_malformed_openai_output_returns_502(
+def test_parse_diary_malformed_openai_output_returns_fallback_200(
     authenticated_client: TestClient, monkeypatch
 ) -> None:
     monkeypatch.setattr(
@@ -202,10 +202,10 @@ def test_parse_diary_malformed_openai_output_returns_502(
         json={"date": "2026-02-15", "diary_text": "Today I wrote code and took a break."},
     )
 
-    assert response.status_code == 502
+    assert response.status_code == 200
     body = response.json()
-    assert isinstance(body.get("detail"), dict)
-    assert body["detail"]["code"] == "PARSE_SCHEMA_INVALID"
+    assert isinstance(body.get("entries"), list)
+    assert len(body["entries"]) >= 1
 
 
 def test_reflect_malformed_openai_output_returns_502(
