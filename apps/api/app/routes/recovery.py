@@ -68,6 +68,21 @@ _NUDGE_MESSAGE_BY_LOCALE: dict[str, str] = {
     "es": "No necesitas reiniciar perfecto. Empieza con una accion minima de 2 minutos.",
 }
 
+_RECOVERY_REQUIRED_TABLES: tuple[str, ...] = (
+    "recovery_sessions",
+    "user_recovery_state",
+    "recovery_nudges",
+)
+_RECOVERY_PREFLIGHT_SELECT_COLUMN: dict[str, str] = {
+    "recovery_sessions": "id",
+    "user_recovery_state": "user_id",
+    "recovery_nudges": "id",
+}
+_RECOVERY_MIGRATION_FILES: tuple[str, ...] = (
+    "supabase/patches/2026-02-17_recovery_sessions.sql",
+    "supabase/patches/2026-02-18_recovery_state_and_nudges.sql",
+)
+
 
 def _ensure_enabled() -> None:
     if not settings.recovery_v1_enabled:
@@ -160,6 +175,164 @@ def _is_unique_open_conflict(exc: SupabaseRestError) -> bool:
 def _is_unique_nudge_conflict(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
     return exc.code == "23505" and "recovery_nudges_user_session_channel_uniq" in msg
+
+
+def _is_table_missing_error(exc: SupabaseRestError) -> bool:
+    blob = " ".join(
+        [
+            str(exc.code or ""),
+            str(exc),
+            str(exc.hint or ""),
+            str(exc.details or ""),
+        ]
+    ).lower()
+    if exc.code in {"42P01", "PGRST205"}:
+        return True
+    return (
+        ("does not exist" in blob and "relation" in blob)
+        or "table not found" in blob
+        or "could not find the table" in blob
+    )
+
+
+def _is_permission_or_rls_error(exc: SupabaseRestError) -> bool:
+    blob = " ".join(
+        [
+            str(exc.code or ""),
+            str(exc),
+            str(exc.hint or ""),
+            str(exc.details or ""),
+        ]
+    ).lower()
+    if exc.status_code in {401, 403}:
+        return True
+    if exc.code in {"42501", "PGRST301", "PGRST302"}:
+        return True
+    return (
+        "permission denied" in blob
+        or "insufficient_privilege" in blob
+        or "row-level security" in blob
+        or "rls" in blob
+    )
+
+
+async def _log_cron_preflight_error(
+    *,
+    route: str,
+    correlation_id: str,
+    detail: dict[str, Any],
+    err: BaseException,
+) -> None:
+    try:
+        await _log_recovery_error(
+            route=route,
+            message="Recovery cron preflight failed",
+            user_id=None,
+            correlation_id=correlation_id,
+            area="cron_preflight",
+            err=err,
+            meta=detail,
+        )
+    except Exception:
+        pass
+
+
+async def _ensure_cron_runtime_ready(
+    *,
+    route: str,
+    correlation_id: str,
+) -> str:
+    service_token = (settings.supabase_service_role_key or "").strip()
+    if not service_token:
+        detail = {
+            "error": "recovery_cron_preflight_failed",
+            "reason": "service_role_key_missing",
+            "action": "Set SUPABASE_SERVICE_ROLE_KEY before running recovery cron endpoints.",
+        }
+        err = RuntimeError("SUPABASE_SERVICE_ROLE_KEY is not configured")
+        await _log_cron_preflight_error(
+            route=route,
+            correlation_id=correlation_id,
+            detail=detail,
+            err=err,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail,
+        )
+
+    sb = SupabaseRest(str(settings.supabase_url), service_token)
+    missing_tables: list[str] = []
+
+    for table in _RECOVERY_REQUIRED_TABLES:
+        try:
+            await sb.select(
+                table,
+                bearer_token=service_token,
+                params={
+                    "select": _RECOVERY_PREFLIGHT_SELECT_COLUMN.get(table, "id"),
+                    "limit": 1,
+                },
+            )
+        except SupabaseRestError as exc:
+            if _is_table_missing_error(exc):
+                missing_tables.append(table)
+                continue
+            if _is_permission_or_rls_error(exc):
+                detail = {
+                    "error": "recovery_cron_preflight_failed",
+                    "reason": "permission_or_rls",
+                    "table": table,
+                    "action": "Verify SUPABASE_SERVICE_ROLE_KEY permissions and RLS/policy configuration.",
+                }
+                await _log_cron_preflight_error(
+                    route=route,
+                    correlation_id=correlation_id,
+                    detail=detail,
+                    err=exc,
+                )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=detail,
+                )
+            detail = {
+                "error": "recovery_cron_preflight_failed",
+                "reason": "preflight_query_failed",
+                "table": table,
+                "action": "Inspect API/Supabase logs for details and verify recovery schema health.",
+            }
+            await _log_cron_preflight_error(
+                route=route,
+                correlation_id=correlation_id,
+                detail=detail,
+                err=exc,
+            )
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=detail,
+            )
+
+    if missing_tables:
+        detail = {
+            "error": "recovery_cron_preflight_failed",
+            "reason": "missing_tables",
+            "missing_tables": missing_tables,
+            "action": "Apply migrations in order: "
+            + ", ".join(_RECOVERY_MIGRATION_FILES),
+        }
+        err = RuntimeError(f"Missing recovery tables: {', '.join(missing_tables)}")
+        await _log_cron_preflight_error(
+            route=route,
+            correlation_id=correlation_id,
+            detail=detail,
+            err=err,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=detail,
+        )
+
+    return service_token
 
 
 def _event_request_id(event_type: str, session_id: str) -> str:
@@ -1110,9 +1283,12 @@ async def run_auto_lapse_cron(
     _ensure_auto_lapse_enabled()
     _verify_cron_token(request)
     correlation_id = _correlation_id(request, response)
+    service_token = await _ensure_cron_runtime_ready(
+        route="/api/recovery/cron/auto-lapse",
+        correlation_id=correlation_id,
+    )
 
-    sb = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
-    service_token = settings.supabase_service_role_key
+    sb = SupabaseRest(str(settings.supabase_url), service_token)
 
     scanned = 0
     created_count = 0
@@ -1298,9 +1474,12 @@ async def run_nudge_cron(
     _ensure_nudge_enabled()
     _verify_cron_token(request)
     correlation_id = _correlation_id(request, response)
+    service_token = await _ensure_cron_runtime_ready(
+        route="/api/recovery/cron/nudge",
+        correlation_id=correlation_id,
+    )
 
-    sb = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
-    service_token = settings.supabase_service_role_key
+    sb = SupabaseRest(str(settings.supabase_url), service_token)
     now = _utc_now()
 
     scanned = 0
