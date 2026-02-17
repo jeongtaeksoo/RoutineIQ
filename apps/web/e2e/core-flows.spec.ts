@@ -350,21 +350,23 @@ test.describe("RutineIQ core flows", () => {
     await expect(page.getByText(/리포트를 불러오지 못했습니다|Failed to load report/i)).toHaveCount(0);
   });
 
-  test("F3: Guest billing conversion -> checkout session request", async ({ page }) => {
+  test("F3: Settings account tab upgrade -> checkout session request", async ({ page }) => {
     const mock = await installRoutineApiMock(page);
 
     await enterMockApp(page);
-    await page.goto("/app/billing");
+    await page.goto("/app/insights");
+    await page.getByRole("button", { name: /설정|Settings/i }).click();
+    await page.getByRole("tab", { name: /계정|Account/i }).click();
 
-    await page.getByLabel(/이메일|Email/i).fill("demo-user@routineiq.test");
-    await page.getByLabel(/^비밀번호$|^Password$/i).fill("RutineIQ123!");
-    await page.getByLabel(/비밀번호 확인|Confirm password/i).nth(0).fill("RutineIQ123!");
+    await page.getByLabel(/이메일|Email/i).first().fill("demo-user@routineiq.test");
+    await page.getByLabel(/^비밀번호$|^Password$/i).first().fill("RutineIQ123!");
+    await page.getByLabel(/비밀번호 확인|Confirm password/i).first().fill("RutineIQ123!");
     await page.getByRole("button", { name: /계정 만들고 계속하기|Create account to continue/i }).click();
 
     await expect(page.getByTestId("continue-checkout")).toBeVisible();
     await page.getByTestId("continue-checkout").click();
 
-    await expect(page).toHaveURL(/\/app\/billing\?checkout=ok/);
+    await expect(page).toHaveURL(/\/app\/insights\?checkout=ok/);
     expect(mock.checkoutCalls).toBe(1);
   });
 });

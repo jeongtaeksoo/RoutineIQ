@@ -1,10 +1,10 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
 import { Bell, Database, Mail, Settings, ShieldCheck, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
+import { BillingActions } from "@/components/billing-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -55,7 +55,7 @@ type Copy = {
   free: string;
   pro: string;
   upgrade: string;
-  billing: string;
+  billing_inline: string;
   close: string;
   saved: string;
   save_failed: string;
@@ -103,7 +103,7 @@ function getCopy(locale: Locale): Copy {
       free: "일반(Free)",
       pro: "프로(Pro)",
       upgrade: "Pro로 업그레이드",
-      billing: "요금제/결제 열기",
+      billing_inline: "이 창에서 바로 결제/업그레이드할 수 있습니다.",
       close: "닫기",
       saved: "설정이 저장되었습니다.",
       save_failed: "저장에 실패했습니다.",
@@ -149,7 +149,7 @@ function getCopy(locale: Locale): Copy {
     free: "Free",
     pro: "Pro",
     upgrade: "Upgrade to Pro",
-    billing: "Open plans & billing",
+    billing_inline: "You can upgrade directly in this panel.",
     close: "Close",
     saved: "Settings saved.",
     save_failed: "Failed to save.",
@@ -176,7 +176,6 @@ function displayName(user: { email?: string | null; user_metadata?: Record<strin
 
 export function AppSettingsPanel({ locale }: { locale: Locale }) {
   const t = React.useMemo(() => getCopy(locale), [locale]);
-  const router = useRouter();
   const supabaseRef = React.useRef<ReturnType<typeof createClient>>(undefined!);
   if (!supabaseRef.current) {
     supabaseRef.current = createClient();
@@ -191,6 +190,7 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
   const [name, setName] = React.useState("-");
   const [email, setEmail] = React.useState("-");
   const [plan, setPlan] = React.useState<PlanTier>("free");
+  const [needsEmailSetup, setNeedsEmailSetup] = React.useState(false);
 
   const [remindersEnabled, setRemindersEnabled] = React.useState(false);
   const [reminderLogTime, setReminderLogTime] = React.useState("21:30");
@@ -215,6 +215,7 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
       } = await supabaseRef.current.auth.getUser();
       setName(displayName(user));
       setEmail(user?.email || "-");
+      setNeedsEmailSetup(!user?.email);
 
       const reminderMeta = (user?.user_metadata?.routineiq_reminders_v1 || {}) as ReminderMeta;
       setRemindersEnabled(Boolean(reminderMeta.enabled));
@@ -309,11 +310,6 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
     } finally {
       setBusy(false);
     }
-  }
-
-  function openBilling() {
-    setOpen(false);
-    router.push("/app/billing");
   }
 
   return (
@@ -454,15 +450,19 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                       </div>
                     </div>
 
-                    <div className="flex flex-wrap items-center gap-2">
-                      {plan === "free" ? (
-                        <Button onClick={openBilling}>{t.upgrade}</Button>
-                      ) : null}
-                      <Button variant="outline" onClick={openBilling}>
-                        <Mail className="mr-2 h-4 w-4" />
-                        {t.billing}
-                      </Button>
-                    </div>
+                    {plan === "free" ? (
+                      <div className="space-y-2 rounded-xl border bg-white/55 p-3">
+                        <div className="flex items-center gap-2 text-xs text-mutedFg">
+                          <Mail className="h-3.5 w-3.5" />
+                          {t.billing_inline}
+                        </div>
+                        <BillingActions plan="free" needsEmailSetup={needsEmailSetup} />
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border bg-emerald-50 p-3 text-sm text-emerald-900">
+                        {t.pro}
+                      </div>
+                    )}
                   </TabsContent>
                 </Tabs>
               </div>

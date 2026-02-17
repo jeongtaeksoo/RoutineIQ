@@ -241,7 +241,7 @@ async function handleApiRoute(
   if (path === "/stripe/create-checkout-session" && method === "POST") {
     state.checkoutCalls += 1;
     const origin = `${url.protocol}//${url.host}`;
-    return json(route, 200, { url: `${origin}/app/billing?checkout=ok` });
+    return json(route, 200, { url: `${origin}/app/insights?checkout=ok` });
   }
 
   return json(route, 404, { detail: { message: `Unhandled mock route: ${method} ${path}` } });
