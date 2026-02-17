@@ -258,3 +258,53 @@ def test_post_logs_accepts_optional_entry_confidence(
     assert response.status_code == 200
     first_call = supabase_mock["upsert_one"].await_args_list[0].kwargs
     assert first_call["row"]["entries"][0]["confidence"] == "low"
+
+
+def test_post_logs_accepts_window_entry_without_exact_time(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    payload = {
+        "date": "2026-02-15",
+        "entries": [
+            {
+                "start": None,
+                "end": None,
+                "activity": "보고서 작성",
+                "energy": None,
+                "focus": None,
+                "tags": ["문서"],
+                "confidence": "low",
+                "source_text": "하루종일 보고서를 썼다",
+                "time_source": "window",
+                "time_confidence": "low",
+                "time_window": "afternoon",
+                "crosses_midnight": False,
+            }
+        ],
+        "note": "하루 회고",
+        "meta": {"parse_issues": ["entry[1] time downgraded to null (no explicit time evidence)"]},
+    }
+    supabase_mock["upsert_one"].side_effect = [
+        {
+            "id": "log-window-1",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-02-15",
+            "entries": payload["entries"],
+            "note": payload["note"],
+            "meta": payload["meta"],
+        },
+        {
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
+    ]
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
+
+    response = authenticated_client.post("/api/logs", json=payload)
+
+    assert response.status_code == 200
+    first_call = supabase_mock["upsert_one"].await_args_list[0].kwargs
+    assert first_call["row"]["entries"][0]["time_window"] == "afternoon"
+    assert first_call["row"]["entries"][0]["start"] is None
+    assert first_call["row"]["meta"]["parse_issues"]

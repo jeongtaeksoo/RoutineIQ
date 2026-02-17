@@ -341,6 +341,54 @@ test.describe("RutineIQ core flows", () => {
     await expect(page.getByText(/AI가 이렇게 파악했어요|AI parsed your day like this/i)).toBeVisible();
   });
 
+  test("F2d: unknown entry -> one-tap window chip -> save succeeds", async ({ page }) => {
+    test.skip(e2eMode === "live", "Mock-only ambiguity resolution scenario");
+    await installRoutineApiMock(page);
+    await page.route("**/api/parse-diary", async (route) => {
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({
+          entries: [
+            {
+              start: null,
+              end: null,
+              activity: "보고서 작성",
+              energy: null,
+              focus: null,
+              note: null,
+              tags: ["문서"],
+              confidence: "low",
+              source_text: "하루종일 보고서를 썼다",
+              time_source: "unknown",
+              time_confidence: "low",
+              time_window: null,
+              crosses_midnight: false,
+            },
+          ],
+          meta: {
+            mood: "neutral",
+            sleep_quality: null,
+            sleep_hours: null,
+            stress_level: 3,
+            parse_issues: ["entry[1] time downgraded to null (no explicit time evidence)"],
+          },
+          ai_note: "시간 근거가 부족해 확인이 필요합니다.",
+        }),
+      });
+    });
+
+    await enterMockApp(page);
+    await page.goto("/app/daily-flow");
+    await page.locator("textarea").fill("하루종일 보고서를 썼다. 중간에 커피를 마시며 쉬었다.");
+    await page.getByRole("button", { name: /AI 분석하기|Parse with AI/i }).first().click();
+    await expect(page.getByText(/확인하면 더 정확해져요|quick check makes this more accurate/i)).toBeVisible();
+
+    await page.getByRole("button", { name: /아침|Morning/i }).first().click();
+    await page.getByRole("button", { name: /확인\s*&\s*저장|Confirm\s*&\s*Save/i }).first().click();
+    await expect(page.getByText(/저장 완료! AI 분석을 시작할까요\?|Saved! Start AI analysis\?/i)).toBeVisible();
+  });
+
   test("F2c: report 404 renders empty-state card, not error banner", async ({ page }) => {
     test.skip(e2eMode === "live", "Mock-only empty-state scenario");
     await installRoutineApiMock(page);

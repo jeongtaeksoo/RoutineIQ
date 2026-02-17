@@ -35,7 +35,7 @@ _LANG_NAME = {
 
 _TIME_SOURCE_VALUES = {"explicit", "relative", "window", "unknown"}
 _TIME_CONFIDENCE_VALUES = {"high", "medium", "low"}
-_TIME_WINDOW_VALUES = {"morning", "lunch", "afternoon", "evening", "night"}
+_TIME_WINDOW_VALUES = {"dawn", "morning", "lunch", "afternoon", "evening", "night"}
 
 PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -114,6 +114,7 @@ PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
                             {
                                 "type": "string",
                                 "enum": [
+                                    "dawn",
                                     "morning",
                                     "lunch",
                                     "afternoon",
@@ -203,6 +204,7 @@ _SENTENCE_SPLIT_RE = re.compile(r"[\n.!?]+")
 _SLEEP_HOURS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:시간|hours?)", flags=re.IGNORECASE)
 
 _TIME_WINDOW_HINTS: dict[str, tuple[str, ...]] = {
+    "dawn": ("새벽", "이른 아침", "dawn", "early morning"),
     "morning": ("아침", "오전", "morning"),
     "lunch": ("점심", "정오", "lunch", "noon"),
     "afternoon": ("오후", "afternoon"),
@@ -808,7 +810,7 @@ async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryRespo
         "\n"
         "CRITICAL RULES (must follow)\n"
         "1) Do NOT invent times. If a time is not explicitly stated, set start/end to null.\n"
-        "2) If the diary only implies a general time-of-day (morning/lunch/afternoon/evening/night), do NOT convert it into an exact time. Use time_window instead.\n"
+        "2) If the diary only implies a general time-of-day (dawn/morning/lunch/afternoon/evening/night), do NOT convert it into an exact time. Use time_window instead.\n"
         "3) Every entry MUST include source_text: an exact quote (substring) from the diary that supports the entry.\n"
         "4) Separate multiple activities even if they are in one sentence.\n"
         "5) Output JSON ONLY that matches the provided schema. No extra keys.\n"

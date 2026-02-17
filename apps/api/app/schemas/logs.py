@@ -21,14 +21,39 @@ def _to_minutes(hhmm: str) -> int:
 class ActivityLogEntry(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    start: str = Field(pattern=TIME_RE, description="HH:MM")
-    end: str = Field(pattern=TIME_RE, description="HH:MM")
+    start: str | None = Field(default=None, pattern=TIME_RE, description="HH:MM")
+    end: str | None = Field(default=None, pattern=TIME_RE, description="HH:MM")
     activity: str = Field(min_length=1, max_length=120)
     energy: int | None = Field(default=None, ge=1, le=5)
     focus: int | None = Field(default=None, ge=1, le=5)
     confidence: Literal["high", "medium", "low"] | None = None
     tags: list[str] = Field(default_factory=list, max_length=12)
     note: str | None = Field(default=None, max_length=280)
+    source_text: str | None = Field(default=None, max_length=300)
+    time_source: Literal["explicit", "relative", "window", "unknown", "user_exact"] | None = None
+    time_confidence: Literal["high", "medium", "low"] | None = None
+    time_window: Literal["dawn", "morning", "lunch", "afternoon", "evening", "night"] | None = None
+    crosses_midnight: bool = False
+
+    @model_validator(mode="after")
+    def validate_time_shape(self):
+        has_start = self.start is not None
+        has_end = self.end is not None
+        if has_start != has_end:
+            raise ValueError("start/end must be provided together")
+        if not has_start and not has_end:
+            if self.crosses_midnight:
+                raise ValueError("crosses_midnight requires explicit start/end")
+            return self
+
+        if self.start is None or self.end is None:
+            raise ValueError("start/end must be provided together")
+
+        s = _to_minutes(self.start)
+        en = _to_minutes(self.end)
+        if en <= s and not self.crosses_midnight:
+            raise ValueError("end must be after start")
+        return self
 
 
 class DailySignals(BaseModel):
@@ -43,6 +68,7 @@ class DailySignals(BaseModel):
     hydration_level: str | None = Field(default=None, pattern="^(low|ok|great)$")
     water_intake_ml: int | None = Field(default=None, ge=0, le=6000)
     micro_habit_done: bool | None = None
+    parse_issues: list[str] = Field(default_factory=list)
 
 
 class UpsertLogRequest(BaseModel):
@@ -55,9 +81,13 @@ class UpsertLogRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_entries(self):
-        # Ensure each block has end > start and no overlaps.
+        # Ensure explicit-time blocks have valid ordering and no overlaps.
         items = []
         for i, e in enumerate(self.entries):
+            if e.start is None or e.end is None:
+                continue
+            if e.crosses_midnight:
+                continue
             s = _to_minutes(e.start)
             en = _to_minutes(e.end)
             if en <= s:

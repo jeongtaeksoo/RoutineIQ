@@ -15,16 +15,31 @@ type FlowStep = "write" | "confirm" | "done";
 
 type Mood = "very_low" | "low" | "neutral" | "good" | "great";
 type Confidence = "high" | "medium" | "low";
+type TimeSource = "explicit" | "relative" | "window" | "unknown" | "user_exact";
+type TimeWindow = "dawn" | "morning" | "lunch" | "afternoon" | "evening" | "night";
+
+type ParseIssueType =
+  | "no_time_evidence"
+  | "source_not_found"
+  | "overlap"
+  | "invalid_order"
+  | "partial_time"
+  | "other";
 
 type ParsedEntry = {
-  start: string;
-  end: string;
+  start: string | null;
+  end: string | null;
   activity: string;
   energy?: number | null;
   focus?: number | null;
   note?: string | null;
   tags?: string[];
   confidence?: Confidence;
+  source_text?: string | null;
+  time_source?: TimeSource | null;
+  time_confidence?: Confidence | null;
+  time_window?: TimeWindow | null;
+  crosses_midnight?: boolean;
 };
 
 type ParsedMeta = {
@@ -32,6 +47,14 @@ type ParsedMeta = {
   sleep_quality?: number | null;
   sleep_hours?: number | null;
   stress_level?: number | null;
+  parse_issues?: string[];
+};
+
+type ParseIssue = {
+  raw: string;
+  type: ParseIssueType;
+  entryIndex: number | null;
+  resolved: boolean;
 };
 
 type LogsResponse = {
@@ -46,6 +69,14 @@ type ParseDiaryResponse = {
   meta: ParsedMeta;
   ai_note: string;
 };
+
+type TrackEventType =
+  | "ambiguity_shown"
+  | "window_chip_selected"
+  | "issue_viewed"
+  | "issue_resolved"
+  | "save_attempted"
+  | "save_succeeded";
 
 function localYYYYMMDD(d = new Date()): string {
   const y = d.getFullYear();
@@ -77,7 +108,8 @@ function formatDateLabel(dateStr: string, isKo: boolean): string {
   return `${months[m - 1]} ${d} (${dayName})`;
 }
 
-function toMinutes(hhmm: string): number | null {
+function toMinutes(hhmm: string | null | undefined): number | null {
+  if (typeof hhmm !== "string") return null;
   const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
   if (!m) return null;
   const h = Number(m[1]);
@@ -87,16 +119,86 @@ function toMinutes(hhmm: string): number | null {
   return h * 60 + min;
 }
 
+const TIME_WINDOWS: TimeWindow[] = ["dawn", "morning", "lunch", "afternoon", "evening", "night"];
+
+function parseIssueType(raw: string): ParseIssueType {
+  const text = raw.toLowerCase();
+  if (text.includes("no explicit time evidence") || text.includes("entry-level explicit evidence missing")) {
+    return "no_time_evidence";
+  }
+  if (text.includes("source_text not found")) return "source_not_found";
+  if (text.includes("overlap")) return "overlap";
+  if (text.includes("end must be after start")) return "invalid_order";
+  if (text.includes("partial time")) return "partial_time";
+  return "other";
+}
+
+function parseIssueEntryIndex(raw: string): number | null {
+  const match = /entry\[(\d+)\]/.exec(raw);
+  if (!match) return null;
+  const idx = Number(match[1]);
+  if (!Number.isFinite(idx) || idx < 1) return null;
+  return idx - 1;
+}
+
+function normalizeParseIssues(raw: unknown): ParseIssue[] {
+  if (!Array.isArray(raw)) return [];
+  const out: ParseIssue[] = [];
+  for (const item of raw) {
+    if (typeof item !== "string" || !item.trim()) continue;
+    out.push({
+      raw: item.trim(),
+      type: parseIssueType(item),
+      entryIndex: parseIssueEntryIndex(item),
+      resolved: false,
+    });
+  }
+  return out;
+}
+
+function normalizeTimeSource(value: unknown): TimeSource | null {
+  if (
+    value === "explicit" ||
+    value === "relative" ||
+    value === "window" ||
+    value === "unknown" ||
+    value === "user_exact"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeTimeWindow(value: unknown): TimeWindow | null {
+  if (
+    value === "dawn" ||
+    value === "morning" ||
+    value === "lunch" ||
+    value === "afternoon" ||
+    value === "evening" ||
+    value === "night"
+  ) {
+    return value;
+  }
+  return null;
+}
+
+function normalizeConfidence(value: unknown): Confidence | null {
+  if (value === "high" || value === "medium" || value === "low") return value;
+  return null;
+}
+
 function normalizeParsedEntries(raw: unknown): ParsedEntry[] {
   if (!Array.isArray(raw)) return [];
   const out: ParsedEntry[] = [];
   for (const item of raw) {
     if (!item || typeof item !== "object") continue;
     const src = item as Record<string, unknown>;
-    const start = typeof src.start === "string" ? src.start : "";
-    const end = typeof src.end === "string" ? src.end : "";
+    const start = typeof src.start === "string" && /^\d{2}:\d{2}$/.test(src.start) ? src.start : null;
+    const end = typeof src.end === "string" && /^\d{2}:\d{2}$/.test(src.end) ? src.end : null;
     const activity = typeof src.activity === "string" ? src.activity : "";
-    if (!/^\d{2}:\d{2}$/.test(start) || !/^\d{2}:\d{2}$/.test(end) || !activity.trim()) continue;
+    if (!activity.trim()) continue;
+    if ((start == null) !== (end == null)) continue;
 
     const energyRaw = Number(src.energy);
     const focusRaw = Number(src.focus);
@@ -108,6 +210,10 @@ function normalizeParsedEntries(raw: unknown): ParsedEntry[] {
     const confidenceRaw = typeof src.confidence === "string" ? src.confidence : "high";
     const confidence: Confidence =
       confidenceRaw === "low" || confidenceRaw === "medium" || confidenceRaw === "high" ? confidenceRaw : "high";
+    const timeSource = normalizeTimeSource(src.time_source);
+    const timeWindow = normalizeTimeWindow(src.time_window);
+    const sourceText = typeof src.source_text === "string" ? src.source_text : null;
+    const timeConfidence = normalizeConfidence(src.time_confidence);
 
     out.push({
       start,
@@ -118,6 +224,11 @@ function normalizeParsedEntries(raw: unknown): ParsedEntry[] {
       note,
       tags,
       confidence,
+      source_text: sourceText,
+      time_source: timeSource ?? (start && end ? "explicit" : timeWindow ? "window" : "unknown"),
+      time_confidence: timeConfidence ?? (start && end ? "high" : "low"),
+      time_window: timeWindow,
+      crosses_midnight: Boolean(src.crosses_midnight),
     });
   }
   return out;
@@ -138,6 +249,7 @@ function normalizeParsedMeta(raw: unknown): ParsedMeta {
     sleep_quality: Number.isFinite(sleepQuality) && sleepQuality >= 1 && sleepQuality <= 5 ? sleepQuality : null,
     sleep_hours: Number.isFinite(sleepHours) && sleepHours >= 0 && sleepHours <= 14 ? sleepHours : null,
     stress_level: Number.isFinite(stress) && stress >= 1 && stress <= 5 ? stress : null,
+    parse_issues: Array.isArray(src.parse_issues) ? src.parse_issues.filter((v): v is string => typeof v === "string") : [],
   };
 }
 
@@ -147,6 +259,7 @@ function buildMetaPayload(meta: ParsedMeta): Record<string, unknown> {
   if (meta.sleep_quality != null) payload.sleep_quality = meta.sleep_quality;
   if (meta.sleep_hours != null) payload.sleep_hours = meta.sleep_hours;
   if (meta.stress_level != null) payload.stress_level = meta.stress_level;
+  if (meta.parse_issues && meta.parse_issues.length > 0) payload.parse_issues = meta.parse_issues;
   return payload;
 }
 
@@ -186,6 +299,17 @@ export default function DailyFlowPage() {
         parsing: "분석 중...",
         confirmTitle: "AI가 이렇게 파악했어요",
         confirmSubtitle: "저장 전에 결과를 확인해 주세요",
+        explicitTime: "명시 시간",
+        windowTime: "시간대 기반",
+        unknownTime: "확인 필요",
+        noTimeInfo: "시간 정보 없음",
+        timeWindowPrefix: "시간대",
+        evidence: "근거",
+        issueBannerTitle: "확인하면 더 정확해져요.",
+        issueProgress: (current: number, total: number) => `확인 항목 ${current}/${total}`,
+        reviewNow: "지금 확인",
+        saveLater: "나중에 저장",
+        unresolvedHint: (count: number) => `시간 미확정 항목 ${count}개가 남아 있어요`,
         lowConfidence: "추정 정확도 낮음",
         parsedMeta: "파싱된 메타",
         edit: "수정하기",
@@ -217,6 +341,14 @@ export default function DailyFlowPage() {
         retryParse: "다시 분석하기",
         retryParseHint: "결과가 매끄러우면 다시 분석해보세요",
         aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했습니다`,
+        windowChip: {
+          dawn: "새벽",
+          morning: "아침",
+          lunch: "점심",
+          afternoon: "오후",
+          evening: "저녁",
+          night: "밤",
+        },
       };
     }
     return {
@@ -229,6 +361,17 @@ export default function DailyFlowPage() {
       parsing: "Parsing...",
       confirmTitle: "AI parsed your day like this",
       confirmSubtitle: "Review before saving",
+      explicitTime: "Explicit time",
+      windowTime: "Window-based",
+      unknownTime: "Needs review",
+      noTimeInfo: "No time information",
+      timeWindowPrefix: "Window",
+      evidence: "Evidence",
+      issueBannerTitle: "A quick check makes this more accurate.",
+      issueProgress: (current: number, total: number) => `Review item ${current}/${total}`,
+      reviewNow: "Review now",
+      saveLater: "Save later",
+      unresolvedHint: (count: number) => `${count} entries are still time-unconfirmed.`,
       lowConfidence: "Low confidence",
       parsedMeta: "Parsed meta",
       edit: "Edit",
@@ -260,6 +403,14 @@ export default function DailyFlowPage() {
       retryParse: "Re-parse",
       retryParseHint: "Not quite right? Try parsing again",
       aiSourceHint: (n: number) => `AI parsed ${n} activity block${n !== 1 ? "s" : ""}`,
+      windowChip: {
+        dawn: "Dawn",
+        morning: "Morning",
+        lunch: "Lunch",
+        afternoon: "Afternoon",
+        evening: "Evening",
+        night: "Night",
+      },
     };
   }, [isKo]);
 
@@ -269,6 +420,8 @@ export default function DailyFlowPage() {
   const [parsedEntries, setParsedEntries] = React.useState<ParsedEntry[]>([]);
   const [parsedMeta, setParsedMeta] = React.useState<ParsedMeta>({});
   const [aiNote, setAiNote] = React.useState("");
+  const [parseIssues, setParseIssues] = React.useState<ParseIssue[]>([]);
+  const [focusedIssueIdx, setFocusedIssueIdx] = React.useState<number | null>(null);
   const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
   const [parsing, setParsing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
@@ -277,6 +430,8 @@ export default function DailyFlowPage() {
   const [showParseRetry, setShowParseRetry] = React.useState(false);
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
   const diaryRef = React.useRef<HTMLTextAreaElement | null>(null);
+  const entryRefs = React.useRef<Array<HTMLDivElement | null>>([]);
+  const shownAmbiguityKeysRef = React.useRef<Set<string>>(new Set());
 
   useSWR<LogsResponse>(`/logs?date=${date}`, apiFetch, {
     revalidateOnFocus: true,
@@ -284,11 +439,14 @@ export default function DailyFlowPage() {
       if (parsing || saving || analyzing) return;
       const entries = normalizeParsedEntries(data?.entries);
       const meta = normalizeParsedMeta(data?.meta);
+      const issues = normalizeParseIssues(meta.parse_issues ?? []);
       setParsedEntries(entries);
       setParsedMeta(meta);
+      setParseIssues(issues);
       setDiaryText(data?.note || "");
       setAiNote("");
       setEditingIdx(null);
+      setFocusedIssueIdx(0);
       setStep(entries.length > 0 ? "confirm" : "write");
     },
     onError: (err) => {
@@ -308,12 +466,106 @@ export default function DailyFlowPage() {
     autoResizeDiary();
   }, [diaryText, autoResizeDiary]);
 
+  const trackDailyFlowEvent = React.useCallback(
+    async (
+      eventType: TrackEventType,
+      payload: {
+        entry_id?: string;
+        reason?: string;
+        time_source?: string | null;
+        time_confidence?: string | null;
+        window_type?: string | null;
+        issue_type?: string | null;
+        resolution_action?: string | null;
+        start_time?: string | null;
+        end_time?: string | null;
+        ambiguous_count?: number | null;
+        resolved_issue_count?: number | null;
+        has_source_text?: boolean | null;
+      },
+    ) => {
+      try {
+        await apiFetch<{ ok: boolean }>("/trends/cohort/event", {
+          method: "POST",
+          body: JSON.stringify({
+            event_type: eventType,
+            window_days: 1,
+            compare_by: [],
+            threshold_variant: "control",
+            confidence_level: "low",
+            preview_mode: false,
+            cohort_size: 0,
+            ...payload,
+          }),
+        });
+      } catch {
+        // best-effort analytics: never block the core flow
+      }
+    },
+    [],
+  );
+
+  const unresolvedIssues = React.useMemo(() => parseIssues.filter((issue) => !issue.resolved), [parseIssues]);
+
+  const focusedIssue = React.useMemo(() => {
+    if (focusedIssueIdx == null) return unresolvedIssues[0] ?? null;
+    const picked = unresolvedIssues[focusedIssueIdx];
+    return picked ?? unresolvedIssues[0] ?? null;
+  }, [focusedIssueIdx, unresolvedIssues]);
+
+  const focusedIssueProgress = React.useMemo(() => {
+    if (!focusedIssue || unresolvedIssues.length === 0) return null;
+    const idx = unresolvedIssues.findIndex((issue) => issue.raw === focusedIssue.raw);
+    return idx >= 0 ? idx + 1 : 1;
+  }, [focusedIssue, unresolvedIssues]);
+
+  const markIssuesResolvedForEntry = React.useCallback(
+    async (entryIndex: number, resolutionAction: string) => {
+      const candidates = parseIssues.filter((issue) => !issue.resolved && issue.entryIndex === entryIndex);
+      if (candidates.length === 0) return;
+      setParseIssues((prev) =>
+        prev.map((issue) =>
+          issue.entryIndex === entryIndex && !issue.resolved
+            ? { ...issue, resolved: true }
+            : issue,
+        ),
+      );
+      for (const issue of candidates) {
+        await trackDailyFlowEvent("issue_resolved", {
+          entry_id: `entry-${entryIndex}`,
+          issue_type: issue.type,
+          resolution_action: resolutionAction,
+        });
+      }
+      setFocusedIssueIdx(0);
+    },
+    [parseIssues, trackDailyFlowEvent],
+  );
+
+  const focusIssue = React.useCallback(
+    async (issue: ParseIssue | null) => {
+      if (!issue) return;
+      if (issue.entryIndex == null) return;
+      const el = entryRefs.current[issue.entryIndex];
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+      }
+      await trackDailyFlowEvent("issue_viewed", {
+        entry_id: `entry-${issue.entryIndex}`,
+        issue_type: issue.type,
+      });
+    },
+    [trackDailyFlowEvent],
+  );
+
   function resetFlowState(): void {
     setStep("write");
     setDiaryText("");
     setParsedEntries([]);
     setParsedMeta({});
     setAiNote("");
+    setParseIssues([]);
+    setFocusedIssueIdx(null);
     setError(null);
     setShowParseRetry(false);
     setEditingIdx(null);
@@ -331,13 +583,16 @@ export default function DailyFlowPage() {
 
   function validateEntries(list: ParsedEntry[]): string | null {
     for (const [idx, e] of list.entries()) {
+      if (e.start == null && e.end == null) continue;
+      if ((e.start == null) !== (e.end == null)) return t.invalidTime(idx + 1);
       const s = toMinutes(e.start);
       const en = toMinutes(e.end);
       if (s == null || en == null) return t.invalidTime(idx + 1);
-      if (en <= s) return t.endAfterStart(idx + 1);
+      if (en <= s && !e.crosses_midnight) return t.endAfterStart(idx + 1);
     }
     const sorted = list
-      .map((e, i) => ({ i, s: toMinutes(e.start) ?? 0, en: toMinutes(e.end) ?? 0 }))
+      .map((e, i) => ({ i, s: toMinutes(e.start), en: toMinutes(e.end), crosses: Boolean(e.crosses_midnight) }))
+      .filter((x): x is { i: number; s: number; en: number; crosses: boolean } => x.s != null && x.en != null && !x.crosses)
       .sort((a, b) => a.s - b.s);
     for (let i = 1; i < sorted.length; i += 1) {
       const prev = sorted[i - 1];
@@ -349,26 +604,116 @@ export default function DailyFlowPage() {
   }
 
   function buildLogPayload() {
+    const unresolved = parseIssues.filter((issue) => !issue.resolved).map((issue) => issue.raw);
     const payload = {
       date,
       entries: parsedEntries.map((e) => ({
-        start: e.start,
-        end: e.end,
+        start: e.start ?? null,
+        end: e.end ?? null,
         activity: e.activity.trim().slice(0, 120),
         energy: e.energy ?? null,
         focus: e.focus ?? null,
         confidence: e.confidence ?? "high",
         note: (e.note || "").slice(0, 280) || null,
         tags: Array.isArray(e.tags) ? e.tags.slice(0, 12) : [],
+        source_text: e.source_text || null,
+        time_source: e.time_source ?? (e.start && e.end ? "explicit" : "unknown"),
+        time_confidence: e.time_confidence ?? (e.start && e.end ? "high" : "low"),
+        time_window: e.time_window ?? null,
+        crosses_midnight: Boolean(e.crosses_midnight),
       })),
       note: diaryText.trim().slice(0, 5000) || null,
-      meta: buildMetaPayload(parsedMeta),
+      meta: buildMetaPayload({ ...parsedMeta, parse_issues: unresolved }),
     };
     return payload;
   }
 
   function updateParsedEntry(idx: number, patch: Partial<ParsedEntry>) {
     setParsedEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+  }
+
+  function entryTimeState(entry: ParsedEntry): "explicit" | "window" | "unknown" {
+    if (entry.start && entry.end) return "explicit";
+    if (entry.time_source === "window" || entry.time_window) return "window";
+    return "unknown";
+  }
+
+  function timeWindowLabel(value: TimeWindow | null | undefined): string {
+    if (!value) return "-";
+    return t.windowChip[value];
+  }
+
+  function displayEvidence(entry: ParsedEntry): string {
+    const text = (entry.source_text || entry.activity || "").trim();
+    if (!text) return isKo ? "근거 없음" : "No evidence";
+    return text.length > 42 ? `${text.slice(0, 42)}...` : text;
+  }
+
+  function entryTimeHeadline(entry: ParsedEntry): string {
+    const state = entryTimeState(entry);
+    if (state === "explicit" && entry.start && entry.end) {
+      return `${entry.start} - ${entry.end}`;
+    }
+    if (state === "window") {
+      return `${t.timeWindowPrefix}: ${timeWindowLabel(entry.time_window)}`;
+    }
+    return t.noTimeInfo;
+  }
+
+  function entryTimeLabel(entry: ParsedEntry): string {
+    const state = entryTimeState(entry);
+    if (state === "explicit") return t.explicitTime;
+    if (state === "window") return t.windowTime;
+    return t.unknownTime;
+  }
+
+  async function setWindowForEntry(idx: number, windowValue: TimeWindow): Promise<void> {
+    updateParsedEntry(idx, {
+      time_window: windowValue,
+      time_source: "window",
+      time_confidence: "low",
+      start: null,
+      end: null,
+      crosses_midnight: false,
+    });
+    await trackDailyFlowEvent("window_chip_selected", {
+      entry_id: `entry-${idx}`,
+      window_type: windowValue,
+      time_source: "window",
+      time_confidence: "low",
+    });
+    await markIssuesResolvedForEntry(idx, "window");
+  }
+
+  async function setExactTimeForEntry(idx: number, startValue: string | null, endValue: string | null): Promise<void> {
+    const hasStart = Boolean(startValue && /^\d{2}:\d{2}$/.test(startValue));
+    const hasEnd = Boolean(endValue && /^\d{2}:\d{2}$/.test(endValue));
+    if (hasStart && hasEnd) {
+      updateParsedEntry(idx, {
+        start: startValue,
+        end: endValue,
+        time_source: "user_exact",
+        time_confidence: "high",
+        time_window: null,
+      });
+      await markIssuesResolvedForEntry(idx, "exact_time");
+      return;
+    }
+    if (!startValue && !endValue) {
+      updateParsedEntry(idx, {
+        start: null,
+        end: null,
+        time_source: "unknown",
+        time_confidence: "low",
+      });
+      return;
+    }
+    updateParsedEntry(idx, {
+      start: startValue,
+      end: endValue,
+      time_source: "unknown",
+      time_confidence: "low",
+    });
   }
 
   async function parseDiary(): Promise<void> {
@@ -387,8 +732,13 @@ export default function DailyFlowPage() {
           diary_text: diaryText.trim(),
         }),
       });
-      setParsedEntries(normalizeParsedEntries(res.entries));
-      setParsedMeta(normalizeParsedMeta(res.meta));
+      const normalizedEntries = normalizeParsedEntries(res.entries);
+      const normalizedMeta = normalizeParsedMeta(res.meta);
+      const issues = normalizeParseIssues(normalizedMeta.parse_issues ?? []);
+      setParsedEntries(normalizedEntries);
+      setParsedMeta(normalizedMeta);
+      setParseIssues(issues);
+      setFocusedIssueIdx(0);
       setAiNote(typeof res.ai_note === "string" ? res.ai_note : "");
       setStep("confirm");
     } catch (err) {
@@ -423,11 +773,20 @@ export default function DailyFlowPage() {
       return;
     }
     setSaving(true);
+    const resolvedCount = parseIssues.filter((issue) => issue.resolved).length;
+    await trackDailyFlowEvent("save_attempted", {
+      ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
+      resolved_issue_count: resolvedCount,
+    });
     const payload = buildLogPayload();
     await mutate(`/logs?date=${date}`, payload, false);
     try {
       await apiFetch("/logs", { method: "POST", body: JSON.stringify(payload) });
       await mutate(`/logs?date=${date}`);
+      await trackDailyFlowEvent("save_succeeded", {
+        ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
+        resolved_issue_count: resolvedCount,
+      });
       setStep("done");
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
@@ -452,10 +811,19 @@ export default function DailyFlowPage() {
         return;
       }
       setSaving(true);
+      const resolvedCount = parseIssues.filter((issue) => issue.resolved).length;
+      await trackDailyFlowEvent("save_attempted", {
+        ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
+        resolved_issue_count: resolvedCount,
+      });
       const payload = buildLogPayload();
       try {
         await apiFetch("/logs", { method: "POST", body: JSON.stringify(payload) });
         await mutate(`/logs?date=${date}`);
+        await trackDailyFlowEvent("save_succeeded", {
+          ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
+          resolved_issue_count: resolvedCount,
+        });
       } catch (err) {
         const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
         setError(err instanceof Error ? `${err.message}${hint}` : t.saveFailed);
@@ -488,6 +856,24 @@ export default function DailyFlowPage() {
     if (parsedMeta.stress_level != null) rows.push({ label: t.stress, value: String(parsedMeta.stress_level) });
     return rows;
   }, [parsedMeta, t, isKo]);
+
+  React.useEffect(() => {
+    if (step !== "confirm") return;
+    parsedEntries.forEach((entry, idx) => {
+      const state = entryTimeState(entry);
+      if (state === "explicit") return;
+      const key = `${date}-${idx}-${state}-${entry.activity}`;
+      if (shownAmbiguityKeysRef.current.has(key)) return;
+      shownAmbiguityKeysRef.current.add(key);
+      void trackDailyFlowEvent("ambiguity_shown", {
+        entry_id: `entry-${idx}`,
+        reason: state === "window" ? "window_based" : "no_time_information",
+        time_source: entry.time_source ?? state,
+        time_confidence: entry.time_confidence ?? "low",
+        has_source_text: Boolean(entry.source_text),
+      });
+    });
+  }, [date, parsedEntries, step, trackDailyFlowEvent]);
 
   return (
     <div
@@ -587,13 +973,46 @@ export default function DailyFlowPage() {
             <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">{t.noEntries}</div>
           ) : (
             <div className="space-y-2">
+              {unresolvedIssues.length > 0 ? (
+                <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-sm text-amber-900">
+                  <p className="font-medium">{t.issueBannerTitle}</p>
+                  <p className="mt-0.5 text-xs text-amber-900/80">
+                    {t.issueProgress(focusedIssueProgress ?? 1, unresolvedIssues.length)}
+                  </p>
+                  {focusedIssue ? (
+                    <p className="mt-1 text-xs text-amber-900/75">{focusedIssue.raw}</p>
+                  ) : null}
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        void focusIssue(focusedIssue);
+                      }}
+                    >
+                      {t.reviewNow}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => setFocusedIssueIdx(null)}>
+                      {t.saveLater}
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
+
               {parsedEntries.map((entry, idx) => {
                 const lowConfidence = entry.confidence === "low";
                 const isEditing = editingIdx === idx;
+                const timeState = entryTimeState(entry);
+                const isFocusedIssue = focusedIssue?.entryIndex === idx;
                 return (
                   <div
-                    key={`${entry.start}-${entry.end}-${idx}`}
-                    className={`rounded-xl border p-4 ${lowConfidence ? "border-amber-300 bg-amber-50/80" : "bg-white/70"}`}
+                    key={`${entry.start ?? "na"}-${entry.end ?? "na"}-${idx}`}
+                    ref={(el) => {
+                      entryRefs.current[idx] = el;
+                    }}
+                    className={`rounded-xl border p-4 ${
+                      isFocusedIssue ? "border-brand bg-brand/5" : lowConfidence ? "border-amber-300 bg-amber-50/80" : "bg-white/70"
+                    }`}
                     onBlur={(e) => {
                       if (!isEditing) return;
                       const next = e.relatedTarget;
@@ -608,8 +1027,12 @@ export default function DailyFlowPage() {
                             <Clock className="h-3.5 w-3.5" />
                             <input
                               type="time"
-                              value={entry.start}
-                              onChange={(e) => updateParsedEntry(idx, { start: e.target.value })}
+                              value={entry.start ?? ""}
+                              onChange={(e) => {
+                                const nextStart = e.target.value || null;
+                                const nextEnd = entry.end ?? null;
+                                void setExactTimeForEntry(idx, nextStart, nextEnd);
+                              }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") setEditingIdx(null);
                               }}
@@ -618,8 +1041,12 @@ export default function DailyFlowPage() {
                             <span>-</span>
                             <input
                               type="time"
-                              value={entry.end}
-                              onChange={(e) => updateParsedEntry(idx, { end: e.target.value })}
+                              value={entry.end ?? ""}
+                              onChange={(e) => {
+                                const nextStart = entry.start ?? null;
+                                const nextEnd = e.target.value || null;
+                                void setExactTimeForEntry(idx, nextStart, nextEnd);
+                              }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter") setEditingIdx(null);
                               }}
@@ -629,7 +1056,10 @@ export default function DailyFlowPage() {
                         ) : (
                           <p className="text-xs text-mutedFg">
                             <Clock className="mr-1 inline h-3.5 w-3.5" />
-                            {entry.start} - {entry.end}
+                            <span className="font-medium">{entryTimeHeadline(entry)}</span>
+                            <span className="ml-2 rounded-full border px-2 py-0.5 text-[10px]">
+                              {entryTimeLabel(entry)}
+                            </span>
                           </p>
                         )}
                         {isEditing ? (
@@ -649,6 +1079,27 @@ export default function DailyFlowPage() {
                         {entry.tags && entry.tags.length > 0 ? (
                           <p className="mt-1 text-[11px] text-mutedFg">#{entry.tags.join(" #")}</p>
                         ) : null}
+                        <p className="mt-2 text-xs text-mutedFg">
+                          {t.evidence}: <span className="font-medium">{displayEvidence(entry)}</span>
+                        </p>
+                        {timeState !== "explicit" ? (
+                          <div className="mt-2 flex flex-wrap gap-1.5">
+                            {TIME_WINDOWS.map((windowValue) => (
+                              <button
+                                key={`${idx}-${windowValue}`}
+                                type="button"
+                                onClick={() => {
+                                  void setWindowForEntry(idx, windowValue);
+                                }}
+                                className={`rounded-full border px-2.5 py-1 text-[11px] ${
+                                  entry.time_window === windowValue ? "border-brand bg-brand/10 text-brand" : "bg-white text-mutedFg"
+                                }`}
+                              >
+                                {t.windowChip[windowValue]}
+                              </button>
+                            ))}
+                          </div>
+                        ) : null}
                       </div>
                       <div className="shrink-0 text-right text-xs text-mutedFg">
                         <button
@@ -659,6 +1110,7 @@ export default function DailyFlowPage() {
                           <Pencil className="h-3 w-3" />
                           {t.editEntry}
                         </button>
+                        {entry.crosses_midnight ? <p className="mb-1 text-[10px] text-mutedFg">+1 day</p> : null}
                         {entry.energy != null ? (
                           <p>
                             <Zap className="mr-1 inline h-3.5 w-3.5" />
@@ -701,6 +1153,9 @@ export default function DailyFlowPage() {
             <Button variant="outline" onClick={() => setStep("write")} disabled={isBusy}>
               {t.edit}
             </Button>
+            {unresolvedIssues.length > 0 ? (
+              <span className="text-xs text-mutedFg">{t.unresolvedHint(unresolvedIssues.length)}</span>
+            ) : null}
             <Button onClick={save} disabled={isBusy || parsedEntries.length === 0}>
               {saving ? t.saving : t.confirmAndSave}
             </Button>

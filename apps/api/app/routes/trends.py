@@ -581,6 +581,27 @@ async def track_cohort_event(
     payload: CohortTrendEventRequest, auth: AuthDep
 ) -> dict[str, bool]:
     try:
+        meta = {
+            "threshold_variant": payload.threshold_variant,
+            "confidence_level": payload.confidence_level,
+            "preview_mode": payload.preview_mode,
+            "cohort_size": payload.cohort_size,
+            "window_days": payload.window_days,
+            "compare_by": payload.compare_by,
+            "entry_id": payload.entry_id,
+            "reason": payload.reason,
+            "time_source": payload.time_source,
+            "time_confidence": payload.time_confidence,
+            "window_type": payload.window_type,
+            "issue_type": payload.issue_type,
+            "resolution_action": payload.resolution_action,
+            "start_time": payload.start_time,
+            "end_time": payload.end_time,
+            "ambiguous_count": payload.ambiguous_count,
+            "resolved_issue_count": payload.resolved_issue_count,
+            "has_source_text": payload.has_source_text,
+            "extra_context": payload.extra_context,
+        }
         await insert_usage_event(
             user_id=auth.user_id,
             event_date=date.today(),
@@ -590,14 +611,7 @@ async def track_cohort_event(
             tokens_completion=None,
             tokens_total=None,
             cost_usd=None,
-            meta={
-                "threshold_variant": payload.threshold_variant,
-                "confidence_level": payload.confidence_level,
-                "preview_mode": payload.preview_mode,
-                "cohort_size": payload.cohort_size,
-                "window_days": payload.window_days,
-                "compare_by": payload.compare_by,
-            },
+            meta={k: v for k, v in meta.items() if v is not None and v != [] and v != {}},
             access_token=auth.access_token,
         )
         return {"ok": True}

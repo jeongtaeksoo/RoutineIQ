@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from typing import Any
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -25,6 +26,12 @@ CohortEventType = Literal[
     "rank_seen",
     "tip_seen",
     "preferences_click",
+    "ambiguity_shown",
+    "window_chip_selected",
+    "issue_viewed",
+    "issue_resolved",
+    "save_attempted",
+    "save_succeeded",
 ]
 
 
@@ -123,3 +130,16 @@ class CohortTrendEventRequest(BaseModel):
     cohort_size: int | None = Field(default=None, ge=0)
     window_days: int | None = Field(default=None, ge=1)
     compare_by: list[CompareDimension] = Field(default_factory=list)
+    entry_id: str | None = None
+    reason: str | None = None
+    time_source: str | None = None
+    time_confidence: str | None = None
+    window_type: str | None = None
+    issue_type: str | None = None
+    resolution_action: str | None = None
+    start_time: str | None = None
+    end_time: str | None = None
+    ambiguous_count: int | None = Field(default=None, ge=0)
+    resolved_issue_count: int | None = Field(default=None, ge=0)
+    has_source_text: bool | None = None
+    extra_context: dict[str, Any] = Field(default_factory=dict)

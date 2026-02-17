@@ -22,7 +22,7 @@ class ParsedEntry(BaseModel):
     source_text: str | None = None
     time_source: str | None = None  # explicit, relative, window, unknown
     time_confidence: str | None = None  # high, medium, low
-    time_window: str | None = None  # morning, lunch, afternoon, evening, night
+    time_window: str | None = None  # dawn, morning, lunch, afternoon, evening, night
     crosses_midnight: bool = False
 
 
