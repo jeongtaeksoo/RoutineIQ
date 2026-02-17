@@ -72,8 +72,11 @@ def test_parse_diary_eval_scenarios(
         assert "tags" in entry
         assert "confidence" in entry
 
-        assert isinstance(entry["start"], str) and _HHMM_RE.fullmatch(entry["start"])
-        assert isinstance(entry["end"], str) and _HHMM_RE.fullmatch(entry["end"])
+        start = entry["start"]
+        end = entry["end"]
+        assert (start is None and end is None) or (
+            isinstance(start, str) and _HHMM_RE.fullmatch(start) and isinstance(end, str) and _HHMM_RE.fullmatch(end)
+        )
         assert isinstance(entry["activity"], str) and entry["activity"].strip()
         assert isinstance(entry["tags"], list)
         assert entry["confidence"] in _CONFIDENCE_ENUM

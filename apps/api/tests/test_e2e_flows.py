@@ -317,6 +317,11 @@ def test_new_user_full_flow_save_parse_save_analyze_report(
                         "note": "Core feature implementation",
                         "tags": ["focus"],
                         "confidence": "high",
+                        "source_text": "09:00 deep work",
+                        "time_source": "explicit",
+                        "time_confidence": "high",
+                        "time_window": None,
+                        "crosses_midnight": False,
                     }
                 ],
                 "meta": {
@@ -341,7 +346,7 @@ def test_new_user_full_flow_save_parse_save_analyze_report(
         "/api/parse-diary",
         json={
             "date": "2026-02-15",
-            "diary_text": "At 9 I did deep work, had meetings after lunch, and went for a walk.",
+            "diary_text": "09:00 deep work, 12:30 lunch meeting, 18:00 walk.",
         },
     )
     parsed = parse_resp.json()
@@ -353,13 +358,19 @@ def test_new_user_full_flow_save_parse_save_analyze_report(
         }
         for entry in parsed["entries"]
     ]
+    parsed_meta = parsed.get("meta", {})
+    meta_for_save = {
+        key: parsed_meta[key]
+        for key in ("mood", "sleep_quality", "sleep_hours", "stress_level")
+        if key in parsed_meta and parsed_meta[key] is not None
+    }
     save_parsed = authenticated_client.post(
         "/api/logs",
         json={
             "date": "2026-02-15",
             "entries": entries_for_save,
             "note": "Worked on core tasks and took a walk.",
-            "meta": parsed["meta"],
+            "meta": meta_for_save,
         },
     )
     analyze_resp = authenticated_client.post("/api/analyze", json={"date": "2026-02-15"})

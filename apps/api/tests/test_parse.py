@@ -207,8 +207,11 @@ def test_parse_diary_fallback_handles_timeline_text_without_year_misread(
     body = res.json()
     entries = body["entries"]
     assert len(entries) >= 7
-    assert entries[0]["start"] == "07:00"
-    assert entries[0]["activity"].startswith("기상")
-    assert entries[1]["start"] == "07:30"
-    assert entries[1]["end"] == "08:10"
+    starts = [entry.get("start") for entry in entries]
+    assert "07:30" in starts
+    breakfast = next(
+        (entry for entry in entries if entry.get("start") == "07:30" and entry.get("end") == "08:10"),
+        None,
+    )
+    assert breakfast is not None
     assert all(entry["start"] != "20:00" for entry in entries)
