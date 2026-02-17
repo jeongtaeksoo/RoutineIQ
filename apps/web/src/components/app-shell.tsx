@@ -221,7 +221,7 @@ export function AppShell({
         className="fixed bottom-0 left-0 right-0 z-20 border-t backdrop-blur md:hidden"
         style={{ background: "hsl(var(--bg) / 0.9)" }}
       >
-        <div className="mx-auto grid max-w-2xl grid-cols-3">
+        <div className="mx-auto grid max-w-2xl grid-cols-4">
           {navItems.map((it) => {
             const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
             const Icon = it.icon;
@@ -248,6 +248,18 @@ export function AppShell({
               </Link>
             );
           })}
+          <button
+            type="button"
+            onClick={signOut}
+            disabled={signingOut}
+            className="flex min-h-[68px] flex-col items-center justify-center gap-1 px-2 pt-2 text-[11px] text-mutedFg transition-colors duration-200 disabled:opacity-50"
+            style={{ paddingBottom: "calc(0.55rem + env(safe-area-inset-bottom))" }}
+          >
+            <span className="flex items-center justify-center rounded-full p-1.5 transition-colors duration-200 text-mutedFg">
+              <LogOut className="h-5 w-5 text-mutedFg" />
+            </span>
+            <span className="line-clamp-1">{strings.sign_out}</span>
+          </button>
         </div>
       </nav>
     </div>

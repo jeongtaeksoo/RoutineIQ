@@ -5,7 +5,11 @@ from fastapi import APIRouter, HTTPException, status
 from app.core.config import settings
 from app.core.security import AuthDep
 from app.schemas.preferences import DEFAULT_COMPARE_BY, ProfilePreferences
-from app.services.supabase_rest import SupabaseRest, SupabaseRestError
+from app.services.supabase_rest import (
+    SupabaseRest,
+    SupabaseRestError,
+    get_http,
+)
 
 router = APIRouter()
 
@@ -147,4 +151,62 @@ async def delete_my_data(auth: AuthDep) -> dict[str, bool]:
         bearer_token=auth.access_token,
         params={"user_id": f"eq.{auth.user_id}"},
     )
+    return {"ok": True}
+
+
+@router.delete("/preferences/account")
+async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
+    sb_service = SupabaseRest(
+        str(settings.supabase_url), settings.supabase_service_role_key
+    )
+    service_token = settings.supabase_service_role_key
+
+    try:
+        await sb_service.delete(
+            "ai_reports",
+            bearer_token=service_token,
+            params={"user_id": f"eq.{auth.user_id}"},
+        )
+        await sb_service.delete(
+            "activity_logs",
+            bearer_token=service_token,
+            params={"user_id": f"eq.{auth.user_id}"},
+        )
+        await sb_service.delete(
+            "usage_events",
+            bearer_token=service_token,
+            params={"user_id": f"eq.{auth.user_id}"},
+        )
+        await sb_service.delete(
+            "subscriptions",
+            bearer_token=service_token,
+            params={"user_id": f"eq.{auth.user_id}"},
+        )
+        await sb_service.delete(
+            "profiles",
+            bearer_token=service_token,
+            params={"id": f"eq.{auth.user_id}"},
+        )
+    except SupabaseRestError:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete account data",
+        )
+
+    admin_url = (
+        f"{str(settings.supabase_url).rstrip('/')}/auth/v1/admin/users/{auth.user_id}"
+    )
+    resp = await get_http().delete(
+        admin_url,
+        headers={
+            "apikey": service_token,
+            "Authorization": f"Bearer {service_token}",
+        },
+    )
+    if resp.status_code >= 400:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete auth user",
+        )
+
     return {"ok": True}

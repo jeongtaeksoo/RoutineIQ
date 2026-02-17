@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bell, Database, Mail, Settings, ShieldCheck, X } from "lucide-react";
+import { Bell, Database, Mail, Settings, ShieldCheck, User, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { BillingActions } from "@/components/billing-actions";
@@ -19,14 +19,81 @@ type ReminderMeta = {
 };
 
 type PlanTier = "free" | "pro";
+type CompareDimension = "age_group" | "gender" | "job_family" | "work_mode";
+type ProfilePreferences = {
+  age_group: "0_17" | "18_24" | "25_34" | "35_44" | "45_plus" | "unknown";
+  gender: "female" | "male" | "nonbinary" | "prefer_not_to_say" | "unknown";
+  job_family: "office_worker" | "professional" | "creator" | "student" | "self_employed" | "other" | "unknown";
+  work_mode: "fixed" | "flex" | "shift" | "freelance" | "other" | "unknown";
+  trend_opt_in: boolean;
+  trend_compare_by: CompareDimension[];
+  goal_keyword: string | null;
+  goal_minutes_per_day: number | null;
+};
+
+const DEFAULT_PROFILE: ProfilePreferences = {
+  age_group: "unknown",
+  gender: "unknown",
+  job_family: "unknown",
+  work_mode: "unknown",
+  trend_opt_in: false,
+  trend_compare_by: ["age_group", "job_family", "work_mode"],
+  goal_keyword: null,
+  goal_minutes_per_day: 90,
+};
+
+const AGE_OPTIONS = [
+  { value: "0_17", ko: "0-17세", en: "0-17" },
+  { value: "18_24", ko: "18-24세", en: "18-24" },
+  { value: "25_34", ko: "25-34세", en: "25-34" },
+  { value: "35_44", ko: "35-44세", en: "35-44" },
+  { value: "45_plus", ko: "45세+", en: "45+" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
+] as const;
+
+const GENDER_OPTIONS = [
+  { value: "female", ko: "여성", en: "Female" },
+  { value: "male", ko: "남성", en: "Male" },
+  { value: "nonbinary", ko: "논바이너리", en: "Non-binary" },
+  { value: "prefer_not_to_say", ko: "응답 안함", en: "Prefer not to say" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
+] as const;
+
+const JOB_OPTIONS = [
+  { value: "office_worker", ko: "회사원/사무직", en: "Office Worker" },
+  { value: "professional", ko: "전문직 (의사/변호사/회계사 등)", en: "Professional" },
+  { value: "creator", ko: "크리에이터/아티스트", en: "Creator / Artist" },
+  { value: "student", ko: "학생", en: "Student" },
+  { value: "self_employed", ko: "자영업/프리랜서", en: "Self-employed / Freelance" },
+  { value: "other", ko: "기타", en: "Other" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
+] as const;
+
+const WORK_MODE_OPTIONS = [
+  { value: "fixed", ko: "고정근무", en: "Fixed schedule" },
+  { value: "flex", ko: "유연근무", en: "Flexible schedule" },
+  { value: "shift", ko: "교대근무", en: "Shift work" },
+  { value: "freelance", ko: "프리랜서", en: "Freelance" },
+  { value: "other", ko: "기타", en: "Other" },
+  { value: "unknown", ko: "선택하세요 (필수)", en: "Select one (required)" },
+] as const;
 
 type Copy = {
   open: string;
   title: string;
   subtitle: string;
   tab_notifications: string;
+  tab_profile: string;
   tab_data: string;
   tab_account: string;
+  profile_title: string;
+  profile_desc: string;
+  profile_age: string;
+  profile_gender: string;
+  profile_job: string;
+  profile_mode: string;
+  profile_save_done: string;
+  profile_required_error: string;
   notif_title: string;
   notif_desc: string;
   notif_toggle: string;
@@ -52,6 +119,8 @@ type Copy = {
   account_name: string;
   account_email: string;
   account_plan: string;
+  account_delete: string;
+  account_delete_confirm: string;
   free: string;
   pro: string;
   upgrade: string;
@@ -71,8 +140,17 @@ const EN_COPY: Copy = {
   title: "Quick Settings",
   subtitle: "Manage notifications, data controls, and account in one place.",
   tab_notifications: "Notifications",
+  tab_profile: "Profile",
   tab_data: "Data control",
   tab_account: "Account",
+  profile_title: "Personal Profile",
+  profile_desc: "Set required profile fields used for personalization and similar-user trends.",
+  profile_age: "Age group",
+  profile_gender: "Gender",
+  profile_job: "Job family",
+  profile_mode: "Work mode",
+  profile_save_done: "Profile settings saved.",
+  profile_required_error: "All profile fields are required. You can choose 'Prefer not to say' for gender.",
   notif_title: "Notifications",
   notif_desc: "Manage the current reminder settings here.",
   notif_toggle: "Enable reminders",
@@ -98,6 +176,8 @@ const EN_COPY: Copy = {
   account_name: "Name",
   account_email: "Email",
   account_plan: "Current version",
+  account_delete: "Delete account",
+  account_delete_confirm: "Delete your account permanently? All logs, reports, profile, and subscription data will be removed.",
   free: "Free",
   pro: "Pro",
   upgrade: "Upgrade to Pro",
@@ -117,8 +197,17 @@ const KO_COPY: Copy = {
   title: "빠른 설정",
   subtitle: "알림, 데이터 제어, 계정을 한 곳에서 관리하세요.",
   tab_notifications: "알림",
+  tab_profile: "개인설정",
   tab_data: "데이터 제어",
   tab_account: "계정",
+  profile_title: "개인 설정",
+  profile_desc: "개인화 리포트와 유사 사용자 트렌드 비교에 쓰이는 필수 항목입니다.",
+  profile_age: "연령대",
+  profile_gender: "성별",
+  profile_job: "직군",
+  profile_mode: "근무 형태",
+  profile_save_done: "개인 설정을 저장했습니다.",
+  profile_required_error: "개인 설정 항목은 모두 필수입니다. 성별은 '응답 안함'을 선택할 수 있습니다.",
   notif_title: "알림",
   notif_desc: "기존 리마인더 설정을 여기서 바로 관리합니다.",
   notif_toggle: "리마인더 켜기",
@@ -144,6 +233,8 @@ const KO_COPY: Copy = {
   account_name: "이름",
   account_email: "이메일",
   account_plan: "현재 버전",
+  account_delete: "회원탈퇴",
+  account_delete_confirm: "정말 회원탈퇴할까요? 기록, 리포트, 개인설정, 구독 정보가 모두 삭제됩니다.",
   free: "일반(Free)",
   pro: "프로(Pro)",
   upgrade: "Pro로 업그레이드",
@@ -329,6 +420,7 @@ function displayName(user: { email?: string | null; user_metadata?: Record<strin
 
 export function AppSettingsPanel({ locale }: { locale: Locale }) {
   const t = React.useMemo(() => getCopy(locale), [locale]);
+  const isKo = locale === "ko";
   const supabaseRef = React.useRef<ReturnType<typeof createClient>>(undefined!);
   if (!supabaseRef.current) {
     supabaseRef.current = createClient();
@@ -344,6 +436,8 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
   const [email, setEmail] = React.useState("-");
   const [plan, setPlan] = React.useState<PlanTier>("free");
   const [needsEmailSetup, setNeedsEmailSetup] = React.useState(false);
+  const [profile, setProfile] = React.useState<ProfilePreferences>(DEFAULT_PROFILE);
+  const [deletingAccount, setDeletingAccount] = React.useState(false);
 
   const [remindersEnabled, setRemindersEnabled] = React.useState(false);
   const [reminderLogTime, setReminderLogTime] = React.useState("21:30");
@@ -392,6 +486,20 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
           .maybeSingle();
         const isPro = sub?.plan === "pro" && (sub.status === "active" || sub.status === "trialing");
         setPlan(isPro ? "pro" : "free");
+      }
+
+      try {
+        const prefs = await apiFetch<ProfilePreferences>("/preferences/profile");
+        setProfile({
+          ...DEFAULT_PROFILE,
+          ...prefs,
+          trend_compare_by:
+            Array.isArray(prefs.trend_compare_by) && prefs.trend_compare_by.length
+              ? prefs.trend_compare_by
+              : DEFAULT_PROFILE.trend_compare_by,
+        });
+      } catch {
+        // ignore preferences fetch failures in quick panel
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : t.save_failed);
@@ -465,6 +573,60 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
     }
   }
 
+  async function saveProfileSettings() {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      if (
+        profile.age_group === "unknown" ||
+        profile.gender === "unknown" ||
+        profile.job_family === "unknown" ||
+        profile.work_mode === "unknown"
+      ) {
+        throw new Error(t.profile_required_error);
+      }
+
+      const payload: ProfilePreferences = {
+        ...profile,
+        trend_opt_in: true,
+        trend_compare_by: ["age_group", "job_family", "work_mode"],
+      };
+      const saved = await apiFetch<ProfilePreferences>("/preferences/profile", {
+        method: "PUT",
+        body: JSON.stringify(payload),
+      });
+      setProfile({
+        ...DEFAULT_PROFILE,
+        ...saved,
+        trend_compare_by:
+          Array.isArray(saved.trend_compare_by) && saved.trend_compare_by.length
+            ? saved.trend_compare_by
+            : DEFAULT_PROFILE.trend_compare_by,
+      });
+      setMessage(t.profile_save_done);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.save_failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteAccount() {
+    if (!window.confirm(t.account_delete_confirm)) return;
+    setDeletingAccount(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiFetch<{ ok: boolean }>("/preferences/account", { method: "DELETE" });
+      await supabaseRef.current.auth.signOut();
+      window.location.href = "/login?deleted=1";
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.delete_failed);
+      setDeletingAccount(false);
+    }
+  }
+
   return (
     <>
       <button
@@ -500,8 +662,9 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                 ) : null}
 
                 <Tabs defaultValue="notifications" className="h-full">
-                  <TabsList className="grid w-full grid-cols-3">
+                  <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="notifications">{t.tab_notifications}</TabsTrigger>
+                    <TabsTrigger value="profile">{t.tab_profile}</TabsTrigger>
                     <TabsTrigger value="data">{t.tab_data}</TabsTrigger>
                     <TabsTrigger value="account">{t.tab_account}</TabsTrigger>
                   </TabsList>
@@ -554,6 +717,92 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                         {t.check_perm}
                       </Button>
                       <Badge variant={permissionBadge.variant}>{permissionBadge.label}</Badge>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="profile" className="mt-4 space-y-4">
+                    <div className="rounded-xl border bg-white/50 p-4">
+                      <div className="flex items-center gap-2">
+                        <User className="h-4 w-4 text-brand" />
+                        <p className="text-sm font-semibold">{t.profile_title}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-mutedFg">{t.profile_desc}</p>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-mutedFg">{t.profile_age}</label>
+                        <select
+                          value={profile.age_group}
+                          onChange={(e) =>
+                            setProfile((prev) => ({ ...prev, age_group: e.target.value as ProfilePreferences["age_group"] }))
+                          }
+                          className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                        >
+                          {AGE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {isKo ? opt.ko : opt.en}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-mutedFg">{t.profile_gender}</label>
+                        <select
+                          value={profile.gender}
+                          onChange={(e) =>
+                            setProfile((prev) => ({ ...prev, gender: e.target.value as ProfilePreferences["gender"] }))
+                          }
+                          className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                        >
+                          {GENDER_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {isKo ? opt.ko : opt.en}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-mutedFg">{t.profile_job}</label>
+                        <select
+                          value={profile.job_family}
+                          onChange={(e) =>
+                            setProfile((prev) => ({ ...prev, job_family: e.target.value as ProfilePreferences["job_family"] }))
+                          }
+                          className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                        >
+                          {JOB_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {isKo ? opt.ko : opt.en}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <label className="text-xs text-mutedFg">{t.profile_mode}</label>
+                        <select
+                          value={profile.work_mode}
+                          onChange={(e) =>
+                            setProfile((prev) => ({ ...prev, work_mode: e.target.value as ProfilePreferences["work_mode"] }))
+                          }
+                          className="h-10 w-full rounded-xl border bg-white/60 px-3 text-sm transition-colors focus:border-brand focus:outline-none"
+                        >
+                          {WORK_MODE_OPTIONS.map((opt) => (
+                            <option key={opt.value} value={opt.value}>
+                              {isKo ? opt.ko : opt.en}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end">
+                      <Button onClick={saveProfileSettings} disabled={busy}>
+                        {busy ? t.loading : t.save}
+                      </Button>
                     </div>
                   </TabsContent>
 
@@ -616,6 +865,15 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                         {t.pro}
                       </div>
                     )}
+
+                    <Button
+                      variant="outline"
+                      onClick={deleteAccount}
+                      disabled={deletingAccount}
+                      className="border-red-200 text-red-700 hover:bg-red-50"
+                    >
+                      {deletingAccount ? t.loading : t.account_delete}
+                    </Button>
                   </TabsContent>
                 </Tabs>
               </div>

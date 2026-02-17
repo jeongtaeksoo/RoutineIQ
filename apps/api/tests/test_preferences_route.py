@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import pytest
 from fastapi.testclient import TestClient
+from unittest.mock import AsyncMock
 
 import app.routes.preferences as preferences_route
 
@@ -102,12 +103,35 @@ def test_delete_data_returns_ok_and_calls_supabase_delete(
     assert second["table"] == "activity_logs"
 
 
+def test_delete_account_returns_ok_and_calls_account_deletes(
+    authenticated_client: TestClient, supabase_mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Resp:
+        status_code = 200
+
+    class _HttpClient:
+        delete = AsyncMock(return_value=_Resp())
+
+    fake_http = _HttpClient()
+    monkeypatch.setattr(preferences_route, "get_http", lambda: fake_http)
+
+    response = authenticated_client.delete("/api/preferences/account")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+    assert supabase_mock["delete"].await_count == 5
+    tables = [call.kwargs["table"] for call in supabase_mock["delete"].await_args_list]
+    assert tables == ["ai_reports", "activity_logs", "usage_events", "subscriptions", "profiles"]
+    assert fake_http.delete.await_count == 1
+
+
 @pytest.mark.parametrize(
     "method,path,payload",
     [
         ("get", "/api/preferences/profile", None),
         ("put", "/api/preferences/profile", _profile_payload()),
         ("delete", "/api/preferences/data", None),
+        ("delete", "/api/preferences/account", None),
     ],
 )
 def test_preferences_endpoints_require_auth(
