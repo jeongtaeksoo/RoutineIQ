@@ -6,28 +6,25 @@ import { usePathname, useRouter } from "next/navigation";
 import * as React from "react";
 import {
   BarChart3,
-  CreditCard,
   NotebookPen,
-  Settings,
   Shield,
   Sparkles,
   LogOut
 } from "lucide-react";
 
+import { AppSettingsPanel } from "@/components/app-settings-panel";
 import { Button } from "@/components/ui/button";
 import { LocaleProvider } from "@/components/locale-provider";
 import { getStrings, type Locale, normalizeLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
-type NavItem = { key: "insights" | "daily_flow" | "reports" | "billing" | "preferences"; href: string; icon: React.ElementType };
+type NavItem = { key: "insights" | "daily_flow" | "reports"; href: string; icon: React.ElementType };
 
 const navItems: NavItem[] = [
   { key: "insights", href: "/app/insights", icon: BarChart3 },
   { key: "daily_flow", href: "/app/daily-flow", icon: NotebookPen },
-  { key: "reports", href: "/app/reports", icon: Sparkles },
-  { key: "billing", href: "/app/billing", icon: CreditCard },
-  { key: "preferences", href: "/app/preferences", icon: Settings }
+  { key: "reports", href: "/app/reports", icon: Sparkles }
 ];
 
 const ReminderScheduler = dynamic(
@@ -50,6 +47,8 @@ export function AppShell({
   const router = useRouter();
 
   const [locale, setLocale] = React.useState<Locale>(initialLocale);
+  const [resolvedRole, setResolvedRole] = React.useState<"user" | "admin">(role);
+  const [resolvedEmail, setResolvedEmail] = React.useState<string | null>(email);
   const [userMetaVersion, setUserMetaVersion] = React.useState(0);
   const [signingOut, setSigningOut] = React.useState(false);
 
@@ -63,16 +62,12 @@ export function AppShell({
     insights: strings.nav_insights,
     daily_flow: strings.nav_daily_flow,
     reports: strings.nav_reports,
-    billing: strings.nav_billing,
-    preferences: strings.nav_preferences,
   }), [strings]);
 
   const navShortLabels = React.useMemo(() => ({
     insights: strings.nav_short_insights,
     daily_flow: strings.nav_short_daily_flow,
     reports: strings.nav_short_reports,
-    billing: strings.nav_short_billing,
-    preferences: strings.nav_short_preferences,
   }), [strings]);
 
   async function signOut() {
@@ -93,9 +88,22 @@ export function AppShell({
           data: { user }
         } = await supabaseRef.current.auth.getUser();
         if (!user) return;
+        if (!cancelled) {
+          setResolvedEmail(user.email ?? null);
+        }
         const meta = (user.user_metadata as any) || {};
         const loc = meta["routineiq_locale"];
         if (!cancelled) setLocale(loc ? normalizeLocale(loc) : "ko");
+
+        const { data: profile } = await supabaseRef.current
+          .from("profiles")
+          .select("role,email")
+          .eq("id", user.id)
+          .maybeSingle();
+        if (!cancelled) {
+          setResolvedRole(profile?.role === "admin" ? "admin" : "user");
+          if (profile?.email) setResolvedEmail(profile.email);
+        }
       } catch {
         // ignore
       }
@@ -142,7 +150,7 @@ export function AppShell({
             <div>
               <div className="title-serif text-xl leading-none">RutineIQ</div>
             </div>
-            {role === "admin" ? (
+            {resolvedRole === "admin" ? (
               <span className="inline-flex items-center gap-1 rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
                 <Shield className="h-3.5 w-3.5" />
                 {strings.nav_admin}
@@ -172,7 +180,7 @@ export function AppShell({
               );
             })}
 
-            {role === "admin" ? (
+            {resolvedRole === "admin" ? (
               <Link
                 href="/admin"
                 className={cn(
@@ -191,7 +199,7 @@ export function AppShell({
           <div className="mt-auto space-y-3">
             <div className="rounded-xl border bg-[hsl(var(--muted)/0.45)] p-3 text-xs text-mutedFg">
               {strings.signed_in_as}
-              <div className="mt-1 truncate text-sm font-medium text-fg">{email || strings.visitor}</div>
+              <div className="mt-1 truncate text-sm font-medium text-fg">{resolvedEmail || strings.visitor}</div>
             </div>
             <Button variant="outline" className="w-full justify-between" onClick={signOut} disabled={signingOut}>
               <span>{strings.sign_out}</span>
@@ -207,11 +215,13 @@ export function AppShell({
         </main>
       </div>
 
+      <AppSettingsPanel locale={locale} />
+
       <nav
         className="fixed bottom-0 left-0 right-0 z-20 border-t backdrop-blur md:hidden"
         style={{ background: "hsl(var(--bg) / 0.9)" }}
       >
-        <div className="mx-auto grid max-w-2xl grid-cols-5">
+        <div className="mx-auto grid max-w-2xl grid-cols-3">
           {navItems.map((it) => {
             const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
             const Icon = it.icon;

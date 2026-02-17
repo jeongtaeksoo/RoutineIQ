@@ -23,28 +23,20 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = createClient();
 
   const {
-    data: { user }
-  } = await supabase.auth.getUser();
+    data: { session }
+  } = await supabase.auth.getSession();
+  const user = session?.user ?? null;
 
   if (!user) {
     redirect("/login");
   }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role,email")
-    .eq("id", user.id)
-    .maybeSingle();
-
-  const role = profile?.role === "admin" ? "admin" : "user";
-  const email = profile?.email || user.email || null;
 
   const meta = (user.user_metadata as any) || {};
   const loc = meta["routineiq_locale"];
   const initialLocale: Locale = loc ? normalizeLocale(loc) : "ko";
 
   return (
-    <AppShell role={role} email={email} initialLocale={initialLocale}>
+    <AppShell role="user" email={user.email || null} initialLocale={initialLocale}>
       {children}
     </AppShell>
   );

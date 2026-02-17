@@ -21,6 +21,10 @@ type ApiErrorBody =
   | { detail?: unknown }
   | string;
 
+let cachedAccessToken: string | null = null;
+let cachedAccessTokenExpiresAt = 0;
+let pendingAccessTokenPromise: Promise<string | null> | null = null;
+
 function getApiOrigin(): string {
   const fallback = "http://localhost:8000";
   const raw = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
@@ -129,6 +133,85 @@ function normalizeError(body: ApiErrorBody): { message: string; hint?: string; c
   return { message: "Request failed" };
 }
 
+function getBridgeToken(): string | null {
+  if (typeof window === "undefined") return null;
+  const bridgeWindow = (window as any).__ROUTINEIQ_E2E_TOKEN__;
+  const bridgeSession = window.sessionStorage.getItem("routineiq_e2e_token");
+  return typeof bridgeWindow === "string" && bridgeWindow ? bridgeWindow : bridgeSession || null;
+}
+
+async function fetchServerToken(timeoutMs = 1500): Promise<string | null> {
+  if (typeof window === "undefined") return null;
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const tokenRes = await fetch("/auth/token", {
+      method: "GET",
+      credentials: "include",
+      cache: "no-store",
+      signal: controller.signal,
+    });
+    if (!tokenRes.ok) return null;
+    const tokenBody = (await tokenRes.json()) as { access_token?: string };
+    return typeof tokenBody.access_token === "string" ? tokenBody.access_token : null;
+  } catch {
+    return null;
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+async function resolveAccessToken(): Promise<string | null> {
+  const now = Date.now();
+  if (cachedAccessToken && now < cachedAccessTokenExpiresAt) {
+    return cachedAccessToken;
+  }
+  if (pendingAccessTokenPromise) {
+    return pendingAccessTokenPromise;
+  }
+
+  pendingAccessTokenPromise = (async () => {
+    const supabase = createClient();
+    const { data, error } = await supabase.auth.getSession();
+    if (error) throw new Error(error.message);
+
+    let session = data.session ?? null;
+    if (!session) {
+      const refreshed = await supabase.auth.refreshSession();
+      if (refreshed.error) throw new Error(refreshed.error.message);
+      session = refreshed.data.session ?? null;
+    }
+
+    if (session?.access_token) {
+      cachedAccessToken = session.access_token;
+      cachedAccessTokenExpiresAt = (session.expires_at ? session.expires_at * 1000 : now + 60_000) - 10_000;
+      return session.access_token;
+    }
+
+    const bridgeToken = process.env.NEXT_PUBLIC_ENABLE_TOKEN_BRIDGE === "1" ? getBridgeToken() : null;
+    if (bridgeToken) {
+      cachedAccessToken = bridgeToken;
+      cachedAccessTokenExpiresAt = now + 60_000;
+      return bridgeToken;
+    }
+
+    const serverToken = await fetchServerToken();
+    if (serverToken) {
+      cachedAccessToken = serverToken;
+      cachedAccessTokenExpiresAt = now + 60_000;
+      return serverToken;
+    }
+
+    return null;
+  })();
+
+  try {
+    return await pendingAccessTokenPromise;
+  } finally {
+    pendingAccessTokenPromise = null;
+  }
+}
+
 export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   // Single rule:
   // - `NEXT_PUBLIC_API_BASE_URL` may be `http://localhost:8000` or `http://localhost:8000/api` (either is fine).
@@ -150,34 +233,7 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
   }
 
   if (!isE2EMode) {
-    const supabase = createClient();
-    const { data, error } = await supabase.auth.getSession();
-    if (error) throw new Error(error.message);
-    let token = data.session?.access_token ?? null;
-    if (!token) {
-      // Cookie-only sessions can briefly miss a hydrated client session.
-      const refreshed = await supabase.auth.refreshSession();
-      if (refreshed.error) throw new Error(refreshed.error.message);
-      token = refreshed.data.session?.access_token ?? null;
-    }
-    if (!token) {
-      // Server-side cookie session fallback for SSR-authenticated flows.
-      const tokenRes = await fetch("/auth/token", {
-        method: "GET",
-        credentials: "include",
-        cache: "no-store",
-      });
-      if (tokenRes.ok) {
-        const tokenBody = (await tokenRes.json()) as { access_token?: string };
-        token = typeof tokenBody.access_token === "string" ? tokenBody.access_token : null;
-      }
-    }
-    if (!token && process.env.NEXT_PUBLIC_ENABLE_TOKEN_BRIDGE === "1" && typeof window !== "undefined") {
-      const bridgeWindow = (window as any).__ROUTINEIQ_E2E_TOKEN__;
-      const bridgeSession = window.sessionStorage.getItem("routineiq_e2e_token");
-      const bridge = typeof bridgeWindow === "string" && bridgeWindow ? bridgeWindow : bridgeSession;
-      if (bridge) token = bridge;
-    }
+    const token = await resolveAccessToken();
     if (!token) throw new Error("Not signed in");
     headers.set("authorization", `Bearer ${token}`);
   }

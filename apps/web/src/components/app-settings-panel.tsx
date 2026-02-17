@@ -1,0 +1,475 @@
+"use client";
+
+import * as React from "react";
+import { useRouter } from "next/navigation";
+import { Bell, Database, Mail, Settings, ShieldCheck, X } from "lucide-react";
+
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiFetch } from "@/lib/api-client";
+import type { Locale } from "@/lib/i18n";
+import { createClient } from "@/lib/supabase/client";
+
+type ReminderMeta = {
+  enabled?: boolean;
+  logTime?: string;
+  planTime?: string;
+};
+
+type PlanTier = "free" | "pro";
+
+type Copy = {
+  open: string;
+  title: string;
+  subtitle: string;
+  tab_notifications: string;
+  tab_data: string;
+  tab_account: string;
+  notif_title: string;
+  notif_desc: string;
+  notif_toggle: string;
+  notif_toggle_desc: string;
+  evening: string;
+  morning: string;
+  save: string;
+  check_perm: string;
+  perm_on: string;
+  perm_off: string;
+  perm_needed: string;
+  perm_unsupported: string;
+  data_title: string;
+  data_desc: string;
+  data_p1: string;
+  data_p2: string;
+  data_p3: string;
+  reset: string;
+  reset_confirm: string;
+  reset_done: string;
+  account_title: string;
+  account_desc: string;
+  account_name: string;
+  account_email: string;
+  account_plan: string;
+  free: string;
+  pro: string;
+  upgrade: string;
+  billing: string;
+  close: string;
+  saved: string;
+  save_failed: string;
+  delete_failed: string;
+  notif_enabled: string;
+  notif_denied: string;
+  notif_unsupported: string;
+  loading: string;
+};
+
+function getCopy(locale: Locale): Copy {
+  if (locale === "ko") {
+    return {
+      open: "설정",
+      title: "빠른 설정",
+      subtitle: "알림, 데이터 제어, 계정을 한 곳에서 관리하세요.",
+      tab_notifications: "알림",
+      tab_data: "데이터 제어",
+      tab_account: "계정",
+      notif_title: "알림",
+      notif_desc: "기존 리마인더 설정을 여기서 바로 관리합니다.",
+      notif_toggle: "리마인더 켜기",
+      notif_toggle_desc: "브라우저가 열려 있을 때 알림을 보냅니다.",
+      evening: "저녁: 하루 기록하기",
+      morning: "아침: 계획 확인하기",
+      save: "저장",
+      check_perm: "브라우저 권한 확인",
+      perm_on: "알림 켜짐",
+      perm_off: "알림 꺼짐",
+      perm_needed: "설정 필요",
+      perm_unsupported: "미지원",
+      data_title: "데이터 제어",
+      data_desc: "현재 데이터/프라이버시 정책과 동일한 기준입니다.",
+      data_p1: "작성한 기록은 루틴 분석에만 사용됩니다.",
+      data_p2: "광고/판매 목적으로 사용되지 않습니다.",
+      data_p3: "원하면 언제든 모든 데이터를 삭제할 수 있습니다.",
+      reset: "데이터 전체 초기화",
+      reset_confirm: "모든 기록과 리포트를 삭제할까요? 복구할 수 없습니다.",
+      reset_done: "데이터가 초기화되었습니다.",
+      account_title: "계정",
+      account_desc: "이름, 이메일, 현재 버전을 확인할 수 있습니다.",
+      account_name: "이름",
+      account_email: "이메일",
+      account_plan: "현재 버전",
+      free: "일반(Free)",
+      pro: "프로(Pro)",
+      upgrade: "Pro로 업그레이드",
+      billing: "요금제/결제 열기",
+      close: "닫기",
+      saved: "설정이 저장되었습니다.",
+      save_failed: "저장에 실패했습니다.",
+      delete_failed: "삭제에 실패했습니다.",
+      notif_enabled: "알림이 켜졌습니다.",
+      notif_denied: "알림이 거부되었습니다.",
+      notif_unsupported: "이 브라우저는 알림을 지원하지 않습니다.",
+      loading: "불러오는 중...",
+    };
+  }
+  return {
+    open: "Settings",
+    title: "Quick Settings",
+    subtitle: "Manage notifications, data controls, and account in one place.",
+    tab_notifications: "Notifications",
+    tab_data: "Data control",
+    tab_account: "Account",
+    notif_title: "Notifications",
+    notif_desc: "Manage the current reminder settings here.",
+    notif_toggle: "Enable reminders",
+    notif_toggle_desc: "Browser must stay open to receive reminders.",
+    evening: "Evening: log your day",
+    morning: "Morning: review your plan",
+    save: "Save",
+    check_perm: "Check browser permission",
+    perm_on: "On",
+    perm_off: "Off",
+    perm_needed: "Setup needed",
+    perm_unsupported: "Unsupported",
+    data_title: "Data control",
+    data_desc: "Same data/privacy policy as existing preferences.",
+    data_p1: "Your logs are used only for routine analysis.",
+    data_p2: "No ads, no data selling.",
+    data_p3: "You can delete all data at any time.",
+    reset: "Reset all data",
+    reset_confirm: "Delete all logs and reports? This cannot be undone.",
+    reset_done: "All data has been reset.",
+    account_title: "Account",
+    account_desc: "Check your name, email, and current version.",
+    account_name: "Name",
+    account_email: "Email",
+    account_plan: "Current version",
+    free: "Free",
+    pro: "Pro",
+    upgrade: "Upgrade to Pro",
+    billing: "Open plans & billing",
+    close: "Close",
+    saved: "Settings saved.",
+    save_failed: "Failed to save.",
+    delete_failed: "Failed to delete data.",
+    notif_enabled: "Notifications enabled.",
+    notif_denied: "Notifications denied.",
+    notif_unsupported: "Notifications are not supported in this browser.",
+    loading: "Loading...",
+  };
+}
+
+function displayName(user: { email?: string | null; user_metadata?: Record<string, unknown> } | null): string {
+  if (!user) return "-";
+  const meta = user.user_metadata || {};
+  const fromMeta =
+    (typeof meta.full_name === "string" && meta.full_name.trim()) ||
+    (typeof meta.name === "string" && meta.name.trim()) ||
+    (typeof meta.user_name === "string" && meta.user_name.trim()) ||
+    "";
+  if (fromMeta) return fromMeta;
+  if (!user.email) return "-";
+  return user.email.split("@")[0] || user.email;
+}
+
+export function AppSettingsPanel({ locale }: { locale: Locale }) {
+  const t = React.useMemo(() => getCopy(locale), [locale]);
+  const router = useRouter();
+  const supabaseRef = React.useRef<ReturnType<typeof createClient>>(undefined!);
+  if (!supabaseRef.current) {
+    supabaseRef.current = createClient();
+  }
+
+  const [open, setOpen] = React.useState(false);
+  const [busy, setBusy] = React.useState(false);
+  const [loadingAccount, setLoadingAccount] = React.useState(false);
+  const [message, setMessage] = React.useState<string | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
+
+  const [name, setName] = React.useState("-");
+  const [email, setEmail] = React.useState("-");
+  const [plan, setPlan] = React.useState<PlanTier>("free");
+
+  const [remindersEnabled, setRemindersEnabled] = React.useState(false);
+  const [reminderLogTime, setReminderLogTime] = React.useState("21:30");
+  const [reminderPlanTime, setReminderPlanTime] = React.useState("08:30");
+  const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission | "unsupported">(
+    "unsupported"
+  );
+
+  const permissionBadge = React.useMemo(() => {
+    if (notificationPermission === "unsupported") return { label: t.perm_unsupported, variant: "secondary" as const };
+    if (notificationPermission === "granted") return { label: t.perm_on, variant: "default" as const };
+    if (notificationPermission === "denied") return { label: t.perm_off, variant: "destructive" as const };
+    return { label: t.perm_needed, variant: "secondary" as const };
+  }, [notificationPermission, t.perm_needed, t.perm_off, t.perm_on, t.perm_unsupported]);
+
+  const loadCurrentSettings = React.useCallback(async () => {
+    setLoadingAccount(true);
+    setError(null);
+    try {
+      const {
+        data: { user },
+      } = await supabaseRef.current.auth.getUser();
+      setName(displayName(user));
+      setEmail(user?.email || "-");
+
+      const reminderMeta = (user?.user_metadata?.routineiq_reminders_v1 || {}) as ReminderMeta;
+      setRemindersEnabled(Boolean(reminderMeta.enabled));
+      if (typeof reminderMeta.logTime === "string") setReminderLogTime(reminderMeta.logTime);
+      if (typeof reminderMeta.planTime === "string") setReminderPlanTime(reminderMeta.planTime);
+
+      if (typeof Notification === "undefined") {
+        setNotificationPermission("unsupported");
+      } else {
+        setNotificationPermission(Notification.permission);
+      }
+
+      const uid = user?.id || "";
+      if (!uid) {
+        setPlan("free");
+      } else {
+        const { data: sub } = await supabaseRef.current
+          .from("subscriptions")
+          .select("plan,status")
+          .eq("user_id", uid)
+          .maybeSingle();
+        const isPro = sub?.plan === "pro" && (sub.status === "active" || sub.status === "trialing");
+        setPlan(isPro ? "pro" : "free");
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.save_failed);
+    } finally {
+      setLoadingAccount(false);
+    }
+  }, [t.save_failed]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    void loadCurrentSettings();
+  }, [loadCurrentSettings, open]);
+
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [open]);
+
+  async function requestNotifications() {
+    setError(null);
+    setMessage(null);
+    try {
+      if (typeof Notification === "undefined") throw new Error(t.notif_unsupported);
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      setMessage(permission === "granted" ? t.notif_enabled : t.notif_denied);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.save_failed);
+    }
+  }
+
+  async function saveReminders() {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const { error: updateError } = await supabaseRef.current.auth.updateUser({
+        data: {
+          routineiq_reminders_v1: {
+            enabled: remindersEnabled,
+            logTime: reminderLogTime,
+            planTime: reminderPlanTime,
+          },
+        },
+      });
+      if (updateError) throw updateError;
+      setMessage(t.saved);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.save_failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function deleteData() {
+    if (!window.confirm(t.reset_confirm)) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await apiFetch<{ ok: boolean }>("/preferences/data", { method: "DELETE" });
+      setMessage(t.reset_done);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t.delete_failed);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  function openBilling() {
+    setOpen(false);
+    router.push("/app/billing");
+  }
+
+  return (
+    <>
+      <button
+        type="button"
+        aria-label={t.open}
+        onClick={() => setOpen(true)}
+        className="fixed bottom-[calc(5.5rem+env(safe-area-inset-bottom))] right-4 z-30 rounded-full border bg-[hsl(var(--card)/0.95)] p-3 text-fg shadow-elevated transition hover:scale-[1.03] hover:bg-[hsl(var(--card))] md:bottom-5"
+      >
+        <Settings className="h-4 w-4" />
+      </button>
+
+      {open ? (
+        <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4">
+          <button type="button" aria-label={t.close} className="absolute inset-0 h-full w-full" onClick={() => setOpen(false)} />
+          <div className="relative z-10 w-[min(92vw,560px)] max-h-[84vh] aspect-square overflow-hidden rounded-2xl border bg-[hsl(var(--card))] shadow-elevated">
+            <div className="flex h-full flex-col">
+              <div className="flex items-start justify-between border-b px-5 py-4">
+                <div>
+                  <h2 className="title-serif text-2xl">{t.title}</h2>
+                  <p className="mt-1 text-xs text-mutedFg">{t.subtitle}</p>
+                </div>
+                <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label={t.close}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <div className="flex-1 overflow-y-auto px-5 py-4">
+                {message ? (
+                  <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{message}</div>
+                ) : null}
+                {error ? (
+                  <div className="mb-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-900">{error}</div>
+                ) : null}
+
+                <Tabs defaultValue="notifications" className="h-full">
+                  <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="notifications">{t.tab_notifications}</TabsTrigger>
+                    <TabsTrigger value="data">{t.tab_data}</TabsTrigger>
+                    <TabsTrigger value="account">{t.tab_account}</TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="notifications" className="mt-4 space-y-4">
+                    <div className="rounded-xl border bg-white/50 p-4">
+                      <div className="flex items-center gap-2">
+                        <Bell className="h-4 w-4 text-brand" />
+                        <p className="text-sm font-semibold">{t.notif_title}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-mutedFg">{t.notif_desc}</p>
+                    </div>
+
+                    <div className="flex items-center justify-between rounded-xl border bg-white/50 p-4">
+                      <div>
+                        <p className="text-sm font-semibold">{t.notif_toggle}</p>
+                        <p className="mt-1 text-xs text-mutedFg">{t.notif_toggle_desc}</p>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={remindersEnabled}
+                        onChange={(e) => setRemindersEnabled(e.target.checked)}
+                        className="h-5 w-5 rounded border-gray-300 accent-brand"
+                      />
+                    </div>
+
+                    {remindersEnabled ? (
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-mutedFg">{t.evening}</label>
+                          <Input type="time" value={reminderLogTime} onChange={(e) => setReminderLogTime(e.target.value)} />
+                        </div>
+                        <div className="space-y-1.5">
+                          <label className="text-xs text-mutedFg">{t.morning}</label>
+                          <Input type="time" value={reminderPlanTime} onChange={(e) => setReminderPlanTime(e.target.value)} />
+                        </div>
+                      </div>
+                    ) : null}
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button onClick={saveReminders} disabled={busy}>
+                        {busy ? t.loading : t.save}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={requestNotifications}
+                        disabled={busy || notificationPermission === "unsupported" || notificationPermission === "granted"}
+                      >
+                        {t.check_perm}
+                      </Button>
+                      <Badge variant={permissionBadge.variant}>{permissionBadge.label}</Badge>
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="data" className="mt-4 space-y-4">
+                    <div className="rounded-xl border bg-white/50 p-4">
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4 text-brand" />
+                        <p className="text-sm font-semibold">{t.data_title}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-mutedFg">{t.data_desc}</p>
+                    </div>
+
+                    <div className="rounded-xl border bg-[#faf5ee] p-4 text-sm text-[#5c554e]">
+                      <ul className="list-disc space-y-1 pl-4">
+                        <li>{t.data_p1}</li>
+                        <li>{t.data_p2}</li>
+                        <li>{t.data_p3}</li>
+                      </ul>
+                    </div>
+
+                    <Button variant="outline" onClick={deleteData} disabled={busy} className="border-red-200 text-red-700 hover:bg-red-50">
+                      {t.reset}
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="account" className="mt-4 space-y-4">
+                    <div className="rounded-xl border bg-white/50 p-4">
+                      <div className="flex items-center gap-2">
+                        <ShieldCheck className="h-4 w-4 text-brand" />
+                        <p className="text-sm font-semibold">{t.account_title}</p>
+                      </div>
+                      <p className="mt-1 text-xs text-mutedFg">{t.account_desc}</p>
+                    </div>
+
+                    <div className="space-y-2 rounded-xl border bg-white/50 p-4 text-sm">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-mutedFg">{t.account_name}</span>
+                        <span className="font-medium">{loadingAccount ? t.loading : name}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-mutedFg">{t.account_email}</span>
+                        <span className="font-medium">{loadingAccount ? t.loading : email}</span>
+                      </div>
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-mutedFg">{t.account_plan}</span>
+                        <span className="font-semibold">{plan === "pro" ? t.pro : t.free}</span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {plan === "free" ? (
+                        <Button onClick={openBilling}>{t.upgrade}</Button>
+                      ) : null}
+                      <Button variant="outline" onClick={openBilling}>
+                        <Mail className="mr-2 h-4 w-4" />
+                        {t.billing}
+                      </Button>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </>
+  );
+}
