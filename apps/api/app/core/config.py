@@ -66,6 +66,29 @@ class Settings(BaseSettings):
         default=30, alias="PRO_REPORT_RETENTION_DAYS"
     )
     analyze_per_minute_limit: int = Field(default=6, alias="ANALYZE_PER_MINUTE_LIMIT")
+    recovery_v1_enabled: bool = Field(default=False, alias="RECOVERY_V1_ENABLED")
+    auto_lapse_enabled: bool = Field(default=False, alias="AUTO_LAPSE_ENABLED")
+    recovery_nudge_enabled: bool = Field(default=False, alias="RECOVERY_NUDGE_ENABLED")
+    recovery_lapse_default_threshold_hours: int = Field(
+        default=12, alias="RECOVERY_LAPSE_DEFAULT_THRESHOLD_HOURS"
+    )
+    recovery_auto_lapse_cooldown_hours: int = Field(
+        default=24, alias="RECOVERY_AUTO_LAPSE_COOLDOWN_HOURS"
+    )
+    recovery_nudge_cooldown_hours: int = Field(
+        default=24, alias="RECOVERY_NUDGE_COOLDOWN_HOURS"
+    )
+    recovery_quiet_hours_start: int = Field(
+        default=22, alias="RECOVERY_QUIET_HOURS_START"
+    )
+    recovery_quiet_hours_end: int = Field(default=8, alias="RECOVERY_QUIET_HOURS_END")
+    recovery_cron_token: str | None = Field(default=None, alias="RECOVERY_CRON_TOKEN")
+    recovery_auto_lapse_batch_size: int = Field(
+        default=500, alias="RECOVERY_AUTO_LAPSE_BATCH_SIZE"
+    )
+    recovery_nudge_batch_size: int = Field(
+        default=500, alias="RECOVERY_NUDGE_BATCH_SIZE"
+    )
     cohort_window_days: int = Field(default=14, alias="COHORT_WINDOW_DAYS")
     cohort_min_sample_size: int = Field(default=50, alias="COHORT_MIN_SAMPLE_SIZE")
     cohort_preview_sample_size: int = Field(
@@ -136,6 +159,24 @@ class Settings(BaseSettings):
             raise ValueError(
                 "COHORT_EXPERIMENT_MIN_SAMPLE_SIZE must be <= COHORT_EXPERIMENT_HIGH_CONFIDENCE_SAMPLE_SIZE"
             )
+        if not (1 <= self.recovery_lapse_default_threshold_hours <= 168):
+            raise ValueError(
+                "RECOVERY_LAPSE_DEFAULT_THRESHOLD_HOURS must be between 1 and 168"
+            )
+        if not (1 <= self.recovery_auto_lapse_cooldown_hours <= 336):
+            raise ValueError(
+                "RECOVERY_AUTO_LAPSE_COOLDOWN_HOURS must be between 1 and 336"
+            )
+        if not (1 <= self.recovery_nudge_cooldown_hours <= 336):
+            raise ValueError("RECOVERY_NUDGE_COOLDOWN_HOURS must be between 1 and 336")
+        if not (0 <= self.recovery_quiet_hours_start <= 23):
+            raise ValueError("RECOVERY_QUIET_HOURS_START must be 0..23")
+        if not (0 <= self.recovery_quiet_hours_end <= 23):
+            raise ValueError("RECOVERY_QUIET_HOURS_END must be 0..23")
+        if not (1 <= self.recovery_auto_lapse_batch_size <= 2000):
+            raise ValueError("RECOVERY_AUTO_LAPSE_BATCH_SIZE must be 1..2000")
+        if not (1 <= self.recovery_nudge_batch_size <= 2000):
+            raise ValueError("RECOVERY_NUDGE_BATCH_SIZE must be 1..2000")
 
         return self
 

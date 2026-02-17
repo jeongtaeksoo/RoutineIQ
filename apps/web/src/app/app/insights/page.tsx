@@ -113,6 +113,29 @@ type CohortTrend = {
   actionable_tip: string;
 };
 
+type RecoveryActive = {
+  has_open_session: boolean;
+  session_id?: string;
+  lapse_start_ts?: string;
+  elapsed_min?: number | null;
+  correlation_id?: string;
+};
+
+type RecoveryNudgePayload = {
+  nudge_id: string;
+  session_id: string;
+  message: string;
+  lapse_start_ts: string;
+  created_at: string;
+  correlation_id: string;
+};
+
+type RecoveryNudgeEnvelope = {
+  has_nudge: boolean;
+  nudge?: RecoveryNudgePayload | null;
+  correlation_id?: string;
+};
+
 function localYYYYMMDD(d = new Date()) {
   const y = d.getFullYear();
   const m = `${d.getMonth() + 1}`.padStart(2, "0");
@@ -335,6 +358,8 @@ export default function InsightsPage() {
         recoveryTitle: "다시 시작해볼까요?",
         recoveryBody: "기록이 며칠 비어 있어요. 한 줄만 적어도 흐름을 다시 이을 수 있습니다.",
         recoveryCta: "오늘 기록 다시 시작",
+        nudgeTitle: "복구 알림",
+        nudgeDismiss: "확인",
         cohortSampleLine: (n: number, w: number) => `표본 ${n}명 · ${w}일 기준`,
       };
     }
@@ -447,6 +472,8 @@ export default function InsightsPage() {
       recoveryTitle: "Ready to pick back up?",
       recoveryBody: "Your log streak has a gap. Even one line is enough to restart your flow.",
       recoveryCta: "Restart today\'s log",
+      nudgeTitle: "Recovery nudge",
+      nudgeDismiss: "Dismiss",
       cohortSampleLine: (n: number, w: number) => `Sample ${n} users \u00b7 ${w}-day window`,
     };
   }, [isKo]);
@@ -481,6 +508,9 @@ export default function InsightsPage() {
   const [cohortTrend, setCohortTrend] = React.useState<CohortTrend | null>(null);
   const [cohortLoading, setCohortLoading] = React.useState(true);
   const [profileMissingRequired, setProfileMissingRequired] = React.useState(false);
+  const [recoveryActive, setRecoveryActive] = React.useState<RecoveryActive | null>(null);
+  const [recoveryNudge, setRecoveryNudge] = React.useState<RecoveryNudgePayload | null>(null);
+  const [nudgeAcking, setNudgeAcking] = React.useState(false);
 
   async function loadTodayLog() {
     try {
@@ -709,6 +739,49 @@ export default function InsightsPage() {
     }
   }
 
+  async function loadRecoveryActive() {
+    try {
+      const res = await apiFetch<RecoveryActive>("/recovery/active", {
+        timeoutMs: 5_000,
+      });
+      setRecoveryActive(res);
+    } catch {
+      setRecoveryActive(null);
+    }
+  }
+
+  async function loadRecoveryNudge() {
+    try {
+      const res = await apiFetch<RecoveryNudgeEnvelope>("/recovery/nudge", {
+        timeoutMs: 5_000,
+      });
+      if (res.has_nudge && res.nudge) {
+        setRecoveryNudge(res.nudge);
+      } else {
+        setRecoveryNudge(null);
+      }
+    } catch {
+      setRecoveryNudge(null);
+    }
+  }
+
+  async function acknowledgeRecoveryNudge() {
+    if (!recoveryNudge?.nudge_id || nudgeAcking) return;
+    setNudgeAcking(true);
+    try {
+      await apiFetch("/recovery/nudge/ack", {
+        method: "POST",
+        body: JSON.stringify({ nudge_id: recoveryNudge.nudge_id }),
+        timeoutMs: 5_000,
+      });
+    } catch {
+      // Keep UX non-blocking for temporary API failures.
+    } finally {
+      setRecoveryNudge(null);
+      setNudgeAcking(false);
+    }
+  }
+
   React.useEffect(() => {
     // First paint should depend only on critical data.
     const cachedReport = readCachedInsightsReport(today, locale);
@@ -726,6 +799,8 @@ export default function InsightsPage() {
       void loadConsistency();
       void loadCohortTrend();
       void loadProfileHealth();
+      void loadRecoveryActive();
+      void loadRecoveryNudge();
     }, 0);
     return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -885,6 +960,33 @@ export default function InsightsPage() {
           <p className="mt-1 text-sm text-mutedFg">{t.profileSetupBody}</p>
           <Button asChild size="sm" variant="outline" className="mt-3">
             <Link href="/app/preferences">{t.profileSetupCta}</Link>
+          </Button>
+        </div>
+      ) : null}
+      {recoveryNudge ? (
+        <div className="rounded-xl border border-brand/40 bg-brand/5 p-4">
+          <p className="text-sm font-semibold">{t.nudgeTitle}</p>
+          <p className="mt-1 text-sm text-mutedFg">{recoveryNudge.message}</p>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button asChild size="sm">
+              <Link href="/app/daily-flow">{t.recoveryCta}</Link>
+            </Button>
+            <Button size="sm" variant="outline" onClick={acknowledgeRecoveryNudge} disabled={nudgeAcking}>
+              {t.nudgeDismiss}
+            </Button>
+          </div>
+        </div>
+      ) : null}
+      {recoveryActive?.has_open_session ? (
+        <div className="rounded-xl border border-brand/40 bg-brand/5 p-4">
+          <p className="text-sm font-semibold">{t.recoveryTitle}</p>
+          <p className="mt-1 text-sm text-mutedFg">
+            {recoveryActive.elapsed_min !== null && recoveryActive.elapsed_min !== undefined
+              ? `${t.recoveryBody} (${recoveryActive.elapsed_min}m)`
+              : t.recoveryBody}
+          </p>
+          <Button asChild size="sm" className="mt-3">
+            <Link href="/app/daily-flow">{t.recoveryCta}</Link>
           </Button>
         </div>
       ) : null}
