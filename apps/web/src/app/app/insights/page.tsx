@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, FileText, Clock, AlertTriangle, BookOpen, CheckCircle2, ShieldCheck, RotateCcw } from "lucide-react";
+import { Sparkles, FileText, Clock, AlertTriangle, CheckCircle2, ShieldCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -224,6 +224,11 @@ export default function InsightsPage() {
         aiQualityTier: "개인화 수준",
         aiQualityProfile: "프로필 커버리지",
         aiQualitySufficiency: "데이터 충분성",
+        reportDeepDiveTitle: "리포트 상세 보기",
+        reportDeepDiveDesc: "방해 패턴, 집중 시간, If-Then 규칙은 리포트에서 자세히 확인하세요.",
+        reportDeepDivePeak: "대표 집중 시간",
+        reportDeepDiveBreak: "대표 방해 패턴",
+        reportDeepDiveEmpty: "오늘 리포트가 없어서 상세 요약을 아직 만들 수 없어요.",
         suffLow: "보강 필요",
         suffMedium: "보통",
         suffHigh: "충분",
@@ -331,6 +336,11 @@ export default function InsightsPage() {
       aiQualityTier: "Personalization",
       aiQualityProfile: "Profile coverage",
       aiQualitySufficiency: "Data sufficiency",
+      reportDeepDiveTitle: "Open full report details",
+      reportDeepDiveDesc: "View full trigger analysis, peak hours, and If-Then rules in the report page.",
+      reportDeepDivePeak: "Top peak window",
+      reportDeepDiveBreak: "Top break trigger",
+      reportDeepDiveEmpty: "No report yet, so detailed breakdown is not available.",
       suffLow: "Needs more signals",
       suffMedium: "Moderate",
       suffHigh: "Sufficient",
@@ -423,6 +433,7 @@ export default function InsightsPage() {
     deepMinutesChangePct: number | null;
     pattern: "improving" | "declining" | "stable" | "insufficient_data";
   }>({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
+  const [metricsLoading, setMetricsLoading] = React.useState(true);
   const [cohortTrend, setCohortTrend] = React.useState<CohortTrend | null>(null);
   const [cohortLoading, setCohortLoading] = React.useState(true);
   const [profileMissingRequired, setProfileMissingRequired] = React.useState(false);
@@ -466,7 +477,7 @@ export default function InsightsPage() {
         body: JSON.stringify({ date: today, force: true })
       });
       setReport(normalizeReport(res.report, isKo));
-      await loadConsistency();
+      void loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "분석에 실패했습니다" : "Analyze failed");
@@ -498,7 +509,7 @@ export default function InsightsPage() {
         body: JSON.stringify({ date: today, force: true })
       });
       setReport(normalizeReport(res.report, isKo));
-      await loadConsistency();
+      void loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "퀵스타트에 실패했습니다" : "Quickstart failed");
@@ -508,25 +519,27 @@ export default function InsightsPage() {
   }
 
   async function loadConsistency() {
-    if (isE2ETestMode()) {
-      setConsistency({
-        score: 0,
-        series: [
-          { day: "02-01", blocks: 0 },
-          { day: "02-02", blocks: 0 },
-          { day: "02-03", blocks: 0 },
-          { day: "02-04", blocks: 0 },
-          { day: "02-05", blocks: 0 },
-          { day: "02-06", blocks: 0 },
-          { day: "02-07", blocks: 0 },
-        ],
-      });
-      setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
-      setStreak({ current: 0, longest: 0 });
-      setTrend({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
-      return;
-    }
+    setMetricsLoading(true);
     try {
+      if (isE2ETestMode()) {
+        setConsistency({
+          score: 0,
+          series: [
+            { day: "02-01", blocks: 0 },
+            { day: "02-02", blocks: 0 },
+            { day: "02-03", blocks: 0 },
+            { day: "02-04", blocks: 0 },
+            { day: "02-05", blocks: 0 },
+            { day: "02-06", blocks: 0 },
+            { day: "02-07", blocks: 0 },
+          ],
+        });
+        setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
+        setStreak({ current: 0, longest: 0 });
+        setTrend({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
+        return;
+      }
+
       const start = new Date();
       start.setDate(start.getDate() - 6);
       const from = localYYYYMMDD(start);
@@ -584,6 +597,8 @@ export default function InsightsPage() {
       setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
       setStreak({ current: 0, longest: 0 });
       setTrend({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
+    } finally {
+      setMetricsLoading(false);
     }
   }
 
@@ -621,13 +636,19 @@ export default function InsightsPage() {
   }
 
   React.useEffect(() => {
-    void Promise.all([
-      loadReport(),
-      loadConsistency(),
-      loadTodayLog(),
-      loadCohortTrend(),
-      loadProfileHealth(),
-    ]);
+    // First paint should depend only on critical data.
+    void Promise.all([loadReport(), loadTodayLog()]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  React.useEffect(() => {
+    // Defer non-critical fetches so login->insights becomes interactive faster.
+    const timer = window.setTimeout(() => {
+      void loadConsistency();
+      void loadCohortTrend();
+      void loadProfileHealth();
+    }, 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -704,6 +725,8 @@ export default function InsightsPage() {
 
   const hasLog = todayLogBlocks > 0;
   const hasReport = Boolean(report);
+  const topPeak = report?.productivity_peaks?.[0] ?? null;
+  const topFailure = report?.failure_patterns?.[0] ?? null;
   const inputQualityScore = Math.round(report?.analysis_meta?.input_quality_score || 0);
   const dataSufficiency =
     inputQualityScore >= 75 ? t.suffHigh : inputQualityScore >= 50 ? t.suffMedium : t.suffLow;
@@ -1160,70 +1183,53 @@ export default function InsightsPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-6">
+        <Card className="lg:col-span-12">
           <CardHeader>
-            <CardTitle>{t.peakHours}</CardTitle>
-            <CardDescription>{t.peakHoursDesc}</CardDescription>
+            <CardTitle>{t.reportDeepDiveTitle}</CardTitle>
+            <CardDescription>{t.reportDeepDiveDesc}</CardDescription>
           </CardHeader>
           <CardContent>
             {reportLoading ? (
               <div className="space-y-3">
-                <Skeleton className="h-14 w-full rounded-lg" />
-                <Skeleton className="h-14 w-full rounded-lg" />
+                <Skeleton className="h-16 w-full rounded-lg" />
+                <Skeleton className="h-16 w-full rounded-lg" />
               </div>
-            ) : report?.productivity_peaks?.length ? (
+            ) : report ? (
               <div className="space-y-3">
-                {report.productivity_peaks.slice(0, 4).map((p, idx) => (
-                  <div key={idx} className="inset-block">
-                    <p className="text-sm font-semibold">
-                      {p.start}–{p.end}
-                    </p>
-                    <p className="mt-1 text-xs text-mutedFg">{p.reason}</p>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <div className="inset-block">
+                    <p className="text-xs text-mutedFg">{t.reportDeepDivePeak}</p>
+                    {topPeak ? (
+                      <>
+                        <p className="mt-1 text-sm font-semibold">
+                          {topPeak.start}–{topPeak.end}
+                        </p>
+                        <p className="mt-1 text-xs text-mutedFg">{topPeak.reason}</p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-sm text-mutedFg">{t.peakHoursEmpty}</p>
+                    )}
                   </div>
-                ))}
+                  <div className="inset-block">
+                    <p className="text-xs text-mutedFg">{t.reportDeepDiveBreak}</p>
+                    {topFailure ? (
+                      <>
+                        <p className="mt-1 text-sm font-semibold">{topFailure.pattern}</p>
+                        <p className="mt-1 text-xs text-mutedFg">
+                          {isKo ? "트리거" : "Trigger"}: {topFailure.trigger}
+                        </p>
+                      </>
+                    ) : (
+                      <p className="mt-1 text-sm text-mutedFg">{t.breakTriggersEmpty}</p>
+                    )}
+                  </div>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
+                </Button>
               </div>
             ) : (
-              <div className="flex flex-col items-center py-6 text-center">
-                <div className="empty-state-icon">
-                  <Clock className="h-5 w-5" />
-                </div>
-                <p className="text-sm text-mutedFg">{t.peakHoursEmpty}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card className="lg:col-span-6">
-          <CardHeader>
-            <CardTitle>{t.breakTriggers}</CardTitle>
-            <CardDescription>{t.breakTriggersDesc}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {reportLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-20 w-full rounded-lg" />
-              </div>
-            ) : report?.failure_patterns?.length ? (
-              <div className="space-y-3">
-                {report.failure_patterns.slice(0, 3).map((f, idx) => (
-                  <div key={idx} className="inset-block">
-                    <p className="text-sm font-semibold">{f.pattern}</p>
-                    <p className="mt-1 text-xs text-mutedFg">
-                      {isKo ? "트리거" : "Trigger"}: {f.trigger}
-                    </p>
-                    <p className="mt-1 text-xs text-mutedFg">
-                      {t.fixLabel}: {f.fix}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="flex flex-col items-center py-6 text-center">
-                <div className="empty-state-icon">
-                  <AlertTriangle className="h-5 w-5" />
-                </div>
-                <p className="text-sm text-mutedFg">{t.breakTriggersEmpty}</p>
-              </div>
+              <p className="text-sm text-mutedFg">{t.reportDeepDiveEmpty}</p>
             )}
           </CardContent>
         </Card>
@@ -1252,40 +1258,51 @@ export default function InsightsPage() {
               <CardDescription>{t.consistencyDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex items-baseline justify-between">
-                <p className="title-serif text-4xl">{consistency.score}</p>
-                <p className="text-sm text-mutedFg">/ 100</p>
-              </div>
-              <div className="flex items-center justify-between rounded-lg bg-white/50 p-3 text-sm">
-                <span className="text-mutedFg">{t.daysLogged}</span>
-                <span className="font-semibold">
-                  {weekly.daysLogged}/{weekly.daysTotal}
-                </span>
-              </div>
-              <div className="h-32 rounded-lg bg-white/40 p-2">
-                <ConsistencyBarChart data={consistency.series} />
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  onClick={() =>
-                    downloadWeeklyShareCard({
-                      score: consistency.score,
-                      daysLogged: weekly.daysLogged,
-                      daysTotal: weekly.daysTotal || 7,
-                      totalBlocks: weekly.totalBlocks,
-                      deepMinutes: weekly.deepMinutes,
-                      goalMinutesPerDay: weekly.goal?.minutesPerDay,
-                      goalKeyword: weekly.goal?.keyword
-                    })
-                  }
-                  disabled={!weekly.daysTotal}
-                >
-                  {t.downloadShare}
-                </Button>
-                <p className="text-xs text-mutedFg">{t.tip}</p>
-              </div>
+              {metricsLoading ? (
+                <div className="space-y-3">
+                  <Skeleton className="h-10 w-24" />
+                  <Skeleton className="h-10 w-full rounded-lg" />
+                  <Skeleton className="h-32 w-full rounded-lg" />
+                  <Skeleton className="h-8 w-48 rounded-md" />
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-baseline justify-between">
+                    <p className="title-serif text-4xl">{consistency.score}</p>
+                    <p className="text-sm text-mutedFg">/ 100</p>
+                  </div>
+                  <div className="flex items-center justify-between rounded-lg bg-white/50 p-3 text-sm">
+                    <span className="text-mutedFg">{t.daysLogged}</span>
+                    <span className="font-semibold">
+                      {weekly.daysLogged}/{weekly.daysTotal}
+                    </span>
+                  </div>
+                  <div className="h-32 rounded-lg bg-white/40 p-2">
+                    <ConsistencyBarChart data={consistency.series} />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={() =>
+                        downloadWeeklyShareCard({
+                          score: consistency.score,
+                          daysLogged: weekly.daysLogged,
+                          daysTotal: weekly.daysTotal || 7,
+                          totalBlocks: weekly.totalBlocks,
+                          deepMinutes: weekly.deepMinutes,
+                          goalMinutesPerDay: weekly.goal?.minutesPerDay,
+                          goalKeyword: weekly.goal?.keyword
+                        })
+                      }
+                      disabled={!weekly.daysTotal}
+                    >
+                      {t.downloadShare}
+                    </Button>
+                    <p className="text-xs text-mutedFg">{t.tip}</p>
+                  </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -1297,6 +1314,16 @@ export default function InsightsPage() {
               <CardDescription>{t.weeklyDesc}</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4 md:grid-cols-5">
+              {metricsLoading ? (
+                <div className="md:col-span-5 grid gap-4 md:grid-cols-5">
+                  <Skeleton className="h-28 w-full rounded-xl" />
+                  <Skeleton className="h-28 w-full rounded-xl" />
+                  <Skeleton className="h-28 w-full rounded-xl" />
+                  <Skeleton className="h-28 w-full rounded-xl" />
+                  <Skeleton className="h-28 w-full rounded-xl" />
+                </div>
+              ) : (
+                <>
               <div className="rounded-xl bg-white/50 p-4">
                 <p className="text-xs text-mutedFg">{t.totalBlocks7d}</p>
                 <p className="title-serif mt-1 text-3xl">{weekly.totalBlocks}</p>
@@ -1355,6 +1382,8 @@ export default function InsightsPage() {
                   </span>
                 </div>
               </div>
+                </>
+              )}
             </CardContent>
           </Card>
         </div>
