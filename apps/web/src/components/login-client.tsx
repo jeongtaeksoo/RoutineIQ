@@ -39,6 +39,11 @@ const T: Record<
     googleSignup: string;
     googleUnavailable: string;
     googleSetupHint: string;
+    inAppBrowserNotice: string;
+    inAppBrowserHint: string;
+    openInExternalBrowser: string;
+    openingExternalBrowser: string;
+    googleBlockedInApp: string;
     back: string;
     privacy: string;
     signupSuccess: string;
@@ -66,6 +71,11 @@ const T: Record<
     googleSignup: "Google로 가입",
     googleUnavailable: "Google 로그인이 아직 활성화되지 않았습니다. 이메일 로그인으로 진행해 주세요.",
     googleSetupHint: "Supabase Dashboard > Auth > Providers > Google에서 활성화할 수 있습니다.",
+    inAppBrowserNotice: "현재 인앱 브라우저에서는 Google 로그인이 차단될 수 있습니다.",
+    inAppBrowserHint: "아래 버튼으로 외부 브라우저에서 열어 로그인해 주세요.",
+    openInExternalBrowser: "외부 브라우저로 열기",
+    openingExternalBrowser: "외부 브라우저 여는 중...",
+    googleBlockedInApp: "인앱 브라우저에서 Google 로그인이 차단되었습니다. 외부 브라우저에서 다시 시도해 주세요.",
     back: "돌아가기",
     privacy: "개인정보는 루틴 분석에만 사용됩니다.",
     signupSuccess: "가입 완료! 이메일을 확인해 주세요.",
@@ -92,6 +102,11 @@ const T: Record<
     googleSignup: "Sign up with Google",
     googleUnavailable: "Google login is not enabled yet. Please continue with email login.",
     googleSetupHint: "Enable it in Supabase Dashboard > Auth > Providers > Google.",
+    inAppBrowserNotice: "Google sign-in can be blocked inside in-app browsers.",
+    inAppBrowserHint: "Open this page in an external browser and try again.",
+    openInExternalBrowser: "Open in external browser",
+    openingExternalBrowser: "Opening external browser...",
+    googleBlockedInApp: "Google blocked sign-in in this in-app browser. Please retry in an external browser.",
     back: "Back",
     privacy: "Your data is used only for routine analysis.",
     signupSuccess: "Account created! Please check your email.",
@@ -118,6 +133,11 @@ const T: Record<
     googleSignup: "Googleで登録",
     googleUnavailable: "Googleログインはまだ有効化されていません。メールログインで続行してください。",
     googleSetupHint: "Supabase Dashboard > Auth > Providers > Google で有効化できます。",
+    inAppBrowserNotice: "アプリ内ブラウザでは Google ログインがブロックされる場合があります。",
+    inAppBrowserHint: "外部ブラウザで開いてから再度ログインしてください。",
+    openInExternalBrowser: "外部ブラウザで開く",
+    openingExternalBrowser: "外部ブラウザを開いています...",
+    googleBlockedInApp: "アプリ内ブラウザでは Google ログインがブロックされました。外部ブラウザで再試行してください。",
     back: "戻る",
     privacy: "個人情報はルーティン分析にのみ使用されます。",
     signupSuccess: "登録完了！メールをご確認ください。",
@@ -144,6 +164,11 @@ const T: Record<
     googleSignup: "使用 Google 注册",
     googleUnavailable: "Google 登录尚未启用，请先使用邮箱登录。",
     googleSetupHint: "可在 Supabase Dashboard > Auth > Providers > Google 启用。",
+    inAppBrowserNotice: "在应用内浏览器中，Google 登录可能会被拦截。",
+    inAppBrowserHint: "请在外部浏览器中打开后重试。",
+    openInExternalBrowser: "在外部浏览器打开",
+    openingExternalBrowser: "正在打开外部浏览器...",
+    googleBlockedInApp: "Google 已在应用内浏览器中拦截登录，请在外部浏览器重试。",
     back: "返回",
     privacy: "个人信息仅用于习惯分析。",
     signupSuccess: "注册成功！请查看您的邮箱。",
@@ -170,6 +195,11 @@ const T: Record<
     googleSignup: "Registrarse con Google",
     googleUnavailable: "El acceso con Google aún no está habilitado. Continúa con correo electrónico.",
     googleSetupHint: "Actívalo en Supabase Dashboard > Auth > Providers > Google.",
+    inAppBrowserNotice: "El acceso con Google puede bloquearse dentro de navegadores integrados en apps.",
+    inAppBrowserHint: "Abre esta página en un navegador externo e inténtalo de nuevo.",
+    openInExternalBrowser: "Abrir en navegador externo",
+    openingExternalBrowser: "Abriendo navegador externo...",
+    googleBlockedInApp: "Google bloqueó el acceso en este navegador integrado. Reintenta en un navegador externo.",
     back: "Volver",
     privacy: "Tus datos se usan solo para analizar rutinas.",
     signupSuccess: "Cuenta creada. Revisa tu correo.",
@@ -229,6 +259,62 @@ function setPostAuthRedirectCookie(nextPath: string): void {
   document.cookie = `routineiq_post_auth_next=${encodeURIComponent(safeNext)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
 }
 
+function isLikelyInAppBrowser(userAgent: string): boolean {
+  const ua = userAgent.toLowerCase();
+  const markers = [
+    "kakaotalk",
+    "naver",
+    "line/",
+    "micromessenger",
+    "instagram",
+    "fban",
+    "fbav",
+    "fb_iab",
+    "messenger",
+    "whatsapp",
+    "snapchat",
+    "twitter",
+  ];
+  if (markers.some((marker) => ua.includes(marker))) return true;
+
+  const isAndroidWebView = ua.includes("android") && ua.includes("wv");
+  if (isAndroidWebView) return true;
+
+  const isIos = /iphone|ipad|ipod/.test(ua);
+  const isSafari = ua.includes("safari");
+  const isCriOS = ua.includes("crios");
+  const isFxiOS = ua.includes("fxios");
+  const isEdgeIOS = ua.includes("edgios");
+  // iOS in-app browsers often omit Safari token while still including AppleWebKit.
+  if (isIos && !isSafari && !isCriOS && !isFxiOS && !isEdgeIOS && ua.includes("applewebkit")) {
+    return true;
+  }
+  return false;
+}
+
+function openInExternalBrowser(url: string): void {
+  if (typeof window === "undefined") return;
+  const ua = window.navigator.userAgent || "";
+  const isAndroid = /android/i.test(ua);
+
+  if (isAndroid) {
+    try {
+      const parsed = new URL(url);
+      const scheme = parsed.protocol.replace(":", "");
+      const withoutScheme = `${parsed.host}${parsed.pathname}${parsed.search}${parsed.hash}`;
+      const intentUrl = `intent://${withoutScheme}#Intent;scheme=${scheme};package=com.android.chrome;end`;
+      window.location.href = intentUrl;
+      window.setTimeout(() => {
+        window.open(url, "_blank", "noopener,noreferrer");
+      }, 250);
+      return;
+    } catch {
+      // Fallback to generic new-tab navigation below.
+    }
+  }
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
 export default function LoginClient() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -242,6 +328,8 @@ export default function LoginClient() {
   const [email, setEmail] = React.useState("");
   const [password, setPassword] = React.useState("");
   const [googleEnabled, setGoogleEnabled] = React.useState(true);
+  const [inAppBrowser, setInAppBrowser] = React.useState(false);
+  const [openingExternal, setOpeningExternal] = React.useState(false);
 
   const t = T[lang];
   const redirectedFrom = searchParams.get("redirectedFrom");
@@ -268,6 +356,18 @@ export default function LoginClient() {
       cancelled = true;
     };
   }, [supabaseEnv.anonKey, supabaseEnv.configured, supabaseEnv.url]);
+
+  React.useEffect(() => {
+    if (typeof window === "undefined") return;
+    setInAppBrowser(isLikelyInAppBrowser(window.navigator.userAgent || ""));
+  }, []);
+
+  function openCurrentPageInExternalBrowser() {
+    if (typeof window === "undefined") return;
+    setOpeningExternal(true);
+    openInExternalBrowser(window.location.href);
+    window.setTimeout(() => setOpeningExternal(false), 1500);
+  }
 
   async function signInWithPassword(e: React.FormEvent) {
     e.preventDefault();
@@ -346,17 +446,32 @@ export default function LoginClient() {
       const authOrigin = resolveAuthOrigin();
       setPostAuthRedirectCookie(afterAuthRedirect);
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithOAuth({
+      const { data, error } = await supabase.auth.signInWithOAuth({
         provider: "google",
         options: {
           redirectTo: `${authOrigin}/auth/callback`,
+          skipBrowserRedirect: true,
         },
       });
       if (error) throw error;
+      const oauthUrl = data?.url;
+      if (!oauthUrl) throw new Error("Google OAuth URL missing");
+
+      if (inAppBrowser) {
+        setMessage(t.inAppBrowserHint);
+        openInExternalBrowser(oauthUrl);
+        setLoading(false);
+        return;
+      }
+
+      window.location.assign(oauthUrl);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "Google login failed";
-      if (msg.toLowerCase().includes("unsupported provider")) {
+      const lowered = msg.toLowerCase();
+      if (lowered.includes("unsupported provider")) {
         setError(t.googleUnavailable);
+      } else if (lowered.includes("disallowed_useragent")) {
+        setError(t.googleBlockedInApp);
       } else {
         setError(msg);
       }
@@ -451,10 +566,24 @@ export default function LoginClient() {
 
           {message ? <div className="mb-4 rounded-xl border border-emerald-200 bg-emerald-50/80 p-3 text-sm text-emerald-800">{message}</div> : null}
           {error ? <div className="mb-4 rounded-xl border border-red-200 bg-red-50/80 p-3 text-sm text-red-800">{error}</div> : null}
+          {inAppBrowser ? (
+            <div className="mb-4 rounded-xl border border-amber-200 bg-amber-50/80 p-3">
+              <p className="text-sm font-medium text-amber-900">{t.inAppBrowserNotice}</p>
+              <p className="mt-1 text-xs text-amber-800">{t.inAppBrowserHint}</p>
+              <button
+                type="button"
+                onClick={openCurrentPageInExternalBrowser}
+                disabled={openingExternal || loading}
+                className="mt-2 rounded-lg border border-amber-300 bg-white px-3 py-2 text-xs font-medium text-amber-900 transition-colors hover:bg-amber-100 disabled:opacity-50"
+              >
+                {openingExternal ? t.openingExternalBrowser : t.openInExternalBrowser}
+              </button>
+            </div>
+          ) : null}
 
           <button
             onClick={signInWithGoogle}
-            disabled={loading || !googleEnabled}
+            disabled={loading || !googleEnabled || openingExternal}
             className="flex w-full items-center justify-center gap-3 rounded-xl border border-[#e8e4de] bg-white py-3 text-sm font-medium text-[#3d3a36] transition-all hover:bg-[#f5f2ee] hover:shadow-sm disabled:opacity-50"
           >
             <GoogleIcon className="h-5 w-5" />
