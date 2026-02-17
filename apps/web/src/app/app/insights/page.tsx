@@ -959,7 +959,7 @@ export default function InsightsPage() {
           <p className="text-sm font-semibold">{t.profileSetupTitle}</p>
           <p className="mt-1 text-sm text-mutedFg">{t.profileSetupBody}</p>
           <Button asChild size="sm" variant="outline" className="mt-3">
-            <Link href="/app/preferences">{t.profileSetupCta}</Link>
+            <Link href="/app/insights?settings=1&settingsTab=profile">{t.profileSetupCta}</Link>
           </Button>
         </div>
       ) : null}
@@ -1238,7 +1238,7 @@ export default function InsightsPage() {
               <div className="inset-block p-4">
                 <p className="text-sm">{cohortTrend.message}</p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
-                  <Link href="/app/preferences" onClick={onCohortPreferencesClick}>
+                  <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
                     {isKo ? "설정 열기" : "Open Preferences"}
                   </Link>
                 </Button>
@@ -1252,7 +1252,7 @@ export default function InsightsPage() {
                     : `Current sample ${cohortTrend.cohort_size} / preview minimum ${cohortTrend.preview_sample_size}`}
                 </p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
-                  <Link href="/app/preferences" onClick={onCohortPreferencesClick}>
+                  <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
                     {isKo ? "비교 기준 조정" : "Adjust filters"}
                   </Link>
                 </Button>
@@ -1354,7 +1354,7 @@ export default function InsightsPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button asChild variant="outline" size="sm">
-                    <Link href="/app/preferences" onClick={onCohortPreferencesClick}>
+                    <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
                       {isKo ? "비교 기준 변경" : "Change dimensions"}
                     </Link>
                   </Button>

@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Bell, Database, Mail, Settings, ShieldCheck, User, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -19,6 +20,7 @@ type ReminderMeta = {
 };
 
 type PlanTier = "free" | "pro";
+type SettingsTab = "notifications" | "profile" | "data" | "account";
 type CompareDimension = "age_group" | "gender" | "job_family" | "work_mode";
 type ProfilePreferences = {
   age_group: "0_17" | "18_24" | "25_34" | "35_44" | "45_plus" | "unknown";
@@ -426,7 +428,12 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
     supabaseRef.current = createClient();
   }
 
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+
   const [open, setOpen] = React.useState(false);
+  const [activeTab, setActiveTab] = React.useState<SettingsTab>("notifications");
   const [busy, setBusy] = React.useState(false);
   const [loadingAccount, setLoadingAccount] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
@@ -521,6 +528,23 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
+
+  React.useEffect(() => {
+    if (searchParams.get("settings") !== "1") return;
+    const tabParam = searchParams.get("settingsTab");
+    const nextTab: SettingsTab =
+      tabParam === "profile" || tabParam === "data" || tabParam === "account" || tabParam === "notifications"
+        ? tabParam
+        : "notifications";
+    setActiveTab(nextTab);
+    setOpen(true);
+
+    const cleaned = new URLSearchParams(searchParams.toString());
+    cleaned.delete("settings");
+    cleaned.delete("settingsTab");
+    const query = cleaned.toString();
+    router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   async function requestNotifications() {
     setError(null);
@@ -661,7 +685,7 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                   <div className="mb-3 rounded-xl border border-red-300 bg-red-50 p-3 text-sm text-red-900">{error}</div>
                 ) : null}
 
-                <Tabs defaultValue="notifications" className="h-full">
+                <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as SettingsTab)} className="h-full">
                   <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="notifications">{t.tab_notifications}</TabsTrigger>
                     <TabsTrigger value="profile">{t.tab_profile}</TabsTrigger>

@@ -215,7 +215,9 @@ export function AppShell({
         </main>
       </div>
 
-      <AppSettingsPanel locale={locale} />
+      <React.Suspense fallback={null}>
+        <AppSettingsPanel locale={locale} />
+      </React.Suspense>
 
       <nav
         className="fixed bottom-0 left-0 right-0 z-20 border-t backdrop-blur md:hidden"
