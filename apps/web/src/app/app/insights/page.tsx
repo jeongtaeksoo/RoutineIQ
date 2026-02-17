@@ -120,6 +120,50 @@ function localYYYYMMDD(d = new Date()) {
   return `${y}-${m}-${day}`;
 }
 
+const INSIGHTS_REPORT_CACHE_TTL_MS = 1000 * 60 * 5;
+
+function insightsReportCacheKey(date: string, locale: string): string {
+  return `routineiq:insights-report:v1:${date}:${locale}`;
+}
+
+function readCachedInsightsReport(date: string, locale: string): AIReport | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(insightsReportCacheKey(date, locale));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts?: number; report?: AIReport };
+    if (!parsed?.ts || !parsed?.report) return null;
+    if (Date.now() - parsed.ts > INSIGHTS_REPORT_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(insightsReportCacheKey(date, locale));
+      return null;
+    }
+    return parsed.report;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedInsightsReport(date: string, locale: string, report: AIReport): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(
+      insightsReportCacheKey(date, locale),
+      JSON.stringify({ ts: Date.now(), report })
+    );
+  } catch {
+    // Ignore cache storage failures.
+  }
+}
+
+function clearCachedInsightsReport(date: string, locale: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(insightsReportCacheKey(date, locale));
+  } catch {
+    // Ignore cache removal failures.
+  }
+}
+
 function normalizeReport(raw: AIReport | null, isKo: boolean): AIReport | null {
   if (!raw) return null;
   const riskRaw = String(raw?.wellbeing_insight?.burnout_risk || "medium").toLowerCase();
@@ -440,30 +484,46 @@ export default function InsightsPage() {
 
   async function loadTodayLog() {
     try {
-      const res = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`);
+      const res = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`, {
+        timeoutMs: 8_000,
+      });
       setTodayLogBlocks(Array.isArray(res.entries) ? res.entries.length : 0);
     } catch {
       setTodayLogBlocks(0);
     }
   }
 
-  async function loadReport() {
+  async function loadReport(opts?: { background?: boolean }) {
     setReportError(null);
-    setReportLoading(true);
+    if (!opts?.background) {
+      setReportLoading(true);
+    }
     try {
-      const res = await apiFetch<{ date: string; report: AIReport; model?: string }>(`/reports?date=${today}`);
-      setReport(normalizeReport(res.report, isKo));
+      const res = await apiFetch<{ date: string; report: AIReport; model?: string }>(`/reports?date=${today}`, {
+        timeoutMs: 10_000,
+      });
+      const normalized = normalizeReport(res.report, isKo);
+      setReport(normalized);
+      if (normalized) {
+        writeCachedInsightsReport(today, locale, normalized);
+      }
     } catch (err) {
       // 404 = no report yet; treat as empty state.
       const status = isApiFetchError(err) ? err.status : null;
       if (status === 404) {
         setReport(null);
+        clearCachedInsightsReport(today, locale);
       } else {
         const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-        setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "리포트를 불러오지 못했습니다" : "Failed to load report");
+        // Keep stale data visible when background refresh fails.
+        if (!opts?.background || !report) {
+          setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "리포트를 불러오지 못했습니다" : "Failed to load report");
+        }
       }
     } finally {
-      setReportLoading(false);
+      if (!opts?.background) {
+        setReportLoading(false);
+      }
     }
   }
 
@@ -476,7 +536,11 @@ export default function InsightsPage() {
         method: "POST",
         body: JSON.stringify({ date: today, force: true })
       });
-      setReport(normalizeReport(res.report, isKo));
+      const normalized = normalizeReport(res.report, isKo);
+      setReport(normalized);
+      if (normalized) {
+        writeCachedInsightsReport(today, locale, normalized);
+      }
       void loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
@@ -508,7 +572,11 @@ export default function InsightsPage() {
         method: "POST",
         body: JSON.stringify({ date: today, force: true })
       });
-      setReport(normalizeReport(res.report, isKo));
+      const normalized = normalizeReport(res.report, isKo);
+      setReport(normalized);
+      if (normalized) {
+        writeCachedInsightsReport(today, locale, normalized);
+      }
       void loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
@@ -544,7 +612,9 @@ export default function InsightsPage() {
       start.setDate(start.getDate() - 6);
       const from = localYYYYMMDD(start);
 
-      const res = await apiFetch<WeeklyInsightsResponse>(`/insights/weekly?from=${from}&to=${today}`);
+      const res = await apiFetch<WeeklyInsightsResponse>(`/insights/weekly?from=${from}&to=${today}`, {
+        timeoutMs: 8_000,
+      });
       setConsistency({
         score: Math.max(0, Math.min(100, Math.round(Number(res.consistency.score) || 0))),
         series: Array.isArray(res.consistency.series)
@@ -605,7 +675,9 @@ export default function InsightsPage() {
   async function loadCohortTrend() {
     setCohortLoading(true);
     try {
-      const res = await apiFetch<CohortTrend>("/trends/cohort");
+      const res = await apiFetch<CohortTrend>("/trends/cohort", {
+        timeoutMs: 8_000,
+      });
       setCohortTrend(res);
     } catch {
       setCohortTrend(null);
@@ -621,7 +693,9 @@ export default function InsightsPage() {
         gender?: string;
         job_family?: string;
         work_mode?: string;
-      }>("/preferences/profile");
+      }>("/preferences/profile", {
+        timeoutMs: 8_000,
+      });
       const required = [
         profile.age_group,
         profile.gender,
@@ -637,9 +711,14 @@ export default function InsightsPage() {
 
   React.useEffect(() => {
     // First paint should depend only on critical data.
-    void Promise.all([loadReport(), loadTodayLog()]);
+    const cachedReport = readCachedInsightsReport(today, locale);
+    if (cachedReport) {
+      setReport(normalizeReport(cachedReport, isKo));
+      setReportLoading(false);
+    }
+    void Promise.all([loadReport({ background: Boolean(cachedReport) }), loadTodayLog()]);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [today, locale, isKo]);
 
   React.useEffect(() => {
     // Defer non-critical fetches so login->insights becomes interactive faster.
@@ -963,7 +1042,7 @@ export default function InsightsPage() {
                       <Sparkles className="h-4 w-4" />
                       {analyzing ? t.analyzing : t.cta_analyzeNow}
                     </Button>
-                    <Button variant="ghost" size="sm" onClick={loadReport} disabled={reportLoading}>
+                    <Button variant="ghost" size="sm" onClick={() => void loadReport({ background: Boolean(report) })} disabled={reportLoading}>
                       {t.cta_reload}
                     </Button>
                   </div>

@@ -21,6 +21,10 @@ type ApiErrorBody =
   | { detail?: unknown }
   | string;
 
+type ApiFetchInit = RequestInit & {
+  timeoutMs?: number;
+};
+
 let cachedAccessToken: string | null = null;
 let cachedAccessTokenExpiresAt = 0;
 let pendingAccessTokenPromise: Promise<string | null> | null = null;
@@ -212,7 +216,7 @@ async function resolveAccessToken(): Promise<string | null> {
   }
 }
 
-export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
+export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T> {
   // Single rule:
   // - `NEXT_PUBLIC_API_BASE_URL` may be `http://localhost:8000` or `http://localhost:8000/api` (either is fine).
   // - Callers should pass endpoint paths like `/logs`, `/reports?date=...`, `/stripe/status`, etc.
@@ -238,10 +242,48 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
     headers.set("authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(url, {
-    ...init,
-    headers
-  });
+  const method = String(init?.method || "GET").toUpperCase();
+  const timeoutMs =
+    typeof init?.timeoutMs === "number"
+      ? Math.max(1_000, Number(init.timeoutMs))
+      : method === "GET" || method === "HEAD"
+        ? 12_000
+        : 45_000;
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  void _timeoutMs;
+
+  if (init?.signal) {
+    if (init.signal.aborted) {
+      clearTimeout(timeoutId);
+      controller.abort();
+    } else {
+      init.signal.addEventListener("abort", () => controller.abort(), { once: true });
+    }
+  }
+
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      ...requestInit,
+      headers,
+      signal: controller.signal
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err instanceof DOMException && err.name === "AbortError") {
+      const timeoutErr: ApiFetchError = new Error(
+        "요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요. Request timed out. Please retry."
+      );
+      timeoutErr.status = 504;
+      timeoutErr.code = "timeout";
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!res.ok) {
     let body: ApiErrorBody = "Request failed";

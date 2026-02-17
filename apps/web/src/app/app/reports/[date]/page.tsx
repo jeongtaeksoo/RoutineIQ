@@ -115,6 +115,47 @@ function addDays(dateStr: string, delta: number) {
   return `${yy}-${mm}-${dd}`;
 }
 
+const REPORT_CACHE_TTL_MS = 1000 * 60 * 10;
+
+function reportCacheKey(date: string, locale: string): string {
+  return `routineiq:report-page:v1:${date}:${locale}`;
+}
+
+function readCachedReport(date: string, locale: string): AIReport | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.sessionStorage.getItem(reportCacheKey(date, locale));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as { ts?: number; report?: AIReport };
+    if (!parsed?.ts || !parsed?.report) return null;
+    if (Date.now() - parsed.ts > REPORT_CACHE_TTL_MS) {
+      window.sessionStorage.removeItem(reportCacheKey(date, locale));
+      return null;
+    }
+    return parsed.report;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedReport(date: string, locale: string, report: AIReport): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(reportCacheKey(date, locale), JSON.stringify({ ts: Date.now(), report }));
+  } catch {
+    // Ignore cache storage failures.
+  }
+}
+
+function clearCachedReport(date: string, locale: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(reportCacheKey(date, locale));
+  } catch {
+    // Ignore cache removal failures.
+  }
+}
+
 function toMinutes(hhmm: string): number | null {
   const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
   if (!m) return null;
@@ -343,6 +384,7 @@ export default function ReportPage() {
   const [loading, setLoading] = React.useState(true);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
+  const [refreshing, setRefreshing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<AIReport | null>(null);
   const burnoutRisk =
@@ -401,22 +443,38 @@ export default function ReportPage() {
       }>;
   }, [report]);
 
-  async function load() {
+  async function load(opts?: { background?: boolean }) {
     setError(null);
-    setLoading(true);
+    if (opts?.background) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     try {
-      const res = await apiFetch<{ date: string; report: AIReport }>(`/reports?date=${date}`);
-      setReport(normalizeReport(res.report, isKo));
+      const res = await apiFetch<{ date: string; report: AIReport }>(`/reports?date=${date}`, {
+        timeoutMs: 10_000,
+      });
+      const normalized = normalizeReport(res.report, isKo);
+      setReport(normalized);
+      writeCachedReport(date, locale, normalized);
     } catch (err) {
       const status = isApiFetchError(err) ? err.status : null;
       if (status === 404) {
         setReport(null);
+        clearCachedReport(date, locale);
       } else {
         const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-        setError(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
+        // Keep stale report visible when background refresh fails.
+        if (!opts?.background || !report) {
+          setError(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
+        }
       }
     } finally {
-      setLoading(false);
+      if (opts?.background) {
+        setRefreshing(false);
+      } else {
+        setLoading(false);
+      }
     }
   }
 
@@ -428,7 +486,9 @@ export default function ReportPage() {
         method: "POST",
         body: JSON.stringify({ date, force: true })
       });
-      setReport(normalizeReport(res.report, isKo));
+      const normalized = normalizeReport(res.report, isKo);
+      setReport(normalized);
+      writeCachedReport(date, locale, normalized);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setError(err instanceof Error ? `${err.message}${hint}` : t.analyzeFailed);
@@ -459,9 +519,14 @@ export default function ReportPage() {
   }
 
   React.useEffect(() => {
-    void load();
+    const cached = readCachedReport(date, locale);
+    if (cached) {
+      setReport(normalizeReport(cached, isKo));
+      setLoading(false);
+    }
+    void load({ background: Boolean(cached) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [date]);
+  }, [date, locale, isKo]);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -484,8 +549,8 @@ export default function ReportPage() {
             <Sparkles className="h-4 w-4" />
             {analyzing ? t.analyzing : t.analyze}
           </Button>
-          <Button variant="outline" onClick={load} disabled={loading}>
-            {t.refresh}
+          <Button variant="outline" onClick={() => void load({ background: Boolean(report) })} disabled={loading || refreshing}>
+            {refreshing ? t.loading : t.refresh}
           </Button>
         </div>
       </div>
