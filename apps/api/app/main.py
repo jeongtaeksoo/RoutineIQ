@@ -16,6 +16,7 @@ from app.routes.logs import router as logs_router
 from app.routes.insights import router as insights_router
 from app.routes.preferences import router as preferences_router
 from app.routes.parse import router as parse_router
+from app.routes.recovery import router as recovery_router
 from app.routes.reports import router as reports_router
 from app.routes.suggest import router as suggest_router
 from app.routes.reflect import router as reflect_router
@@ -212,3 +213,4 @@ app.include_router(admin_router, prefix="/api")
 app.include_router(preferences_router, prefix="/api")
 app.include_router(trends_router, prefix="/api")
 app.include_router(insights_router, prefix="/api")
+app.include_router(recovery_router, prefix="/api")

@@ -224,6 +224,25 @@ async function handleApiRoute(
     return json(route, 200, { ok: true });
   }
 
+  if (path === "/recovery/active" && method === "GET") {
+    return json(route, 200, {
+      has_open_session: false,
+      correlation_id: "e2e",
+    });
+  }
+
+  if (path === "/recovery/nudge" && method === "GET") {
+    return json(route, 200, {
+      has_nudge: false,
+      nudge: null,
+      correlation_id: "e2e",
+    });
+  }
+
+  if (path === "/recovery/nudge/ack" && method === "POST") {
+    return json(route, 200, { ok: true });
+  }
+
   if (path === "/demo/seed" && method === "POST") {
     return json(route, 200, {
       ok: true,
