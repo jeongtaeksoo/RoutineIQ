@@ -284,3 +284,87 @@ def test_nudge_cron_rate_limit_uses_last_nudge_at(
     body = response.json()
     assert body["scheduled_count"] == 0
     assert body["suppressed_by_reason"].get("nudge_rate_limited") == 1
+
+
+def test_auto_lapse_cron_returns_503_when_required_tables_missing(
+    client: TestClient,
+    supabase_mock,
+    recovery_cron_flags,
+) -> None:
+    async def _select(*, table: str, bearer_token: str, params: dict):
+        if table == "user_recovery_state" and params.get("limit") == 1:
+            raise SupabaseRestError(
+                status_code=404,
+                code="42P01",
+                message='relation "public.user_recovery_state" does not exist',
+            )
+        return []
+
+    supabase_mock["select"].side_effect = _select
+
+    response = client.post(
+        "/api/recovery/cron/auto-lapse",
+        headers={"X-Recovery-Cron-Token": "cron-secret"},
+    )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["reason"] == "missing_tables"
+    assert "user_recovery_state" in detail["missing_tables"]
+    assert "migration" in detail["action"].lower()
+
+
+def test_nudge_cron_returns_503_when_required_tables_missing(
+    client: TestClient,
+    supabase_mock,
+    recovery_cron_flags,
+) -> None:
+    async def _select(*, table: str, bearer_token: str, params: dict):
+        if table == "recovery_nudges" and params.get("limit") == 1:
+            raise SupabaseRestError(
+                status_code=404,
+                code="PGRST205",
+                message="Could not find the table 'public.recovery_nudges'",
+            )
+        return []
+
+    supabase_mock["select"].side_effect = _select
+
+    response = client.post(
+        "/api/recovery/cron/nudge",
+        headers={"X-Recovery-Cron-Token": "cron-secret"},
+    )
+
+    assert response.status_code == 503
+    detail = response.json()["detail"]
+    assert detail["reason"] == "missing_tables"
+    assert "recovery_nudges" in detail["missing_tables"]
+    assert "migration" in detail["action"].lower()
+
+
+def test_cron_returns_503_when_service_role_key_missing(
+    client: TestClient,
+    recovery_cron_flags,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(recovery_route.settings, "supabase_service_role_key", "")
+
+    auto_response = client.post(
+        "/api/recovery/cron/auto-lapse",
+        headers={"X-Recovery-Cron-Token": "cron-secret"},
+    )
+    nudge_response = client.post(
+        "/api/recovery/cron/nudge",
+        headers={"X-Recovery-Cron-Token": "cron-secret"},
+    )
+
+    assert auto_response.status_code == 503
+    assert nudge_response.status_code == 503
+    assert (
+        auto_response.json()["detail"]["reason"]
+        == "service_role_key_missing"
+    )
+    assert (
+        nudge_response.json()["detail"]["reason"]
+        == "service_role_key_missing"
+    )
