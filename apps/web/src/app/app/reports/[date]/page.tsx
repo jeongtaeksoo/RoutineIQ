@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Sparkles } from "lucide-react";
+import { Sparkles, ShieldCheck } from "lucide-react";
 
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
@@ -258,7 +258,11 @@ export default function ReportPage() {
         failedLoad: "리포트를 불러오지 못했습니다",
         analyzeFailed: "분석에 실패했습니다",
         exportNoBlocks: "내보낼 일정이 없습니다",
-        exportFailed: "캘린더 내보내기에 실패했습니다"
+        exportFailed: "캘린더 내보내기에 실패했습니다",
+        heroNextAction: "지금 할 한 가지",
+        heroKeyMetrics: "핵심 지표",
+        trustBadge: "AI 참고 안내",
+        trustBadgeBody: "이 분석은 기록된 데이터를 기반으로 한 추정이며, 의학적 진단이 아닙니다. 기록이 쌓일수록 정확도가 높아집니다."
       };
     }
     return {
@@ -328,7 +332,11 @@ export default function ReportPage() {
       failedLoad: "Failed to load report",
       analyzeFailed: "Analyze failed",
       exportNoBlocks: "No routine blocks to export",
-      exportFailed: "Failed to export calendar"
+      exportFailed: "Failed to export calendar",
+      heroNextAction: "One thing to do now",
+      heroKeyMetrics: "Key Metrics",
+      trustBadge: "AI Notice",
+      trustBadgeBody: "This analysis is an estimate based on your logged data, not a medical diagnosis. Accuracy improves as you log more days."
     };
   }, [isKo]);
 
@@ -563,18 +571,63 @@ export default function ReportPage() {
 
       {!loading && report ? (
         <div className="grid gap-4 lg:grid-cols-12">
-          <Card className="lg:col-span-12">
+          {/* ─── Hero first fold: Coach tip + 1 next action + 3 key metrics ─── */}
+          <Card className="lg:col-span-12 border-brand/20 shadow-elevated">
             <CardHeader>
               <CardTitle>{t.coachOneLiner}</CardTitle>
               <CardDescription>{t.coachOneLinerDesc}</CardDescription>
             </CardHeader>
-            <CardContent>
+            <CardContent className="space-y-4">
               <p className="title-serif text-2xl leading-snug">{report.coach_one_liner}</p>
-              <p className="mt-2 text-xs text-mutedFg">
+
+              {/* Next 1 action */}
+              {(report.micro_advice?.[0] || report.if_then_rules?.[0]) ? (
+                <div className="rounded-xl bg-brand/5 border border-brand/15 p-4">
+                  <p className="text-xs font-semibold text-brand">{t.heroNextAction}</p>
+                  {report.micro_advice?.[0] ? (
+                    <p className="mt-1 text-sm font-medium">
+                      {report.micro_advice[0].action}
+                      <span className="ml-2 text-xs text-mutedFg">({report.micro_advice[0].duration_min}m)</span>
+                    </p>
+                  ) : report.if_then_rules?.[0] ? (
+                    <p className="mt-1 text-sm"><span className="font-semibold">{t.ifLabel}:</span> {report.if_then_rules[0].if} → <span className="font-semibold">{t.thenLabel}:</span> {report.if_then_rules[0].then}</p>
+                  ) : null}
+                </div>
+              ) : null}
+
+              {/* 3 Key metrics */}
+              <div>
+                <p className="text-xs text-mutedFg mb-2">{t.heroKeyMetrics}</p>
+                <div className="grid grid-cols-3 gap-3">
+                  <div className="rounded-xl bg-white/50 p-3 text-center">
+                    <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${burnoutBadgeClass}`}>{burnoutRiskLabel}</span>
+                    <p className="mt-1 text-[11px] text-mutedFg">{t.burnoutRisk}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/50 p-3 text-center">
+                    <p className="title-serif text-xl">{inputQualityScore}</p>
+                    <p className="mt-1 text-[11px] text-mutedFg">{t.qualityScore}</p>
+                  </div>
+                  <div className="rounded-xl bg-white/50 p-3 text-center">
+                    <p className="title-serif text-xl">{personalizationTierLabel}</p>
+                    <p className="mt-1 text-[11px] text-mutedFg">{t.qualityTier}</p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-xs text-mutedFg">
                 {t.schemaBadge}: v{report.schema_version ?? 1}
               </p>
             </CardContent>
           </Card>
+
+          {/* ─── AI Trust Badge (UX-C06) ─── */}
+          <div className="lg:col-span-12 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
+            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+            <div>
+              <p className="text-xs font-semibold text-blue-900">{t.trustBadge}</p>
+              <p className="mt-0.5 text-xs text-blue-800">{t.trustBadgeBody}</p>
+            </div>
+          </div>
 
           {report.analysis_meta ? (
             <Card className="lg:col-span-12">

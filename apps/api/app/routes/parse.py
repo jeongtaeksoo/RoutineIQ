@@ -46,18 +46,18 @@ PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
                 "additionalProperties": False,
                 "required": ["start", "end", "activity", "tags", "confidence"],
                 "properties": {
-                    "start": {"type": "string"},
-                    "end": {"type": "string"},
+                    "start": {"type": "string", "pattern": r"^\d{2}:\d{2}$"},
+                    "end": {"type": "string", "pattern": r"^\d{2}:\d{2}$"},
                     "activity": {"type": "string"},
                     "energy": {
                         "anyOf": [
-                            {"type": "integer"},
+                            {"type": "integer", "minimum": 1, "maximum": 5},
                             {"type": "null"},
                         ]
                     },
                     "focus": {
                         "anyOf": [
-                            {"type": "integer"},
+                            {"type": "integer", "minimum": 1, "maximum": 5},
                             {"type": "null"},
                         ]
                     },
@@ -91,19 +91,19 @@ PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
                 },
                 "sleep_quality": {
                     "anyOf": [
-                        {"type": "integer"},
+                        {"type": "integer", "minimum": 1, "maximum": 5},
                         {"type": "null"},
                     ]
                 },
                 "sleep_hours": {
                     "anyOf": [
-                        {"type": "number"},
+                        {"type": "number", "minimum": 0, "maximum": 14},
                         {"type": "null"},
                     ]
                 },
                 "stress_level": {
                     "anyOf": [
-                        {"type": "integer"},
+                        {"type": "integer", "minimum": 1, "maximum": 5},
                         {"type": "null"},
                     ]
                 },
@@ -113,17 +113,22 @@ PARSE_DIARY_JSON_SCHEMA: dict[str, Any] = {
     },
 }
 
-_TIME_RANGE_RE = re.compile(
-    r"(?P<sh>\d{1,2})(?::(?P<sm>\d{2}))?\s*(?P<sap>am|pm|오전|오후)?\s*(?:시)?\s*(?:부터|~|-|–|to)\s*"
-    r"(?P<eh>\d{1,2})(?::(?P<em>\d{2}))?\s*(?P<eap>am|pm|오전|오후)?\s*(?:시)?",
+_LINE_RANGE_TIME_RE = re.compile(
+    r"^\s*(?P<sap>am|pm|오전|오후)?\s*(?P<sh>\d{1,2})(?::|시)(?P<sm>\d{2})\s*(?:분)?\s*"
+    r"(?:부터|~|-|–|to)\s*"
+    r"(?P<eap>am|pm|오전|오후)?\s*(?P<eh>\d{1,2})(?::|시)(?P<em>\d{2})\s*(?:분)?",
     flags=re.IGNORECASE,
 )
-_TIME_POINT_RE = re.compile(
-    r"(?P<h>\d{1,2})(?::(?P<m>\d{2}))?\s*(?P<ap>am|pm|오전|오후)?\s*(?:시)?",
+_LINE_POINT_TIME_RE = re.compile(
+    r"^\s*(?P<ap>am|pm|오전|오후)?\s*(?P<h>\d{1,2})(?::|시)(?P<m>\d{2})\s*(?:분)?",
     flags=re.IGNORECASE,
 )
 _SENTENCE_SPLIT_RE = re.compile(r"[\n.!?]+")
 _SLEEP_HOURS_RE = re.compile(r"(\d+(?:\.\d+)?)\s*(?:시간|hours?)", flags=re.IGNORECASE)
+_DURATION_MIN_RE = re.compile(
+    r"(?P<minutes>\d{1,3})\s*(?:분|min(?:ute)?s?)",
+    flags=re.IGNORECASE,
+)
 
 _FALLBACK_ACTIVITY = {
     "ko": "기록된 활동",
@@ -210,10 +215,11 @@ def _hhmm(total_minutes: int) -> str:
     return f"{mins // 60:02d}:{mins % 60:02d}"
 
 
-def _clean_activity(segment: str, locale: str) -> str:
-    cleaned = _TIME_RANGE_RE.sub(" ", segment)
-    cleaned = _TIME_POINT_RE.sub(" ", cleaned)
-    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -,:;")
+def _clean_activity(text: str, locale: str) -> str:
+    cleaned = re.sub(r"^\s*[-•\d.)\s]+", " ", text)
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" -,:;()[]")
+    if "." in cleaned:
+        cleaned = cleaned.split(".", 1)[0].strip()
     return cleaned[:120] if cleaned else _FALLBACK_ACTIVITY[_locale_or_default(locale)]
 
 
@@ -273,24 +279,31 @@ def _infer_meta(text: str) -> ParsedMeta:
     )
 
 
+def _clamp_minutes(value: int) -> int:
+    return max(0, min(value, 23 * 60 + 59))
+
+
+def _next_start_after(
+    provisional: list[dict[str, Any]], idx: int, start_min: int
+) -> int | None:
+    for candidate in provisional[idx + 1 :]:
+        cand = int(candidate["start_min"])
+        if cand > start_min:
+            return cand
+    return None
+
+
 def _build_fallback_entries(diary_text: str, locale: str) -> list[ParsedEntry]:
-    segments = [
-        seg.strip()
-        for seg in _SENTENCE_SPLIT_RE.split(diary_text)
-        if seg and seg.strip()
-    ]
-    if not segments:
-        segments = [diary_text.strip()] if diary_text.strip() else []
+    lines = [line.strip() for line in diary_text.splitlines() if line.strip()]
+    provisional: list[dict[str, Any]] = []
 
-    entries: list[ParsedEntry] = []
-    cursor = 9 * 60
-
-    for segment in segments[:8]:
+    for line in lines:
         start_min: int | None = None
         end_min: int | None = None
-        confidence = "low"
+        confidence: str = "low"
+        tail = line
 
-        range_match = _TIME_RANGE_RE.search(segment)
+        range_match = _LINE_RANGE_TIME_RE.match(line)
         if range_match:
             start_min = _to_minutes(
                 range_match.group("sh"),
@@ -302,57 +315,95 @@ def _build_fallback_entries(diary_text: str, locale: str) -> list[ParsedEntry]:
                 range_match.group("em"),
                 range_match.group("eap"),
             )
-            confidence = "medium"
+            tail = line[range_match.end() :]
+            if start_min is not None and end_min is not None and end_min > start_min:
+                confidence = "high"
         else:
-            point_matches = list(_TIME_POINT_RE.finditer(segment))
-            if point_matches:
-                first = point_matches[0]
-                start_min = _to_minutes(
-                    first.group("h"),
-                    first.group("m"),
-                    first.group("ap"),
-                )
-                if len(point_matches) >= 2:
-                    second = point_matches[1]
-                    end_min = _to_minutes(
-                        second.group("h"),
-                        second.group("m"),
-                        second.group("ap"),
-                    )
-                    confidence = "medium"
+            point_match = _LINE_POINT_TIME_RE.match(line)
+            if not point_match:
+                continue
+            start_min = _to_minutes(
+                point_match.group("h"),
+                point_match.group("m"),
+                point_match.group("ap"),
+            )
+            tail = line[point_match.end() :]
+            if start_min is not None:
+                duration_match = _DURATION_MIN_RE.search(tail)
+                if duration_match:
+                    minutes = int(duration_match.group("minutes"))
+                    if 15 <= minutes <= 240:
+                        end_min = start_min + minutes
+                        confidence = "medium"
 
         if start_min is None:
-            start_min = cursor
-        if entries:
-            prev_end = int(entries[-1].end[:2]) * 60 + int(entries[-1].end[3:])
-            if start_min <= prev_end:
-                start_min = min(prev_end + 5, 23 * 60)
-        if end_min is None or end_min <= start_min:
-            end_min = min(start_min + 90, 23 * 60 + 59)
+            continue
 
-        activity = _clean_activity(segment, locale)
-        energy, focus = _infer_energy_focus(segment)
-        entry = ParsedEntry(
-            start=_hhmm(start_min),
-            end=_hhmm(end_min),
-            activity=activity,
-            energy=energy,
-            focus=focus,
-            note=None,
-            tags=[],
-            confidence=confidence,
+        if provisional:
+            prev_start = int(provisional[-1]["start_min"])
+            if start_min <= prev_start:
+                start_min = min(prev_start + 5, 23 * 60)
+
+        energy, focus = _infer_energy_focus(line)
+        provisional.append(
+            {
+                "start_min": start_min,
+                "end_min": end_min,
+                "activity": _clean_activity(tail, locale),
+                "energy": energy,
+                "focus": focus,
+                "confidence": confidence,
+            }
         )
-        entries.append(entry)
-        cursor = min(end_min + 15, 23 * 60)
+
+    entries: list[ParsedEntry] = []
+    for idx, item in enumerate(provisional[:10]):
+        start_min = _clamp_minutes(int(item["start_min"]))
+        end_raw = item.get("end_min")
+        end_min = int(end_raw) if isinstance(end_raw, int) else None
+        if end_min is None or end_min <= start_min:
+            next_start = _next_start_after(provisional, idx, start_min)
+            if next_start is not None:
+                end_min = min(next_start, start_min + 180)
+            else:
+                end_min = start_min + 90
+        if end_min <= start_min:
+            end_min = start_min + 30
+        end_min = _clamp_minutes(end_min)
+
+        confidence = str(item["confidence"])
+        if confidence == "low" and end_min - start_min >= 30:
+            confidence = "medium"
+
+        entries.append(
+            ParsedEntry(
+                start=_hhmm(start_min),
+                end=_hhmm(end_min),
+                activity=str(item["activity"]),
+                energy=item["energy"] if isinstance(item["energy"], int) else None,
+                focus=item["focus"] if isinstance(item["focus"], int) else None,
+                note=None,
+                tags=[],
+                confidence=confidence,
+            )
+        )
 
     if entries:
         return entries
 
+    first_sentence = next(
+        (
+            seg.strip()
+            for seg in _SENTENCE_SPLIT_RE.split(diary_text)
+            if seg and seg.strip()
+        ),
+        _FALLBACK_ACTIVITY[_locale_or_default(locale)],
+    )
     return [
         ParsedEntry(
             start="09:00",
             end="10:00",
-            activity=_FALLBACK_ACTIVITY[_locale_or_default(locale)],
+            activity=_clean_activity(first_sentence, locale),
             energy=None,
             focus=None,
             note=None,
@@ -454,15 +505,7 @@ async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryRespo
             err=exc,
             meta={**request_meta, "code": "PARSE_UPSTREAM_FAILURE"},
         )
-        raise HTTPException(
-            status_code=502,
-            detail=_error_payload(
-                code="PARSE_UPSTREAM_FAILURE",
-                message="AI diary parsing failed. Please try again.",
-                request_id=request_id,
-                retryable=False,
-            ),
-        )
+        return _fallback_response(body.diary_text, auth.locale)
 
     try:
         return ParseDiaryResponse.model_validate(obj)

@@ -214,6 +214,9 @@ export default function DailyFlowPage() {
         sleepQuality: "수면 질",
         sleepHours: "수면 시간",
         stress: "스트레스",
+        retryParse: "다시 분석하기",
+        retryParseHint: "결과가 매끄러우면 다시 분석해보세요",
+        aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했습니다`,
       };
     }
     return {
@@ -254,6 +257,9 @@ export default function DailyFlowPage() {
       sleepQuality: "Sleep quality",
       sleepHours: "Sleep hours",
       stress: "Stress",
+      retryParse: "Re-parse",
+      retryParseHint: "Not quite right? Try parsing again",
+      aiSourceHint: (n: number) => `AI parsed ${n} activity block${n !== 1 ? "s" : ""}`,
     };
   }, [isKo]);
 
@@ -562,8 +568,19 @@ export default function DailyFlowPage() {
       {step === "confirm" ? (
         <div className="space-y-4">
           <div className="rounded-xl border bg-white/60 p-4">
-            <h2 className="text-base font-semibold">{t.confirmTitle}</h2>
-            <p className="mt-0.5 text-xs text-mutedFg">{t.confirmSubtitle}</p>
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-base font-semibold">{t.confirmTitle}</h2>
+                <p className="mt-0.5 text-xs text-mutedFg">{t.confirmSubtitle}</p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => void parseDiary()} disabled={isBusy} title={t.retryParseHint}>
+                <Sparkles className={`mr-1 h-3.5 w-3.5 ${parsing ? "animate-pulse" : ""}`} />
+                {parsing ? t.parsing : t.retryParse}
+              </Button>
+            </div>
+            {parsedEntries.length > 0 ? (
+              <p className="mt-2 text-[11px] text-mutedFg">{t.aiSourceHint(parsedEntries.length)}</p>
+            ) : null}
           </div>
 
           {parsedEntries.length === 0 ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, FileText, Clock, AlertTriangle, BookOpen, CheckCircle2 } from "lucide-react";
+import { Sparkles, FileText, Clock, AlertTriangle, BookOpen, CheckCircle2, ShieldCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
 import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -281,6 +281,12 @@ export default function InsightsPage() {
         dim_gender: "성별",
         dim_job_family: "직군",
         dim_work_mode: "근무 형태",
+        trustBadge: "AI 참고 안내",
+        trustBadgeBody: "이 분석은 기록된 데이터 기반의 추정이며, 전문 진단이 아닙니다. 기록이 쌓일수록 정확도가 높아집니다.",
+        recoveryTitle: "다시 시작해볼까요?",
+        recoveryBody: "기록이 며칠 비어 있어요. 한 줄만 적어도 흐름을 다시 이을 수 있습니다.",
+        recoveryCta: "오늘 기록 다시 시작",
+        cohortSampleLine: (n: number, w: number) => `표본 ${n}명 · ${w}일 기준`,
       };
     }
     return {
@@ -382,6 +388,12 @@ export default function InsightsPage() {
       dim_gender: "Gender",
       dim_job_family: "Job family",
       dim_work_mode: "Work mode",
+      trustBadge: "AI Notice",
+      trustBadgeBody: "These insights are estimates based on your logged data, not professional advice. Accuracy improves as you log more days.",
+      recoveryTitle: "Ready to pick back up?",
+      recoveryBody: "Your log streak has a gap. Even one line is enough to restart your flow.",
+      recoveryCta: "Restart today\'s log",
+      cohortSampleLine: (n: number, w: number) => `Sample ${n} users \u00b7 ${w}-day window`,
     };
   }, [isKo]);
 
@@ -854,6 +866,15 @@ export default function InsightsPage() {
           </CardContent>
         </Card>
 
+        {/* ─── AI Trust Badge (UX-C06) ─── */}
+        <div className="lg:col-span-7 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
+          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
+          <div>
+            <p className="text-xs font-semibold text-blue-900">{t.trustBadge}</p>
+            <p className="mt-0.5 text-xs text-blue-800">{t.trustBadgeBody}</p>
+          </div>
+        </div>
+
         <Card className="lg:col-span-5 border-brand/30 bg-white/70 shadow-elevated">
           <CardHeader>
             <CardTitle>{t.nextTitle}</CardTitle>
@@ -928,6 +949,24 @@ export default function InsightsPage() {
             </div>
           </CardContent>
         </Card>
+
+        {/* ─── Re-engagement loop (UX-C08): missed-day recovery ─── */}
+        {!hasLog && streak.current === 0 && weekly.daysLogged > 0 ? (
+          <Card className="lg:col-span-12 border-amber-200 bg-amber-50/50">
+            <CardContent className="flex flex-col items-center gap-3 py-6 text-center sm:flex-row sm:text-left">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-100">
+                <RotateCcw className="h-5 w-5 text-amber-700" />
+              </div>
+              <div className="flex-1">
+                <p className="text-sm font-semibold text-amber-900">{t.recoveryTitle}</p>
+                <p className="mt-0.5 text-sm text-amber-800">{t.recoveryBody}</p>
+              </div>
+              <Button asChild size="sm">
+                <Link href="/app/daily-flow">{t.recoveryCta}</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <Card className="lg:col-span-12">
           <CardHeader>
@@ -1034,11 +1073,11 @@ export default function InsightsPage() {
                       ) : null}
                     </div>
                   </div>
-                  {compareByLabels.length ? (
-                    <p className="mt-2 text-xs text-mutedFg">
-                      {t.compareBy}: {compareByLabels.join(" · ")}
-                    </p>
-                  ) : null}
+                  {/* ─── Fixed-placement confidence line (UX-C04) ─── */}
+                  <p className="mt-2 text-[11px] text-mutedFg">
+                    {t.cohortSampleLine(cohortTrend.cohort_size, cohortTrend.window_days)}
+                    {compareByLabels.length ? ` · ${t.compareBy}: ${compareByLabels.join(", ")}` : null}
+                  </p>
 
                   {[
                     {
@@ -1110,9 +1149,6 @@ export default function InsightsPage() {
                   ) : null}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
-                    {isKo ? `${cohortTrend.window_days}일 기준` : `${cohortTrend.window_days}-day window`}
-                  </span>
                   <Button asChild variant="outline" size="sm">
                     <Link href="/app/preferences" onClick={onCohortPreferencesClick}>
                       {isKo ? "비교 기준 변경" : "Change dimensions"}

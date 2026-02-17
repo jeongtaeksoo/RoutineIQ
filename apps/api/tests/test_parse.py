@@ -173,3 +173,42 @@ def test_parse_diary_http_status_error_returns_fallback_response(
     body = res.json()
     assert isinstance(body.get("entries"), list)
     assert len(body["entries"]) >= 1
+
+
+def test_parse_diary_fallback_handles_timeline_text_without_year_misread(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    request = httpx.Request("POST", "https://api.openai.com/v1/responses")
+    monkeypatch.setattr(
+        parse_route,
+        "call_openai_structured",
+        AsyncMock(side_effect=httpx.ConnectError("network issue", request=request)),
+    )
+    monkeypatch.setattr(parse_route, "log_system_error", AsyncMock(return_value=None))
+
+    diary_text = (
+        "2026년 2월 16일 (월)\n\n"
+        "07:00 기상. 전날 늦게 자서 몸이 약간 무거웠다.\n"
+        "07:30~08:10 아침 루틴(세면, 정리, 커피).\n"
+        "09:00~11:30 RoutineIQ 웹 기능 수정 작업.\n"
+        "12:00 점심 식사.\n"
+        "13:30~14:00 영어 말하기 연습.\n"
+        "15:00~16:00 논문 메일 초안 수정.\n"
+        "18:00 가벼운 산책 20분.\n"
+        "22:30 하루 정리."
+    )
+
+    res = authenticated_client.post(
+        "/api/parse-diary",
+        json={"date": "2026-02-16", "diary_text": diary_text},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    entries = body["entries"]
+    assert len(entries) >= 7
+    assert entries[0]["start"] == "07:00"
+    assert entries[0]["activity"].startswith("기상")
+    assert entries[1]["start"] == "07:30"
+    assert entries[1]["end"] == "08:10"
+    assert all(entry["start"] != "20:00" for entry in entries)
