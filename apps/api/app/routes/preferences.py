@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
@@ -35,6 +36,16 @@ _ALLOWED_JOB_FAMILY: set[str] = {
 def _is_rls_write_failure(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
     return exc.code == "42501" or "row-level security policy" in msg
+
+
+def _is_ignorable_delete_failure(exc: SupabaseRestError) -> bool:
+    msg = str(exc).lower()
+    return (
+        exc.status_code == 404
+        or exc.code in {"PGRST116", "42P01"}
+        or "relation" in msg
+        and "does not exist" in msg
+    )
 
 
 def _migrate_job_family(value: object) -> str:
@@ -161,32 +172,27 @@ async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
     )
     service_token = settings.supabase_service_role_key
 
+    async def _delete_table(table: str, params: dict[str, str]) -> None:
+        for attempt in range(2):
+            try:
+                await sb_service.delete(table, bearer_token=service_token, params=params)
+                return
+            except SupabaseRestError as exc:
+                if _is_ignorable_delete_failure(exc):
+                    return
+                if attempt == 0 and exc.status_code >= 500:
+                    await asyncio.sleep(0)
+                    continue
+                raise
+
     try:
-        await sb_service.delete(
-            "ai_reports",
-            bearer_token=service_token,
-            params={"user_id": f"eq.{auth.user_id}"},
+        await asyncio.gather(
+            _delete_table("ai_reports", {"user_id": f"eq.{auth.user_id}"}),
+            _delete_table("activity_logs", {"user_id": f"eq.{auth.user_id}"}),
+            _delete_table("usage_events", {"user_id": f"eq.{auth.user_id}"}),
+            _delete_table("subscriptions", {"user_id": f"eq.{auth.user_id}"}),
         )
-        await sb_service.delete(
-            "activity_logs",
-            bearer_token=service_token,
-            params={"user_id": f"eq.{auth.user_id}"},
-        )
-        await sb_service.delete(
-            "usage_events",
-            bearer_token=service_token,
-            params={"user_id": f"eq.{auth.user_id}"},
-        )
-        await sb_service.delete(
-            "subscriptions",
-            bearer_token=service_token,
-            params={"user_id": f"eq.{auth.user_id}"},
-        )
-        await sb_service.delete(
-            "profiles",
-            bearer_token=service_token,
-            params={"id": f"eq.{auth.user_id}"},
-        )
+        await _delete_table("profiles", {"id": f"eq.{auth.user_id}"})
     except SupabaseRestError:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
@@ -196,14 +202,20 @@ async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
     admin_url = (
         f"{str(settings.supabase_url).rstrip('/')}/auth/v1/admin/users/{auth.user_id}"
     )
-    resp = await get_http().delete(
-        admin_url,
-        headers={
-            "apikey": service_token,
-            "Authorization": f"Bearer {service_token}",
-        },
-    )
-    if resp.status_code >= 400:
+    try:
+        resp = await get_http().delete(
+            admin_url,
+            headers={
+                "apikey": service_token,
+                "Authorization": f"Bearer {service_token}",
+            },
+        )
+    except Exception:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to delete auth user",
+        )
+    if resp.status_code >= 400 and resp.status_code != 404:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete auth user",

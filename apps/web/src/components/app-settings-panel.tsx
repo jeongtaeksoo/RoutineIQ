@@ -9,7 +9,7 @@ import { BillingActions } from "@/components/billing-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiFetch } from "@/lib/api-client";
+import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import type { Locale } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 
@@ -642,11 +642,15 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
     setError(null);
     setMessage(null);
     try {
-      await apiFetch<{ ok: boolean }>("/preferences/account", { method: "DELETE" });
+      await apiFetch<{ ok: boolean }>("/preferences/account", {
+        method: "DELETE",
+        timeoutMs: 120_000,
+      });
       await supabaseRef.current.auth.signOut();
       window.location.href = "/login?deleted=1";
     } catch (err) {
-      setError(err instanceof Error ? err.message : t.delete_failed);
+      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
+      setError(err instanceof Error ? `${err.message}${hint}` : t.delete_failed);
       setDeletingAccount(false);
     }
   }

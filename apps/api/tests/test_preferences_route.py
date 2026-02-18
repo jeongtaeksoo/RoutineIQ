@@ -121,7 +121,27 @@ def test_delete_account_returns_ok_and_calls_account_deletes(
     assert response.json() == {"ok": True}
     assert supabase_mock["delete"].await_count == 5
     tables = [call.kwargs["table"] for call in supabase_mock["delete"].await_args_list]
-    assert tables == ["ai_reports", "activity_logs", "usage_events", "subscriptions", "profiles"]
+    assert "profiles" in tables
+    assert set(tables) == {"ai_reports", "activity_logs", "usage_events", "subscriptions", "profiles"}
+    assert fake_http.delete.await_count == 1
+
+
+def test_delete_account_treats_missing_auth_user_as_success(
+    authenticated_client: TestClient, supabase_mock, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Resp:
+        status_code = 404
+
+    class _HttpClient:
+        delete = AsyncMock(return_value=_Resp())
+
+    fake_http = _HttpClient()
+    monkeypatch.setattr(preferences_route, "get_http", lambda: fake_http)
+
+    response = authenticated_client.delete("/api/preferences/account")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
     assert fake_http.delete.await_count == 1
 
 

@@ -515,7 +515,7 @@ export default function InsightsPage() {
   async function loadTodayLog() {
     try {
       const res = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`, {
-        timeoutMs: 8_000,
+        timeoutMs: 15_000,
       });
       setTodayLogBlocks(Array.isArray(res.entries) ? res.entries.length : 0);
     } catch {
@@ -530,7 +530,7 @@ export default function InsightsPage() {
     }
     try {
       const res = await apiFetch<{ date: string; report: AIReport; model?: string }>(`/reports?date=${today}`, {
-        timeoutMs: 10_000,
+        timeoutMs: 18_000,
       });
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
@@ -643,7 +643,7 @@ export default function InsightsPage() {
       const from = localYYYYMMDD(start);
 
       const res = await apiFetch<WeeklyInsightsResponse>(`/insights/weekly?from=${from}&to=${today}`, {
-        timeoutMs: 8_000,
+        timeoutMs: 15_000,
       });
       setConsistency({
         score: Math.max(0, Math.min(100, Math.round(Number(res.consistency.score) || 0))),
@@ -706,7 +706,7 @@ export default function InsightsPage() {
     setCohortLoading(true);
     try {
       const res = await apiFetch<CohortTrend>("/trends/cohort", {
-        timeoutMs: 8_000,
+        timeoutMs: 15_000,
       });
       setCohortTrend(res);
     } catch {
@@ -724,7 +724,7 @@ export default function InsightsPage() {
         job_family?: string;
         work_mode?: string;
       }>("/preferences/profile", {
-        timeoutMs: 8_000,
+        timeoutMs: 15_000,
       });
       const required = [
         profile.age_group,
@@ -742,7 +742,7 @@ export default function InsightsPage() {
   async function loadRecoveryActive() {
     try {
       const res = await apiFetch<RecoveryActive>("/recovery/active", {
-        timeoutMs: 5_000,
+        timeoutMs: 12_000,
       });
       setRecoveryActive(res);
     } catch {
@@ -753,7 +753,7 @@ export default function InsightsPage() {
   async function loadRecoveryNudge() {
     try {
       const res = await apiFetch<RecoveryNudgeEnvelope>("/recovery/nudge", {
-        timeoutMs: 5_000,
+        timeoutMs: 12_000,
       });
       if (res.has_nudge && res.nudge) {
         setRecoveryNudge(res.nudge);
@@ -772,7 +772,7 @@ export default function InsightsPage() {
       await apiFetch("/recovery/nudge/ack", {
         method: "POST",
         body: JSON.stringify({ nudge_id: recoveryNudge.nudge_id }),
-        timeoutMs: 5_000,
+        timeoutMs: 12_000,
       });
     } catch {
       // Keep UX non-blocking for temporary API failures.

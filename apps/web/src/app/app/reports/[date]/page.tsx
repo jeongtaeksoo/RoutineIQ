@@ -452,7 +452,7 @@ export default function ReportPage() {
     }
     try {
       const res = await apiFetch<{ date: string; report: AIReport }>(`/reports?date=${date}`, {
-        timeoutMs: 10_000,
+        timeoutMs: 18_000,
       });
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);

@@ -23,6 +23,7 @@ type ApiErrorBody =
 
 type ApiFetchInit = RequestInit & {
   timeoutMs?: number;
+  _retryAttempt?: number;
 };
 
 let cachedAccessToken: string | null = null;
@@ -144,7 +145,7 @@ function getBridgeToken(): string | null {
   return typeof bridgeWindow === "string" && bridgeWindow ? bridgeWindow : bridgeSession || null;
 }
 
-async function fetchServerToken(timeoutMs = 1500): Promise<string | null> {
+async function fetchServerToken(timeoutMs = 3500): Promise<string | null> {
   if (typeof window === "undefined") return null;
   const controller = new AbortController();
   const timer = window.setTimeout(() => controller.abort(), timeoutMs);
@@ -243,16 +244,19 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   }
 
   const method = String(init?.method || "GET").toUpperCase();
+  const retryAttempt = Number.isFinite(Number(init?._retryAttempt)) ? Number(init?._retryAttempt) : 0;
+  const canRetry = method === "GET" || method === "HEAD" || method === "DELETE";
   const timeoutMs =
     typeof init?.timeoutMs === "number"
       ? Math.max(1_000, Number(init.timeoutMs))
       : method === "GET" || method === "HEAD"
-        ? 12_000
-        : 45_000;
+        ? 20_000
+        : 90_000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const { timeoutMs: _timeoutMs, ...requestInit } = init ?? {};
+  const { timeoutMs: _timeoutMs, _retryAttempt: _retryAttempt, ...requestInit } = init ?? {};
   void _timeoutMs;
+  void _retryAttempt;
 
   if (init?.signal) {
     if (init.signal.aborted) {
@@ -273,6 +277,13 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === "AbortError") {
+      if (canRetry && retryAttempt < 1 && !(init?.signal?.aborted)) {
+        return apiFetch<T>(path, {
+          ...init,
+          timeoutMs: Math.round(timeoutMs * 1.5),
+          _retryAttempt: retryAttempt + 1,
+        });
+      }
       const timeoutErr: ApiFetchError = new Error(
         "요청 시간이 초과되었습니다. 잠시 후 다시 시도해주세요. Request timed out. Please retry."
       );
