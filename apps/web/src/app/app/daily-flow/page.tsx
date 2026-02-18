@@ -266,7 +266,7 @@ export default function DailyFlowPage() {
         unknownTime: "확인 필요",
         noTimeInfo: "시간 정보 없음",
         timeWindowPrefix: "시간대",
-        evidence: "근거",
+        evidence: "원본",
         issueBannerTitle: "한번 확인하면 정확도가 올라가요",
         issueProgress: (current: number, total: number) => `확인 항목 ${current}/${total}`,
         reviewNow: "지금 확인",
@@ -302,7 +302,7 @@ export default function DailyFlowPage() {
         stress: "스트레스",
         retryParse: "다시 분석하기",
         retryParseHint: "결과가 어색하면 다시 분석해 보세요",
-        aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했습니다`,
+        aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했어요`,
         windowChip: {
           dawn: "새벽",
           morning: "아침",
@@ -318,7 +318,7 @@ export default function DailyFlowPage() {
           good: "좋음",
           great: "매우 좋음",
         },
-        noEvidence: "근거 없음",
+        noEvidence: "원본 없음",
         placeholder: "오늘 하루를 돌아보며 자유롭게 적어주세요...",
       };
     }

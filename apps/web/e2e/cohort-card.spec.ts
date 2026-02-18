@@ -60,7 +60,7 @@ for (const vp of previewViewports) {
     await expect(page).toHaveURL(/\/app\/insights/);
 
     await expect(page.locator("span", { hasText: /참고용 미리보기|Preview only/i })).toBeVisible();
-    await expect(page.getByText(/데이터 신뢰도:\s*낮음|Data confidence:\s*Low/i)).toBeVisible();
+    await expect(page.getByText(/데이터 (신뢰도|정확도):\s*낮음|Data confidence:\s*Low/i)).toBeVisible();
     await expect(page.locator("p", { hasText: /비교 기준:|Compared by:/i }).first()).toBeVisible();
     await expect(page.locator("p", { hasText: /전주 대비|vs last week/i }).first()).toBeVisible();
     await expect(page.getByText(/14일 기준|14-day window/i)).toBeVisible();

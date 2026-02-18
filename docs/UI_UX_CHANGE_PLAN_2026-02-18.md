@@ -368,3 +368,160 @@ npx playwright test e2e/responsive-layouts.spec.ts
 | PR4 (structure) | `git revert <PR4-commit>` | Utility functions return to inline in each page |
 
 Each PR is independently revertable. No cross-PR dependencies exist.
+
+---
+
+## v1.1 Execution Plan (Appendix, Existing MVP Mode)
+
+Date: 2026-02-19  
+Source: `docs/UI_STRUCTURE_AUDIT_CODE_FACT_2026-02-18.md`, `docs/COPY_CHANGE_MAP_2026-02-18.md`
+
+### 0) Scope Confirmation (Web-only)
+- Mobile native codebase (`apps/mobile`, `ios`, `android`, `expo`, `react-native`, `flutter`) is **not present** in this repo.
+- This iteration is **Web-only** and targets responsive behavior at `390 / 768 / 1440`.
+
+### 1) Target Screens (Top priority 5)
+
+| Priority | Screen | File Path | Why first |
+|---|---|---|---|
+| P1 | Insights | `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/app/app/insights/page.tsx` | 사용자 체감 진입 화면, API 호출 밀집 |
+| P1 | Daily Flow | `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/app/app/daily-flow/page.tsx` | 핵심 입력/저장 플로우, 회귀 영향 큼 |
+| P1 | App Shell + Settings | `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/components/app-shell.tsx`, `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/components/app-settings-panel.tsx` | 전 화면 공통 레이아웃/고정요소 충돌 위험 |
+| P2 | Report | `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/app/app/reports/[date]/page.tsx` | 리포트 가독성/차트 overflow 리스크 |
+| P2 | Login | `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/components/login-client.tsx` | 모바일 진입 안정성/카피 단순화 |
+
+### 2) Screen-by-screen Change Contract
+
+#### 2-1. Insights (`/app/insights`)
+- Structure change:
+  - monolith 내부에서 **표시 전용 블록(배너/카드 헤더/metric row)**를 local presentational section으로 분리 (파일 분할 최소화).
+  - API fetch/normalize/useEffect 영역은 그대로 유지.
+- Layout change (before → after):
+  - container: `max-w-6xl (1152px)` → 유지
+  - grid gap: `16px` → 유지
+  - 상단 subtitle line-height: 현재 값 유지, 텍스트 길이 단축으로 줄바꿈 위험 완화
+  - profile/cohort 경고 블록 내부 버튼 군집 간격: `mt-3` 유지, 문구 단축으로 390px 줄바꿈 최소화
+- Copy change:
+  - `docs/COPY_CHANGE_MAP_2026-02-18.md`의 Insights 키 적용/검증
+  - 어려운 용어 치환: `옵트인/코호트/신호/확신도` → `동의/유사 사용자/데이터/정확도`
+
+#### 2-2. Daily Flow (`/app/daily-flow`)
+- Structure change:
+  - step(`write/confirm/done`) 렌더 구획을 명확히 분리(동일 파일 내 섹션화), 저장/분석 로직은 유지.
+- Layout change (before → after):
+  - container: `max-w-3xl (768px)` → 유지
+  - textarea min-height: `200px` → `180px` (390px 기준 첫 화면 입력 가시영역 확보)
+  - date nav horizontal padding: `8px` → `12px` (`px-2` → `px-3`) 터치 안정성 개선
+  - bottom safe padding: `pb-24 (96px)` → 토큰 기반 동등값 유지 (`var(--space-bottom-safe)`)
+- Copy change:
+  - `파싱`/`엔트리` 노출 축소, `정리`/`활동 블록` 중심으로 통일
+  - 에러 카피를 사용자 행동 중심(재시도/다시 분석)으로 단순화
+
+#### 2-3. App Shell + Settings Panel
+- Structure change:
+  - 공통 fixed 요소 레이어 관리만 정리 (`bottom nav z-20`, `settings FAB z-30`, `modal z-40` 유지)
+  - 설정 탭 내부 상태/저장 로직 분리는 현행 유지(대규모 리팩토링 금지)
+- Layout change (before → after):
+  - sidebar width: `288px` → 유지
+  - main content padding: `20px/24px` → 유지
+  - mobile bottom nav min-height: `68px` → 유지
+  - settings FAB bottom: `calc(5.5rem + safe-area)` → 유지
+- Copy change:
+  - 설정 내 사용자 문구를 쉬운 한국어로 통일(개인설정/알림/데이터 제어/계정)
+
+#### 2-4. Report (`/app/reports/[date]`)
+- Structure change:
+  - hero/quality/wellbeing/plan 카드의 표시 텍스트만 정리, 데이터 구조 불변
+- Layout change (before → after):
+  - container: `1152px` 유지
+  - date input width: `160px` 유지
+  - timeline track: `40px` 유지
+  - 긴 카피 단축으로 카드 내부 행간 overflow 리스크만 낮춤
+- Copy change:
+  - 긴 설명 문구(30자 초과) 단축
+  - `신호/확신도` 계열 용어 통일
+
+#### 2-5. Login (`/login`)
+- Structure change:
+  - 인증 로직/분기 유지, 카피 및 라벨만 단순화
+- Layout change (before → after):
+  - auth card padding `32px` 유지
+  - dropdown overlay z-index 유지 (`z-20/30`)
+- Copy change:
+  - technical phrasing 최소화, 모바일 가독성 우선 문구로 치환
+
+### 3) Measurement Contract (Required)
+
+#### 3-1. Viewports
+- Mobile: `390 x 844`
+- Tablet: `768 x 1024`
+- Desktop: `1440 x 900`
+
+#### 3-2. Record fields (per screen)
+- `max-width`
+- page padding (`px`, `py`, `pb`)
+- header/footer heights (actual rendered)
+- fixed positions (`bottom/right/top`, z-index)
+- overflow/scroll container (`body`, `main`, modal body)
+
+#### 3-3. Screenshot artifacts
+- Before/After per target screen at `390/768/1440`
+- 저장 경로: `/Users/taeksoojung/Desktop/RutineIQ/logs/ui-v1.1/<slice>/<screen>-<viewport>-before|after.png`
+
+### 4) Risk & Regression Points
+- High risk files:
+  - `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/app/app/insights/page.tsx`
+  - `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/app/app/daily-flow/page.tsx`
+  - `/Users/taeksoojung/Desktop/RutineIQ/apps/web/src/components/app-settings-panel.tsx`
+- Main risks:
+  - monolith 파일에서 copy/layout 동시 변경 시 의도치 않은 상태 회귀
+  - fixed 요소와 mobile safe-area 충돌
+  - 카피 길이 변경으로 버튼 줄바꿈/카드 높이 변동
+- Guardrails:
+  - 기능 로직 변경 금지(레이아웃/카피 외)
+  - slice 단위 diff 제한
+  - 각 slice 후 즉시 테스트 + screenshot diff 기록
+
+### 5) Test Gates & Commands
+
+Web (every slice):
+```bash
+cd /Users/taeksoojung/Desktop/RutineIQ/apps/web
+npm run lint
+npm run typecheck
+npm run build
+npm run test:e2e
+```
+
+API (only if touched):
+```bash
+cd /Users/taeksoojung/Desktop/RutineIQ/apps/api
+.venv/bin/python -m pytest tests/ -v --tb=short
+```
+
+### 6) Slice Breakdown (PR-sized)
+
+| Slice | Scope | Expected files | Gate |
+|---|---|---|---|
+| S1 | Copy simplification only (no layout values change) | `insights/page.tsx`, `daily-flow/page.tsx`, `reports/[date]/page.tsx`, `app-shell.tsx`, `login-client.tsx`, `docs/COPY_CHANGE_MAP_2026-02-18.md` | Web full gate |
+| S2 | Layout metric fixes only (390 우선) | `daily-flow/page.tsx`, `app-shell.tsx`, `globals.css`(필요 시) | Web full gate + screenshots |
+| S3 | Settings/AppShell overlap and fixed-layer polish | `app-shell.tsx`, `app-settings-panel.tsx`, `insights/page.tsx` | Web full gate + screenshots |
+| S4 | Report readability tuning (no data logic change) | `reports/[date]/page.tsx` | Web full gate + screenshots |
+
+### 7) Rollback Note (per slice)
+- 원칙: Slice 단위 `git revert <sha>`로 안전 롤백
+- 조건: 테스트 실패 또는 viewport clipping 재현 시 즉시 해당 slice revert
+- 주의: 여러 slice를 한 커밋으로 합치지 않음
+
+### 8) Approval Tradeoff Options (Choose 1)
+
+| Option | Scope | 장점 | 단점 | 추천 상황 |
+|---|---|---|---|---|
+| A (권장) | `S1 -> S2` 먼저, `S3/S4` 후속 | 회귀 위험 최소, 제출 링크 안정성 우선 | 시각 완성도 개선이 단계적으로 반영됨 | 3일 내 안정 제출이 최우선일 때 |
+| B | `S1 -> S2 -> S3` 한 번에 진행 | 모바일/고정요소 체감 품질 빠르게 상승 | 변경 파일 증가로 회귀 조사 범위 확대 | QA 시간과 스크린샷 검증 리소스가 충분할 때 |
+| C | `S1`만 우선 반영 후 배포 | 카피 혼선 즉시 해소, 위험도 최저 | 레이아웃 핫스팟(390px) 잔존 가능 | 기능 안정성은 충분하고 문구 정리가 급할 때 |
+
+Decision guide:
+- 제출 URL의 재현 안정성이 최우선이면 **Option A**.
+- 모바일 fixed 레이어 충돌이 현재 가장 큰 불편이면 **Option B**.
+- 당장 사용자 혼란(용어/카피)만 빠르게 줄이려면 **Option C**.

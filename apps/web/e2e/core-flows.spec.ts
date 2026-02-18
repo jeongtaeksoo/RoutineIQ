@@ -263,9 +263,9 @@ test.describe("RutineIQ core flows", () => {
     await expect(diaryInput).toHaveValue(diaryText);
     await expect(parseButton).toBeEnabled({ timeout: 15_000 });
     await parseButton.click();
-    await expect(page.getByText(/AI가 이렇게 파악했어요|AI parsed your day like this/i)).toBeVisible();
+    await expect(page.getByText(/AI가 (이렇게 파악했어요|정리한 결과예요)|AI parsed your day like this/i)).toBeVisible();
     await page.getByRole("button", { name: /확인\s*&\s*저장|Confirm\s*&\s*Save/i }).first().click();
-    await expect(page.getByText(/저장 완료! AI 분석을 시작할까요\?|Saved! Start AI analysis\?/i)).toBeVisible();
+    await expect(page.getByText(/저장 완료! AI 분석을 (시작할까요|해볼까요)\?|Saved! Start AI analysis\?/i)).toBeVisible();
     await page.getByRole("button", { name: /AI 분석|AI Analyze/i }).first().click();
 
     await expect(page).toHaveURL(/\/app\/reports\/\d{4}-\d{2}-\d{2}/, {
@@ -275,7 +275,7 @@ test.describe("RutineIQ core flows", () => {
     await expect(page.getByText(/오늘의 요약|Your Day in Review/i)).toBeVisible();
     await expect(page.getByText("지금은 25분 한 번만 끝내세요.")).toBeVisible();
     await expect(
-      page.getByText(/신호가 부족해 분석 확신도가 낮습니다|Signal quality is limited/i),
+      page.getByText(/(신호가 부족해 분석 확신도가 낮습니다|데이터가 부족해 정확도가 낮아요)|Signal quality is limited/i),
     ).toBeVisible();
   });
 
@@ -333,12 +333,12 @@ test.describe("RutineIQ core flows", () => {
     await page.getByRole("button", { name: /AI 분석하기|Parse with AI/i }).first().click();
 
     await expect(
-      page.getByText(/AI 응답이 지연되고 있어요|AI response timed out/i),
+      page.getByText(/(AI 응답이 지연되고 있어요|AI가 느려요)|AI response timed out/i),
     ).toBeVisible();
     await expect(page.getByRole("button", { name: /다시 시도|Retry parse/i })).toBeVisible();
 
     await page.getByRole("button", { name: /다시 시도|Retry parse/i }).click();
-    await expect(page.getByText(/AI가 이렇게 파악했어요|AI parsed your day like this/i)).toBeVisible();
+    await expect(page.getByText(/AI가 (이렇게 파악했어요|정리한 결과예요)|AI parsed your day like this/i)).toBeVisible();
   });
 
   test("F2d: unknown entry -> one-tap window chip -> save succeeds", async ({ page }) => {
@@ -382,11 +382,11 @@ test.describe("RutineIQ core flows", () => {
     await page.goto("/app/daily-flow");
     await page.locator("textarea").fill("하루종일 보고서를 썼다. 중간에 커피를 마시며 쉬었다.");
     await page.getByRole("button", { name: /AI 분석하기|Parse with AI/i }).first().click();
-    await expect(page.getByText(/확인하면 더 정확해져요|quick check makes this more accurate/i)).toBeVisible();
+    await expect(page.getByText(/(확인하면 더 정확해져요|한번 확인하면 정확도가 올라가요)|quick check makes this more accurate/i)).toBeVisible();
 
     await page.getByRole("button", { name: /아침|Morning/i }).first().click();
     await page.getByRole("button", { name: /확인\s*&\s*저장|Confirm\s*&\s*Save/i }).first().click();
-    await expect(page.getByText(/저장 완료! AI 분석을 시작할까요\?|Saved! Start AI analysis\?/i)).toBeVisible();
+    await expect(page.getByText(/저장 완료! AI 분석을 (시작할까요|해볼까요)\?|Saved! Start AI analysis\?/i)).toBeVisible();
   });
 
   test("F2c: report 404 renders empty-state card, not error banner", async ({ page }) => {
@@ -394,7 +394,7 @@ test.describe("RutineIQ core flows", () => {
     await installRoutineApiMock(page);
     await enterMockApp(page);
     await page.goto(`/app/reports/${todayLocal()}`);
-    await expect(page.getByText(/리포트를 만들 준비가 되었나요\?|No report yet/i)).toBeVisible();
+    await expect(page.getByText(/(리포트를 만들 준비가 되었나요\?|리포트를 만들어 볼까요\?)|No report yet/i)).toBeVisible();
     await expect(page.getByText(/리포트를 불러오지 못했습니다|Failed to load report/i)).toHaveCount(0);
   });
 
