@@ -243,24 +243,6 @@ function buildMetaPayload(meta: ParsedMeta): Record<string, unknown> {
   return payload;
 }
 
-function moodLabel(mood: Mood, isKo: boolean): string {
-  const ko: Record<Mood, string> = {
-    very_low: "매우 낮음",
-    low: "낮음",
-    neutral: "보통",
-    good: "좋음",
-    great: "매우 좋음",
-  };
-  const en: Record<Mood, string> = {
-    very_low: "Very low",
-    low: "Low",
-    neutral: "Neutral",
-    good: "Good",
-    great: "Great",
-  };
-  return isKo ? ko[mood] : en[mood];
-}
-
 export default function DailyFlowPage() {
   const locale = useLocale();
   const isKo = locale === "ko";
@@ -329,6 +311,15 @@ export default function DailyFlowPage() {
           evening: "저녁",
           night: "밤",
         },
+        moods: {
+          very_low: "매우 나쁨",
+          low: "나쁨",
+          neutral: "보통",
+          good: "좋음",
+          great: "매우 좋음",
+        },
+        noEvidence: "근거 없음",
+        placeholder: "오늘 하루를 돌아보며 자유롭게 적어주세요...",
       };
     }
     return {
@@ -391,6 +382,15 @@ export default function DailyFlowPage() {
         evening: "Evening",
         night: "Night",
       },
+      moods: {
+        very_low: "Very low",
+        low: "Low",
+        neutral: "Neutral",
+        good: "Good",
+        great: "Great",
+      },
+      noEvidence: "No evidence",
+      placeholder: "Write freely about your day...",
     };
   }, [isKo]);
 
@@ -625,7 +625,7 @@ export default function DailyFlowPage() {
 
   function displayEvidence(entry: ParsedEntry): string {
     const text = (entry.source_text || entry.activity || "").trim();
-    if (!text) return isKo ? "근거 없음" : "No evidence";
+    if (!text) return t.noEvidence;
     return text.length > 42 ? `${text.slice(0, 42)}...` : text;
   }
 
@@ -830,7 +830,7 @@ export default function DailyFlowPage() {
 
   const parsedMetaRows = React.useMemo(() => {
     const rows: Array<{ label: string; value: string }> = [];
-    if (parsedMeta.mood) rows.push({ label: t.mood, value: moodLabel(parsedMeta.mood, isKo) });
+    if (parsedMeta.mood) rows.push({ label: t.mood, value: t.moods[parsedMeta.mood] });
     if (parsedMeta.sleep_quality != null) rows.push({ label: t.sleepQuality, value: String(parsedMeta.sleep_quality) });
     if (parsedMeta.sleep_hours != null) rows.push({ label: t.sleepHours, value: String(parsedMeta.sleep_hours) });
     if (parsedMeta.stress_level != null) rows.push({ label: t.stress, value: String(parsedMeta.stress_level) });
@@ -918,7 +918,7 @@ export default function DailyFlowPage() {
             value={diaryText}
             onChange={(e) => setDiaryText(e.target.value)}
             aria-label={t.writeTitle}
-            placeholder={isKo ? "오늘 하루를 돌아보며 자유롭게 적어주세요..." : "Write freely about your day..."}
+            placeholder={t.placeholder}
             className="min-h-[180px] resize-none bg-white/80"
           />
           <p className="text-xs text-mutedFg">{t.writeHint}</p>

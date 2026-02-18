@@ -209,7 +209,12 @@ export default function ReportPage() {
         heroNextAction: "지금 할 한 가지",
         heroKeyMetrics: "핵심 지표",
         trustBadge: "AI 참고 안내",
-        trustBadgeBody: "기록 기반 추정이에요. 의학적 진단은 아니며, 기록이 쌓일수록 정확해져요."
+        trustBadgeBody: "기록 기반 추정이에요. 의학적 진단은 아니며, 기록이 쌓일수록 정확해져요.",
+        burnoutHigh: "높음",
+        burnoutLow: "낮음",
+        burnoutMedium: "중간",
+        labelNoAdvice: "아직 실행 가이드가 없습니다.",
+        labelExport: "Google/Apple 캘린더로 가져올 수 있는 .ics 파일로 내보냅니다",
       };
     }
     return {
@@ -283,7 +288,12 @@ export default function ReportPage() {
       heroNextAction: "One thing to do now",
       heroKeyMetrics: "Key Metrics",
       trustBadge: "AI Notice",
-      trustBadgeBody: "This analysis is an estimate based on your logged data, not a medical diagnosis. Accuracy improves as you log more days."
+      trustBadgeBody: "This analysis is an estimate based on your logged data, not a medical diagnosis. Accuracy improves as you log more days.",
+      burnoutHigh: "High",
+      burnoutLow: "Low",
+      burnoutMedium: "Medium",
+      labelNoAdvice: "No micro advice generated yet.",
+      labelExport: "Export as .ics for Google Calendar / Apple Calendar",
     };
   }, [isKo]);
 
@@ -297,17 +307,12 @@ export default function ReportPage() {
     report?.wellbeing_insight?.burnout_risk === "low" || report?.wellbeing_insight?.burnout_risk === "high"
       ? report.wellbeing_insight.burnout_risk
       : "medium";
-  const burnoutRiskLabel = isKo
-    ? burnoutRisk === "high"
-      ? "높음"
+  const burnoutRiskLabel =
+    burnoutRisk === "high"
+      ? t.burnoutHigh
       : burnoutRisk === "low"
-        ? "낮음"
-        : "중간"
-    : burnoutRisk === "high"
-      ? "High"
-      : burnoutRisk === "low"
-        ? "Low"
-        : "Medium";
+        ? t.burnoutLow
+        : t.burnoutMedium;
   const burnoutBadgeClass =
     burnoutRisk === "high"
       ? "border-red-300 bg-red-50 text-red-700"
@@ -717,7 +722,7 @@ export default function ReportPage() {
                   </div>
                 ))
               ) : (
-                <p className="text-sm text-mutedFg">{isKo ? "아직 실행 가이드가 없습니다." : "No micro advice generated yet."}</p>
+                <p className="text-sm text-mutedFg">{t.labelNoAdvice}</p>
               )}
             </CardContent>
           </Card>
@@ -797,7 +802,7 @@ export default function ReportPage() {
                 size="sm"
                 onClick={exportCalendar}
                 disabled={exporting || !report.tomorrow_routine.length}
-                title={isKo ? "Google/Apple 캘린더로 가져올 수 있는 .ics 파일로 내보냅니다" : "Export as .ics for Google Calendar / Apple Calendar"}
+                title={t.labelExport}
               >
                 {exporting ? t.exporting : t.exportIcs}
               </Button>

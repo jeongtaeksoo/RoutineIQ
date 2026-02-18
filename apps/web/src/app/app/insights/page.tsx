@@ -280,6 +280,19 @@ export default function InsightsPage() {
         nudgeTitle: "복구 알림",
         nudgeDismiss: "확인",
         cohortSampleLine: (n: number, w: number) => `표본 ${n}명 · ${w}일 기준`,
+        errorLoad: "리포트를 불러오지 못했습니다",
+        errorAnalyze: "분석에 실패했습니다",
+        errorQuickstart: "퀵스타트에 실패했습니다",
+        statusDone: "완료",
+        labelGoal: "목표",
+        errorCohort: "코호트 트렌드를 불러오지 못했습니다.",
+        openSettings: "설정 열기",
+        adjustCompare: "비교 기준 조정",
+        labelMe: "나",
+        changeCompare: "비교 기준 변경",
+        labelTrigger: "트리거",
+        labelOpen: "열기",
+        labelClose: "닫기",
       };
     }
     return {
@@ -394,6 +407,19 @@ export default function InsightsPage() {
       nudgeTitle: "Recovery nudge",
       nudgeDismiss: "Dismiss",
       cohortSampleLine: (n: number, w: number) => `Sample ${n} users \u00b7 ${w}-day window`,
+      errorLoad: "Failed to load report",
+      errorAnalyze: "Analyze failed",
+      errorQuickstart: "Quickstart failed",
+      statusDone: "OK",
+      labelGoal: "Goal",
+      errorCohort: "Failed to load cohort trend.",
+      openSettings: "Open Preferences",
+      adjustCompare: "Adjust filters",
+      labelMe: "You",
+      changeCompare: "Change dimensions",
+      labelTrigger: "Trigger",
+      labelOpen: "Open",
+      labelClose: "Close",
     };
   }, [isKo]);
 
@@ -466,7 +492,7 @@ export default function InsightsPage() {
         const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
         // Keep stale data visible when background refresh fails.
         if (!opts?.background || !report) {
-          setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "리포트를 불러오지 못했습니다" : "Failed to load report");
+          setReportError(err instanceof Error ? `${err.message}${hint}` : t.errorLoad);
         }
       }
     } finally {
@@ -493,7 +519,7 @@ export default function InsightsPage() {
       void loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "분석에 실패했습니다" : "Analyze failed");
+      setReportError(err instanceof Error ? `${err.message}${hint}` : t.errorAnalyze);
     } finally {
       setAnalyzing(false);
     }
@@ -529,7 +555,7 @@ export default function InsightsPage() {
       void loadConsistency();
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setReportError(err instanceof Error ? `${err.message}${hint}` : isKo ? "퀵스타트에 실패했습니다" : "Quickstart failed");
+      setReportError(err instanceof Error ? `${err.message}${hint}` : t.errorQuickstart);
     } finally {
       setAnalyzing(false);
     }
@@ -1009,19 +1035,19 @@ export default function InsightsPage() {
                   <div className="rounded-lg bg-white/70 p-2 text-center">
                     <div className="font-semibold">{t.step_log}</div>
                     <div className={hasLog ? "mt-1 flex items-center justify-center gap-1 text-emerald-700" : "mt-1 text-mutedFg"}>
-                      {hasLog ? <><CheckCircle2 className="h-3.5 w-3.5" />{isKo ? "완료" : "OK"}</> : <span className="text-lg">·</span>}
+                      {hasLog ? <><CheckCircle2 className="h-3.5 w-3.5" />{t.statusDone}</> : <span className="text-lg">·</span>}
                     </div>
                   </div>
                   <div className="rounded-lg bg-white/70 p-2 text-center">
                     <div className="font-semibold">{t.step_analyze}</div>
                     <div className={hasReport ? "mt-1 flex items-center justify-center gap-1 text-emerald-700" : "mt-1 text-mutedFg"}>
-                      {hasReport ? <><CheckCircle2 className="h-3.5 w-3.5" />{isKo ? "완료" : "OK"}</> : <span className="text-lg">·</span>}
+                      {hasReport ? <><CheckCircle2 className="h-3.5 w-3.5" />{t.statusDone}</> : <span className="text-lg">·</span>}
                     </div>
                   </div>
                   <div className="rounded-lg bg-white/70 p-2 text-center">
                     <div className="font-semibold">{t.step_plan}</div>
                     <div className={hasReport ? "mt-1 flex items-center justify-center gap-1 text-emerald-700" : "mt-1 text-mutedFg"}>
-                      {hasReport ? <><CheckCircle2 className="h-3.5 w-3.5" />{isKo ? "완료" : "OK"}</> : <span className="text-lg">·</span>}
+                      {hasReport ? <><CheckCircle2 className="h-3.5 w-3.5" />{t.statusDone}</> : <span className="text-lg">·</span>}
                     </div>
                   </div>
                 </div>
@@ -1108,7 +1134,7 @@ export default function InsightsPage() {
                         {it.start}–{it.end} · {it.activity}
                       </p>
                       <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
-                        {isKo ? "목표" : "Goal"}: {it.goal}
+                        {t.labelGoal}: {it.goal}
                       </span>
                     </div>
                   </div>
@@ -1146,7 +1172,7 @@ export default function InsightsPage() {
                   <AlertTriangle className="h-5 w-5" />
                 </div>
                 <p className="text-sm">
-                  {isKo ? "코호트 트렌드를 불러오지 못했습니다." : "Failed to load cohort trend."}
+                  {t.errorCohort}
                 </p>
               </div>
             ) : !cohortTrend.enabled ? (
@@ -1154,7 +1180,7 @@ export default function InsightsPage() {
                 <p className="text-sm">{cohortTrend.message}</p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
                   <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
-                    {isKo ? "설정 열기" : "Open Preferences"}
+                    {t.openSettings}
                   </Link>
                 </Button>
               </div>
@@ -1168,7 +1194,7 @@ export default function InsightsPage() {
                 </p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
                   <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
-                    {isKo ? "비교 기준 조정" : "Adjust filters"}
+                    {t.adjustCompare}
                   </Link>
                 </Button>
               </div>
@@ -1228,7 +1254,7 @@ export default function InsightsPage() {
                         <div className="mt-1 grid grid-cols-2 gap-2">
                           <div>
                             <p className="title-serif text-2xl">{fmtRate(row.mine)}</p>
-                            <p className="text-[11px] text-mutedFg">{isKo ? "나" : "You"}</p>
+                            <p className="text-[11px] text-mutedFg">{t.labelMe}</p>
                             <p
                               className={
                                 row.delta === null
@@ -1270,7 +1296,7 @@ export default function InsightsPage() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Button asChild variant="outline" size="sm">
                     <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
-                      {isKo ? "비교 기준 변경" : "Change dimensions"}
+                      {t.changeCompare}
                     </Link>
                   </Button>
                 </div>
@@ -1312,7 +1338,7 @@ export default function InsightsPage() {
                       <>
                         <p className="mt-1 text-sm font-semibold">{topFailure.pattern}</p>
                         <p className="mt-1 text-xs text-mutedFg">
-                          {isKo ? "트리거" : "Trigger"}: {topFailure.trigger}
+                          {t.labelTrigger}: {topFailure.trigger}
                         </p>
                       </>
                     ) : (
@@ -1339,10 +1365,10 @@ export default function InsightsPage() {
               <p className="mt-1 text-xs text-mutedFg">{t.detailsSubtitle}</p>
             </div>
             <span className="rounded-full border bg-white/70 px-3 py-1 text-xs text-mutedFg group-open:hidden">
-              {isKo ? "열기" : "Open"}
+              {t.labelOpen}
             </span>
             <span className="rounded-full border bg-white/70 px-3 py-1 text-xs text-mutedFg hidden group-open:inline-flex">
-              {isKo ? "닫기" : "Close"}
+              {t.labelClose}
             </span>
           </div>
         </summary>
