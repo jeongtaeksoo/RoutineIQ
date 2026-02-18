@@ -23,6 +23,7 @@ type ApiErrorBody =
 
 type ApiFetchInit = RequestInit & {
   timeoutMs?: number;
+  retryOnTimeout?: boolean;
   _retryAttempt?: number;
 };
 
@@ -246,16 +247,18 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   const method = String(init?.method || "GET").toUpperCase();
   const retryAttempt = Number.isFinite(Number(init?._retryAttempt)) ? Number(init?._retryAttempt) : 0;
   const canRetry = method === "GET" || method === "HEAD" || method === "DELETE";
+  const explicitTimeout = typeof init?.timeoutMs === "number";
   const timeoutMs =
     typeof init?.timeoutMs === "number"
       ? Math.max(1_000, Number(init.timeoutMs))
       : method === "GET" || method === "HEAD"
-        ? 20_000
-        : 90_000;
+        ? 8_000
+        : 35_000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
-  const { timeoutMs: _timeoutMs, _retryAttempt: _retryAttempt, ...requestInit } = init ?? {};
+  const { timeoutMs: _timeoutMs, retryOnTimeout: _retryOnTimeout, _retryAttempt: _retryAttempt, ...requestInit } = init ?? {};
   void _timeoutMs;
+  void _retryOnTimeout;
   void _retryAttempt;
 
   if (init?.signal) {
@@ -277,10 +280,16 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === "AbortError") {
-      if (canRetry && retryAttempt < 1 && !(init?.signal?.aborted)) {
+      const shouldRetryOnTimeout =
+        canRetry &&
+        retryAttempt < 1 &&
+        !(init?.signal?.aborted) &&
+        !explicitTimeout &&
+        init?.retryOnTimeout === true;
+      if (shouldRetryOnTimeout) {
         return apiFetch<T>(path, {
           ...init,
-          timeoutMs: Math.round(timeoutMs * 1.5),
+          timeoutMs: Math.min(Math.round(timeoutMs * 1.25), 10_000),
           _retryAttempt: retryAttempt + 1,
         });
       }

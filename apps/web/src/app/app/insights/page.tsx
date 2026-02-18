@@ -460,7 +460,7 @@ export default function InsightsPage() {
   async function loadTodayLog() {
     try {
       const res = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`, {
-        timeoutMs: 15_000,
+        timeoutMs: 8_000,
       });
       setTodayLogBlocks(Array.isArray(res.entries) ? res.entries.length : 0);
     } catch {
@@ -475,7 +475,7 @@ export default function InsightsPage() {
     }
     try {
       const res = await apiFetch<{ date: string; report: AIReport; model?: string }>(`/reports?date=${today}`, {
-        timeoutMs: 18_000,
+        timeoutMs: 10_000,
       });
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
@@ -509,6 +509,7 @@ export default function InsightsPage() {
     try {
       const res = await apiFetch<{ date: string; report: AIReport; cached: boolean }>(`/analyze`, {
         method: "POST",
+        timeoutMs: 25_000,
         body: JSON.stringify({ date: today, force: true })
       });
       const normalized = normalizeReport(res.report, isKo);
@@ -530,12 +531,15 @@ export default function InsightsPage() {
     setReportError(null);
     setInfoMessage(null);
     try {
-      const log = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`);
+      const log = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`, {
+        timeoutMs: 8_000,
+      });
       const hasLog = Array.isArray(log.entries) && log.entries.length > 0;
       if (!hasLog) {
         const tmpl = DAILY_FLOW_TEMPLATES[DEFAULT_TEMPLATE_NAME] || [];
         await apiFetch(`/logs`, {
           method: "POST",
+          timeoutMs: 12_000,
           body: JSON.stringify({ date: today, entries: tmpl, note: "Quickstart template" })
         });
         setTodayLogBlocks(tmpl.length);
@@ -545,6 +549,7 @@ export default function InsightsPage() {
 
       const res = await apiFetch<{ date: string; report: AIReport; cached: boolean }>(`/analyze`, {
         method: "POST",
+        timeoutMs: 25_000,
         body: JSON.stringify({ date: today, force: true })
       });
       const normalized = normalizeReport(res.report, isKo);
@@ -588,7 +593,7 @@ export default function InsightsPage() {
       const from = localYYYYMMDD(start);
 
       const res = await apiFetch<WeeklyInsightsResponse>(`/insights/weekly?from=${from}&to=${today}`, {
-        timeoutMs: 15_000,
+        timeoutMs: 8_000,
       });
       setConsistency({
         score: Math.max(0, Math.min(100, Math.round(Number(res.consistency.score) || 0))),
@@ -651,7 +656,7 @@ export default function InsightsPage() {
     setCohortLoading(true);
     try {
       const res = await apiFetch<CohortTrend>("/trends/cohort", {
-        timeoutMs: 15_000,
+        timeoutMs: 8_000,
       });
       setCohortTrend(res);
     } catch {
@@ -669,7 +674,7 @@ export default function InsightsPage() {
         job_family?: string;
         work_mode?: string;
       }>("/preferences/profile", {
-        timeoutMs: 15_000,
+        timeoutMs: 8_000,
       });
       const required = [
         profile.age_group,
@@ -687,7 +692,7 @@ export default function InsightsPage() {
   async function loadRecoveryActive() {
     try {
       const res = await apiFetch<RecoveryActive>("/recovery/active", {
-        timeoutMs: 12_000,
+        timeoutMs: 6_000,
       });
       setRecoveryActive(res);
     } catch {
@@ -698,7 +703,7 @@ export default function InsightsPage() {
   async function loadRecoveryNudge() {
     try {
       const res = await apiFetch<RecoveryNudgeEnvelope>("/recovery/nudge", {
-        timeoutMs: 12_000,
+        timeoutMs: 6_000,
       });
       if (res.has_nudge && res.nudge) {
         setRecoveryNudge(res.nudge);
@@ -766,6 +771,7 @@ export default function InsightsPage() {
       try {
         await apiFetch<{ ok: boolean }>("/trends/cohort/event", {
           method: "POST",
+          timeoutMs: 5_000,
           body: JSON.stringify({
             event_type: eventType,
             threshold_variant: payload.threshold_variant,
