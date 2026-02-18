@@ -211,7 +211,7 @@ export default function InsightsPage() {
         aiQualityProfile: "프로필 커버리지",
         aiQualitySufficiency: "데이터 충분성",
         reportDeepDiveTitle: "리포트 상세 보기",
-        reportDeepDiveDesc: "방해 패턴, 집중 시간, If-Then 규칙은 리포트에서 자세히 확인하세요.",
+        reportDeepDiveDesc: "방해 패턴, 집중 시간, 대응 규칙은 리포트에서 확인하세요.",
         reportDeepDivePeak: "대표 집중 시간",
         reportDeepDiveBreak: "대표 방해 패턴",
         reportDeepDiveEmpty: "오늘 리포트가 없어서 상세 요약을 아직 만들 수 없어요.",
@@ -226,37 +226,37 @@ export default function InsightsPage() {
         profileSetupBody: "연령대·성별·직군·근무 형태를 설정하면 더 맞춤 추천을 받아요.",
         profileSetupCta: "설정 열기",
         peakHours: "집중 잘 되는 시간",
-        peakHoursDesc: "몰입이 자연스럽게 일어나는 시간대입니다.",
+        peakHoursDesc: "집중이 자연스럽게 일어나는 시간대입니다.",
         peakHoursEmpty: "분석을 실행하면, 집중이 잘 되는 시간대가 표시됩니다.",
         breakTriggers: "집중을 방해하는 것들",
         breakTriggersDesc: "나도 모르게 흐름이 끊기는 순간들.",
         breakTriggersEmpty: "분석을 실행하면, 흐름을 깨는 패턴이 표시됩니다.",
         fixLabel: "해결안",
-        consistency: "꾸준함 점수",
-        consistencyDesc: "하루를 기록하며 나를 돌본 날들입니다. (최근 7일)",
+        consistency: "기록 점수",
+        consistencyDesc: "최근 7일간 기록한 날들이에요.",
         daysLogged: "기록한 날",
         downloadShare: "기록 공유하기",
         tip: "팁: 매일 조금씩 기록하면, 나에게 더 잘 맞는 제안을 받을 수 있어요.",
         weeklyTitle: "이번 주 요약",
         weeklyDesc: "지난 7일간의 나의 모습입니다.",
         totalBlocks7d: "기록한 활동 수",
-        deepMinutes7d: "몰입한 시간 (7일)",
-        currentStreak: "현재 스트릭",
-        longestStreak: "최장 스트릭",
+        deepMinutes7d: "집중한 시간 (7일)",
+        currentStreak: "연속 기록",
+        longestStreak: "최장 연속 기록",
         trendPattern: "주간 변화",
         trendBlocksDelta: "활동 수 변화",
-        trendDeepDelta: "몰입 시간 변화",
+        trendDeepDelta: "집중 시간 변화",
         emptyMetricsTitle: "데이터가 쌓이고 있어요",
         emptyMetricsBody: "오늘 첫 기록을 남겨보세요. 3일만 쌓여도 내 패턴이 보이기 시작합니다.",
-        detailsTitle: "주간 지표 더보기",
-        detailsSubtitle: "꾸준함 그래프와 주간 요약",
+        detailsTitle: "이번 주 한눈에 보기",
+        detailsSubtitle: "기록 점수와 주간 요약",
         cohortTitle: "나와 유사한 사용자 트렌드",
         cohortDesc: "동의한 사용자의 익명 비교예요. 비교 기준은 설정에서 바꿀 수 있어요.",
         youVsSimilar: "나 vs 유사 사용자",
         similarUsers: (n: number) => `유사 사용자 ${n}명`,
         myFocusRate: "나의 집중 블록 유지율",
         myReboundRate: "나의 복귀율",
-        myRecoveryRate: "나의 회복 버퍼 사용일",
+        myRecoveryRate: "나의 회복 시간 활용일",
         average: "유사 사용자 평균",
         rank: "나의 위치",
         actionableTip: "실행 팁",
@@ -713,15 +713,11 @@ export default function InsightsPage() {
   }, [today, locale, isKo]);
 
   React.useEffect(() => {
-    // Defer non-critical fetches so login->insights becomes interactive faster.
-    const timer = window.setTimeout(() => {
-      void loadConsistency();
-      void loadCohortTrend();
-      void loadProfileHealth();
-      void loadRecoveryActive();
-      void loadRecoveryNudge();
-    }, 0);
-    return () => window.clearTimeout(timer);
+    void loadConsistency();
+    void loadCohortTrend();
+    void loadProfileHealth();
+    void loadRecoveryActive();
+    void loadRecoveryNudge();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -911,7 +907,7 @@ export default function InsightsPage() {
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-12">
-        <Card className="lg:col-span-7 shadow-soft">
+        <Card className="lg:col-span-12 shadow-soft">
           <CardHeader>
             <CardTitle>{t.coachTitle}</CardTitle>
             <CardDescription>{t.coachDesc}</CardDescription>
@@ -990,7 +986,7 @@ export default function InsightsPage() {
         </Card>
 
         {/* ─── AI Trust Badge (UX-C06) ─── */}
-        <div className="lg:col-span-7 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
+        <div className="lg:col-span-12 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
           <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
           <div>
             <p className="text-xs font-semibold text-blue-900">{t.trustBadge}</p>
@@ -998,7 +994,7 @@ export default function InsightsPage() {
           </div>
         </div>
 
-        <Card className="lg:col-span-5 border-brand/30 bg-white/70 shadow-elevated">
+        <Card className="lg:col-span-12 border-brand/30 bg-white/70 shadow-elevated">
           <CardHeader>
             <CardTitle>{t.nextTitle}</CardTitle>
             <CardDescription>
@@ -1456,7 +1452,7 @@ export default function InsightsPage() {
                         <p className="text-xs text-mutedFg">{t.nextTitle}</p>
                         <p className="mt-2 text-sm">
                           {isKo
-                            ? "무너지는 구간에 10분 버퍼를 넣고, 내일 다시 분석해 계획을 개선해보세요."
+                            ? "흐름이 끊기는 구간에 10분 여유 시간을 넣고, 내일 다시 분석해 보세요."
                             : "Add a 10-min buffer where you break, then re-run Analyze tomorrow to improve the plan."}
                         </p>
                         <div className="mt-3 flex flex-wrap gap-2">

@@ -68,13 +68,13 @@ const PREVIEW_REPORT_KO: AIReport = {
   wellbeing_insight: {
     burnout_risk: "medium",
     energy_curve_forecast: "09:30-11:00 구간에서 에너지 유지 가능성이 높습니다.",
-    note: "강한 집중 블록 뒤에는 10분 회복 버퍼를 먼저 고정하세요.",
+    note: "강한 집중 블록 뒤에는 10분 회복 시간을 먼저 고정하세요.",
   },
   micro_advice: [
     {
       action: "전환 전 3분 리셋",
       when: "작업 전환 직전",
-      reason: "주의 잔여 피로를 줄여 다음 블록 몰입을 지킵니다.",
+      reason: "주의 잔여 피로를 줄여 다음 블록 집중을 지킵니다.",
       duration_min: 3,
     },
   ],
@@ -184,7 +184,7 @@ export default function ReportPage() {
         comparisonNote: "비교 메모",
         topDeviation: "주요 원인",
         powerHours: "집중이 잘 된 시간",
-        powerHoursDesc: "자연스럽게 몰입했던 순간들.",
+        powerHoursDesc: "자연스럽게 집중했던 시간들.",
         noPowerHours: "아직 데이터가 충분하지 않아요.",
         brokeFocus: "방해가 되었던 것들",
         brokeFocusDesc: "원인과 해결 제안.",
