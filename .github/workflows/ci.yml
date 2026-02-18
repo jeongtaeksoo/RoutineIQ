@@ -21,9 +21,11 @@ jobs:
       SUPABASE_JWT_SECRET: test-jwt-secret
       OPENAI_API_KEY: test-openai-key
       OPENAI_MODEL: gpt-4o-mini
+      OPENAI_PRICE_INPUT_PER_1K: "0.00015"
+      OPENAI_PRICE_OUTPUT_PER_1K: "0.00060"
       STRIPE_SECRET_KEY: sk_test_dummy
       STRIPE_WEBHOOK_SECRET: whsec_dummy
-      STRIPE_PRICE_ID_PRO: price_dummy
+      STRIPE_PRICE_ID_PRO: price_test_pro
       STRIPE_SUCCESS_URL: https://rutineiq.com/app/billing?success=1
       STRIPE_CANCEL_URL: https://rutineiq.com/app/billing?canceled=1
       NEXT_PUBLIC_API_BASE_URL: https://api.rutineiq.com
