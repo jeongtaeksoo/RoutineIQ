@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
+import { localYYYYMMDD, addDays, toMinutes } from "@/lib/date-utils";
 
 type FlowStep = "write" | "confirm" | "done";
 
@@ -78,19 +79,7 @@ type TrackEventType =
   | "save_attempted"
   | "save_succeeded";
 
-function localYYYYMMDD(d = new Date()): string {
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
 
-function addDays(dateStr: string, delta: number): string {
-  const [y, m, d] = dateStr.split("-").map((x) => parseInt(x, 10));
-  const dt = new Date(y, m - 1, d);
-  dt.setDate(dt.getDate() + delta);
-  return localYYYYMMDD(dt);
-}
 
 function isToday(dateStr: string): boolean {
   return dateStr === localYYYYMMDD();
@@ -108,16 +97,7 @@ function formatDateLabel(dateStr: string, isKo: boolean): string {
   return `${months[m - 1]} ${d} (${dayName})`;
 }
 
-function toMinutes(hhmm: string | null | undefined): number | null {
-  if (typeof hhmm !== "string") return null;
-  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const min = Number(m[2]);
-  if (!Number.isFinite(h) || !Number.isFinite(min)) return null;
-  if (h < 0 || h > 23 || min < 0 || min > 59) return null;
-  return h * 60 + min;
-}
+
 
 const TIME_WINDOWS: TimeWindow[] = ["dawn", "morning", "lunch", "afternoon", "evening", "night"];
 
@@ -291,46 +271,46 @@ export default function DailyFlowPage() {
     if (isKo) {
       return {
         title: "Daily Flow",
-        subtitle: "자유 일기를 쓰면 AI가 활동 블록으로 정리해줘요",
+        subtitle: "하루를 자유롭게 적으면 AI가 정리해요",
         today: "오늘",
         writeTitle: "오늘 하루를 돌아보며 자유롭게 적어주세요...",
-        writeHint: "시간, 활동, 기분을 포함하면 더 정확한 분석이 가능해요",
+        writeHint: "시간·활동·기분을 적으면 분석이 정확해져요",
         parse: "AI 분석하기",
         parsing: "분석 중...",
-        confirmTitle: "AI가 이렇게 파악했어요",
-        confirmSubtitle: "저장 전에 결과를 확인해 주세요",
+        confirmTitle: "AI가 정리한 결과예요",
+        confirmSubtitle: "저장 전에 확인해 주세요",
         explicitTime: "명시 시간",
         windowTime: "시간대 기반",
         unknownTime: "확인 필요",
         noTimeInfo: "시간 정보 없음",
         timeWindowPrefix: "시간대",
         evidence: "근거",
-        issueBannerTitle: "확인하면 더 정확해져요.",
+        issueBannerTitle: "한번 확인하면 정확도가 올라가요",
         issueProgress: (current: number, total: number) => `확인 항목 ${current}/${total}`,
         reviewNow: "지금 확인",
         saveLater: "나중에 저장",
         unresolvedHint: (count: number) => `시간 미확정 항목 ${count}개가 남아 있어요`,
         lowConfidence: "추정 정확도 낮음",
-        parsedMeta: "파싱된 메타",
+        parsedMeta: "정리된 메타",
         edit: "수정하기",
         editEntry: "편집",
         confirmAndSave: "확인 & 저장",
         saving: "저장 중...",
-        doneTitle: "저장 완료! AI 분석을 시작할까요?",
-        doneHint: "오늘 기록을 기반으로 내일 루틴을 생성합니다.",
+        doneTitle: "저장 완료! AI 분석을 해볼까요?",
+        doneHint: "오늘 기록으로 내일 계획을 만들어요.",
         analyze: "AI 분석",
         analyzing: "분석 중...",
         failedLoad: "불러오기 실패",
-        parseFailed: "일기 파싱 실패",
-        parseTimeout: "AI 응답이 지연되고 있어요. 잠시 후 다시 시도해 주세요.",
-        parseSchemaInvalid: "AI 응답 형식이 불안정했습니다. 다시 시도하면 대부분 해결됩니다.",
-        parseUnavailable: "AI 파싱 서비스가 일시적으로 불안정합니다. 잠시 후 다시 시도해 주세요.",
+        parseFailed: "일기 정리 실패",
+        parseTimeout: "AI가 느려요. 잠시 후 다시 시도해 주세요.",
+        parseSchemaInvalid: "AI가 불안정했어요. 다시 시도하면 보통 해결돼요.",
+        parseUnavailable: "AI가 잠시 멈겼어요. 잠시 후 다시 시도해 주세요.",
         parseRetry: "다시 시도",
         saveFailed: "저장 실패",
         analyzeFailed: "분석 실패",
         needDiary: "일기를 10자 이상 입력해 주세요",
-        needEntries: "저장할 파싱 결과가 없습니다",
-        noEntries: "파싱된 활동이 없습니다. 일기를 조금 더 구체적으로 작성해 주세요.",
+        needEntries: "저장할 정리 결과가 없어요",
+        noEntries: "정리된 활동이 없어요. 일기를 좀 더 자세히 적어주세요.",
         invalidTime: (n: number) => `블록 #${n}: 시간 형식이 올바르지 않습니다`,
         endAfterStart: (n: number) => `블록 #${n}: 종료가 시작보다 빨라요`,
         overlap: (a: number, b: number) => `블록 #${a}과 #${b}의 시간이 겹칩니다`,
@@ -339,7 +319,7 @@ export default function DailyFlowPage() {
         sleepHours: "수면 시간",
         stress: "스트레스",
         retryParse: "다시 분석하기",
-        retryParseHint: "결과가 매끄러우면 다시 분석해보세요",
+        retryParseHint: "결과가 어색하면 다시 분석해 보세요",
         aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했습니다`,
         windowChip: {
           dawn: "새벽",
@@ -877,7 +857,7 @@ export default function DailyFlowPage() {
 
   return (
     <div
-      className="mx-auto w-full max-w-3xl space-y-5 pb-24 md:pb-6"
+      className="mx-auto w-full max-w-3xl space-y-5 pb-bottom-safe md:pb-6"
       onTouchStart={(e) => {
         const touch = e.touches[0];
         if (!touch) return;
@@ -900,7 +880,7 @@ export default function DailyFlowPage() {
           <p className="mt-1 text-sm text-mutedFg">{t.subtitle}</p>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border bg-white/60 px-2 py-2 backdrop-blur">
+        <div className="flex items-center justify-between rounded-xl border bg-white/60 px-3 py-2 backdrop-blur">
           <Button variant="ghost" size="icon" onClick={() => navigateDate(-1)} aria-label="Previous day">
             <ChevronLeft className="h-5 w-5" />
           </Button>
@@ -939,7 +919,7 @@ export default function DailyFlowPage() {
             onChange={(e) => setDiaryText(e.target.value)}
             aria-label={t.writeTitle}
             placeholder={isKo ? "오늘 하루를 돌아보며 자유롭게 적어주세요..." : "Write freely about your day..."}
-            className="min-h-[200px] resize-none bg-white/80"
+            className="min-h-[180px] resize-none bg-white/80"
           />
           <p className="text-xs text-mutedFg">{t.writeHint}</p>
           <div className="flex justify-end">
@@ -1010,9 +990,8 @@ export default function DailyFlowPage() {
                     ref={(el) => {
                       entryRefs.current[idx] = el;
                     }}
-                    className={`rounded-xl border p-4 ${
-                      isFocusedIssue ? "border-brand bg-brand/5" : lowConfidence ? "border-amber-300 bg-amber-50/80" : "bg-white/70"
-                    }`}
+                    className={`rounded-xl border p-4 ${isFocusedIssue ? "border-brand bg-brand/5" : lowConfidence ? "border-amber-300 bg-amber-50/80" : "bg-white/70"
+                      }`}
                     onBlur={(e) => {
                       if (!isEditing) return;
                       const next = e.relatedTarget;
@@ -1091,9 +1070,8 @@ export default function DailyFlowPage() {
                                 onClick={() => {
                                   void setWindowForEntry(idx, windowValue);
                                 }}
-                                className={`rounded-full border px-2.5 py-1 text-[11px] ${
-                                  entry.time_window === windowValue ? "border-brand bg-brand/10 text-brand" : "bg-white text-mutedFg"
-                                }`}
+                                className={`rounded-full border px-2.5 py-1 text-[11px] ${entry.time_window === windowValue ? "border-brand bg-brand/10 text-brand" : "bg-white text-mutedFg"
+                                  }`}
                               >
                                 {t.windowChip[windowValue]}
                               </button>

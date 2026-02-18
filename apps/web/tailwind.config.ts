@@ -9,6 +9,10 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      spacing: {
+        'bottom-nav': 'var(--bottom-nav-height)',
+        'bottom-safe': 'var(--space-bottom-safe)',
+      },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
         serif: ["var(--font-serif)", "ui-serif", "Georgia", "serif"]

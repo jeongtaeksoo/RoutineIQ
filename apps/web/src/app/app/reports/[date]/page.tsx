@@ -10,33 +10,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { buildTomorrowRoutineIcs } from "@/lib/ics";
+import { addDays, toMinutes } from "@/lib/date-utils";
+import { type AIReport, normalizeReport } from "@/lib/report-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
-type AIReport = {
-  schema_version?: number;
-  summary: string;
-  productivity_peaks: { start: string; end: string; reason: string }[];
-  failure_patterns: { pattern: string; trigger: string; fix: string }[];
-  tomorrow_routine: { start: string; end: string; activity: string; goal: string }[];
-  if_then_rules: { if: string; then: string }[];
-  coach_one_liner: string;
-  yesterday_plan_vs_actual: { comparison_note: string; top_deviation: string };
-  wellbeing_insight?: {
-    burnout_risk?: "low" | "medium" | "high" | string;
-    energy_curve_forecast?: string;
-    note?: string;
-  };
-  micro_advice?: { action: string; when: string; reason: string; duration_min: number }[];
-  weekly_pattern_insight?: string;
-  analysis_meta?: {
-    input_quality_score?: number;
-    profile_coverage_pct?: number;
-    wellbeing_signals_count?: number;
-    logged_entry_count?: number;
-    schema_retry_count?: number;
-    personalization_tier?: "low" | "medium" | "high" | string;
-  };
-};
+
 
 const PREVIEW_REPORT_EN: AIReport = {
   schema_version: 2,
@@ -103,17 +81,7 @@ const PREVIEW_REPORT_KO: AIReport = {
   weekly_pattern_insight: "주간 패턴 미리보기: 아침 첫 블록을 지킨 날에 집중 유지율이 더 높았습니다.",
 };
 
-// ... (addDays function remains same) ...
 
-function addDays(dateStr: string, delta: number) {
-  const [y, m, d] = dateStr.split("-").map((x) => parseInt(x, 10));
-  const dt = new Date(y, (m || 1) - 1, d || 1);
-  dt.setDate(dt.getDate() + delta);
-  const yy = dt.getFullYear();
-  const mm = String(dt.getMonth() + 1).padStart(2, "0");
-  const dd = String(dt.getDate()).padStart(2, "0");
-  return `${yy}-${mm}-${dd}`;
-}
 
 const REPORT_CACHE_TTL_MS = 1000 * 60 * 10;
 
@@ -156,71 +124,9 @@ function clearCachedReport(date: string, locale: string): void {
   }
 }
 
-function toMinutes(hhmm: string): number | null {
-  const m = /^(\d{2}):(\d{2})$/.exec(hhmm);
-  if (!m) return null;
-  const h = Number(m[1]);
-  const mm = Number(m[2]);
-  if (!Number.isFinite(h) || !Number.isFinite(mm)) return null;
-  if (h < 0 || h > 23 || mm < 0 || mm > 59) return null;
-  return h * 60 + mm;
-}
 
-function normalizeReport(raw: AIReport, isKo: boolean): AIReport {
-  const riskRaw = String(raw?.wellbeing_insight?.burnout_risk || "medium").toLowerCase();
-  const burnout_risk = riskRaw === "low" || riskRaw === "high" ? riskRaw : "medium";
-  const microRaw = Array.isArray(raw?.micro_advice) ? raw.micro_advice : [];
-  const micro_advice = microRaw
-    .filter((it) => it && typeof it.action === "string" && typeof it.when === "string" && typeof it.reason === "string")
-    .map((it) => ({
-      action: it.action,
-      when: it.when,
-      reason: it.reason,
-      duration_min: Number.isFinite(Number(it.duration_min)) ? Math.min(20, Math.max(1, Number(it.duration_min))) : 5,
-    }));
-  const metaRaw = raw?.analysis_meta && typeof raw.analysis_meta === "object" ? raw.analysis_meta : {};
-  const tierRaw = String(metaRaw?.personalization_tier || "low").toLowerCase();
-  const personalization_tier =
-    tierRaw === "high" || tierRaw === "medium" || tierRaw === "low" ? tierRaw : "low";
-  return {
-    ...raw,
-    schema_version: Number.isFinite(Number(raw?.schema_version)) ? Number(raw?.schema_version) : 1,
-    wellbeing_insight: {
-      burnout_risk,
-      energy_curve_forecast:
-        typeof raw?.wellbeing_insight?.energy_curve_forecast === "string" && raw.wellbeing_insight.energy_curve_forecast.trim()
-          ? raw.wellbeing_insight.energy_curve_forecast
-          : (isKo ? "기록이 쌓이면 에너지 곡선 예측 정확도가 높아집니다." : "Energy-curve forecast improves as you log more days."),
-      note:
-        typeof raw?.wellbeing_insight?.note === "string" && raw.wellbeing_insight.note.trim()
-          ? raw.wellbeing_insight.note
-          : (isKo ? "내일은 회복 버퍼 1개를 먼저 고정해보세요." : "For tomorrow, lock one recovery buffer first."),
-    },
-    micro_advice,
-    weekly_pattern_insight:
-      typeof raw?.weekly_pattern_insight === "string" && raw.weekly_pattern_insight.trim()
-        ? raw.weekly_pattern_insight
-        : (isKo ? "주간 패턴은 최소 3일 기록 후 정확도가 높아집니다." : "Weekly pattern signal becomes clearer after at least 3 logged days."),
-    analysis_meta: {
-      input_quality_score: Number.isFinite(Number(metaRaw?.input_quality_score))
-        ? Math.max(0, Math.min(100, Number(metaRaw.input_quality_score)))
-        : 0,
-      profile_coverage_pct: Number.isFinite(Number(metaRaw?.profile_coverage_pct))
-        ? Math.max(0, Math.min(100, Number(metaRaw.profile_coverage_pct)))
-        : 0,
-      wellbeing_signals_count: Number.isFinite(Number(metaRaw?.wellbeing_signals_count))
-        ? Math.max(0, Math.min(6, Math.round(Number(metaRaw.wellbeing_signals_count))))
-        : 0,
-      logged_entry_count: Number.isFinite(Number(metaRaw?.logged_entry_count))
-        ? Math.max(0, Math.min(200, Math.round(Number(metaRaw.logged_entry_count))))
-        : 0,
-      schema_retry_count: Number.isFinite(Number(metaRaw?.schema_retry_count))
-        ? Math.max(0, Math.min(3, Math.round(Number(metaRaw.schema_retry_count))))
-        : 0,
-      personalization_tier,
-    },
-  };
-}
+
+
 
 export default function ReportPage() {
   const router = useRouter();
@@ -234,22 +140,22 @@ export default function ReportPage() {
     if (isKo) {
       return {
         title: "나의 하루 리포트",
-        subtitle: "오늘 하루를 돌아보고, 내일은 조금 더 편안하게 흘러가도록 돕습니다.",
+        subtitle: "오늘을 돌아보고 내일을 준비해요.",
         date: "날짜",
         analyze: "이 날의 기록 정리하기",
         analyzing: "정리하는 중...",
         refresh: "다시 불러오기",
         loading: "잠시만요...",
-        noReportTitle: "리포트를 만들 준비가 되었나요?",
-        noReportDesc: "기록을 바탕으로 오늘의 흐름을 요약하고, 내일 챙겨야 할 것들을 정리해드립니다.",
+        noReportTitle: "리포트를 만들어 볼까요?",
+        noReportDesc: "오늘 기록으로 내일 계획을 만들어 드려요.",
         analyzeNow: "리포트 만들기",
         previewTitle: "리포트 예시",
         previewDesc: "분석이 완료되면 나만의 리포트가 만들어집니다.",
         coachOneLiner: "오늘의 한 마디",
-        coachOneLinerDesc: "지금 바로 실행할 한 가지 행동입니다.",
+        coachOneLinerDesc: "지금 바로 해볼 행동 한 가지예요.",
         schemaBadge: "리포트 스키마",
         qualityTitle: "AI 분석 품질",
-        qualityDesc: "입력 데이터 충실도와 개인화 커버리지를 표시합니다.",
+        qualityDesc: "입력 데이터 품질과 개인화 수준이에요.",
         qualityScore: "입력 품질 점수",
         qualityProfile: "프로필 커버리지",
         qualityTier: "개인화 수준",
@@ -260,20 +166,20 @@ export default function ReportPage() {
         suffLow: "보강 필요",
         suffMedium: "보통",
         suffHigh: "충분",
-        lowSignalWarning: "신호가 부족해 분석 확신도가 낮습니다. 다음 기록에서 에너지/집중(1-5)을 최소 2개 블록에 입력해 주세요.",
+        lowSignalWarning: "데이터가 부족해 정확도가 낮아요. 다음에 활동 2개에 에너지·집중 점수를 남겨주세요.",
         tierLow: "초기",
         tierMedium: "보통",
         tierHigh: "높음",
         dayReview: "오늘의 요약",
-        dayReviewDesc: "하루의 흐름과 코치의 조언.",
+        dayReviewDesc: "하루 요약과 코치 조언이에요.",
         wellbeingTitle: "웰빙 인사이트",
-        wellbeingDesc: "번아웃 위험과 에너지 곡선 예측입니다.",
+        wellbeingDesc: "번아웃 위험과 에너지 흐름 예측이에요.",
         burnoutRisk: "번아웃 위험도",
         energyForecast: "에너지 곡선 예측",
         wellbeingNote: "웰빙 메모",
         weeklyPattern: "주간 패턴",
         microAdviceTitle: "5분 실행 가이드",
-        microAdviceDesc: "짧게 바로 실행할 수 있는 행동입니다.",
+        microAdviceDesc: "5분 안에 바로 해볼 수 있는 행동이에요.",
         durationMin: "소요",
         comparisonNote: "비교 메모",
         topDeviation: "주요 원인",
@@ -286,13 +192,13 @@ export default function ReportPage() {
         fix: "제안",
         noFailure: "특별한 방해 요소가 없었습니다.",
         optimizedPlan: "내일을 위한 추천 흐름",
-        optimizedPlanDesc: "무리가 되지 않도록 조정한 일정.",
+        optimizedPlanDesc: "무리 없이 조정한 내일 일정이에요.",
         exportIcs: "캘린더로 내보내기 (.ics)",
         exporting: "내보내는 중...",
         noOptimizedPlan: "아직 추천 일정이 없습니다.",
         goal: "목표",
         recoveryRules: "나를 위한 팁",
-        recoveryRulesDesc: "지치거나 힘들 때 꺼내보는 조언.",
+        recoveryRulesDesc: "힘들 때 꺼내 보는 짧은 조언이에요.",
         noRecovery: "아직 팁이 없습니다.",
         ifLabel: "이럴 땐",
         thenLabel: "이렇게 해보세요",
@@ -303,7 +209,7 @@ export default function ReportPage() {
         heroNextAction: "지금 할 한 가지",
         heroKeyMetrics: "핵심 지표",
         trustBadge: "AI 참고 안내",
-        trustBadgeBody: "이 분석은 기록된 데이터를 기반으로 한 추정이며, 의학적 진단이 아닙니다. 기록이 쌓일수록 정확도가 높아집니다."
+        trustBadgeBody: "기록 기반 추정이에요. 의학적 진단은 아니며, 기록이 쌓일수록 정확해져요."
       };
     }
     return {
@@ -456,7 +362,7 @@ export default function ReportPage() {
       });
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
-      writeCachedReport(date, locale, normalized);
+      if (normalized) writeCachedReport(date, locale, normalized);
     } catch (err) {
       const status = isApiFetchError(err) ? err.status : null;
       if (status === 404) {
@@ -488,7 +394,7 @@ export default function ReportPage() {
       });
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
-      writeCachedReport(date, locale, normalized);
+      if (normalized) writeCachedReport(date, locale, normalized);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setError(err instanceof Error ? `${err.message}${hint}` : t.analyzeFailed);

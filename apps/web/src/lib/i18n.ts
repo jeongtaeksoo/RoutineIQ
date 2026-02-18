@@ -65,14 +65,14 @@ const EN: Strings = {
 };
 
 const KO: Strings = {
-  nav_insights: "내 인사이트",
-  nav_daily_flow: "데일리 플로우",
-  nav_reports: "AI 코치 리포트",
+  nav_insights: "나의 하루",
+  nav_daily_flow: "기록하기",
+  nav_reports: "AI 리포트",
   nav_billing: "요금제/결제",
   nav_preferences: "설정",
   nav_admin: "관리자",
 
-  nav_short_insights: "인사이트",
+  nav_short_insights: "하루",
   nav_short_daily_flow: "기록",
   nav_short_reports: "리포트",
   nav_short_billing: "결제",
@@ -83,9 +83,9 @@ const KO: Strings = {
   sign_out: "로그아웃",
 
   reminder_log_title: "오늘 기록하기",
-  reminder_log_body: "Daily Flow를 열고 핵심 블록을 빠르게 기록하세요.",
+  reminder_log_body: "오늘 기록을 열고 활동을 기록하세요.",
   reminder_plan_title: "오늘 계획 확인",
-  reminder_plan_body: "인사이트를 확인하고 파워 아워를 보호하세요.",
+  reminder_plan_body: "인사이트를 확인하고 집중 시간을 챙기세요.",
 
   suggest_activity: "활동 추천받기",
   reflect_on_day: "하루 회고하기",

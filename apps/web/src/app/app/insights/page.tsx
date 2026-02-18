@@ -15,34 +15,12 @@ const ConsistencyBarChart = dynamic(
 );
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { DAILY_FLOW_TEMPLATES, DEFAULT_TEMPLATE_NAME } from "@/lib/daily-flow-templates";
+import { localYYYYMMDD } from "@/lib/date-utils";
+import { type AIReport, normalizeReport } from "@/lib/report-utils";
 import { downloadWeeklyShareCard } from "@/lib/share-card";
 import { isE2ETestMode } from "@/lib/supabase/env";
 
-type AIReport = {
-  schema_version?: number;
-  summary: string;
-  productivity_peaks: { start: string; end: string; reason: string }[];
-  failure_patterns: { pattern: string; trigger: string; fix: string }[];
-  tomorrow_routine: { start: string; end: string; activity: string; goal: string }[];
-  if_then_rules: { if: string; then: string }[];
-  coach_one_liner: string;
-  yesterday_plan_vs_actual: { comparison_note: string; top_deviation: string };
-  wellbeing_insight?: {
-    burnout_risk?: "low" | "medium" | "high" | string;
-    energy_curve_forecast?: string;
-    note?: string;
-  };
-  micro_advice?: { action: string; when: string; reason: string; duration_min: number }[];
-  weekly_pattern_insight?: string;
-  analysis_meta?: {
-    input_quality_score?: number;
-    profile_coverage_pct?: number;
-    wellbeing_signals_count?: number;
-    logged_entry_count?: number;
-    schema_retry_count?: number;
-    personalization_tier?: "low" | "medium" | "high" | string;
-  };
-};
+
 
 type GoalPrefs = {
   keyword: string;
@@ -136,12 +114,7 @@ type RecoveryNudgeEnvelope = {
   correlation_id?: string;
 };
 
-function localYYYYMMDD(d = new Date()) {
-  const y = d.getFullYear();
-  const m = `${d.getMonth() + 1}`.padStart(2, "0");
-  const day = `${d.getDate()}`.padStart(2, "0");
-  return `${y}-${m}-${day}`;
-}
+
 
 const INSIGHTS_REPORT_CACHE_TTL_MS = 1000 * 60 * 5;
 
@@ -187,61 +160,7 @@ function clearCachedInsightsReport(date: string, locale: string): void {
   }
 }
 
-function normalizeReport(raw: AIReport | null, isKo: boolean): AIReport | null {
-  if (!raw) return null;
-  const riskRaw = String(raw?.wellbeing_insight?.burnout_risk || "medium").toLowerCase();
-  const burnout_risk = riskRaw === "low" || riskRaw === "high" ? riskRaw : "medium";
-  const microRaw = Array.isArray(raw?.micro_advice) ? raw.micro_advice : [];
-  const metaRaw = raw?.analysis_meta && typeof raw.analysis_meta === "object" ? raw.analysis_meta : {};
-  const tierRaw = String(metaRaw?.personalization_tier || "low").toLowerCase();
-  const personalization_tier =
-    tierRaw === "high" || tierRaw === "medium" || tierRaw === "low" ? tierRaw : "low";
-  return {
-    ...raw,
-    schema_version: Number.isFinite(Number(raw?.schema_version)) ? Number(raw?.schema_version) : 1,
-    wellbeing_insight: {
-      burnout_risk,
-      energy_curve_forecast:
-        typeof raw?.wellbeing_insight?.energy_curve_forecast === "string" && raw.wellbeing_insight.energy_curve_forecast.trim()
-          ? raw.wellbeing_insight.energy_curve_forecast
-          : (isKo ? "기록이 더 쌓이면 에너지 곡선 예측이 개선됩니다." : "Energy forecast improves as more days are logged."),
-      note:
-        typeof raw?.wellbeing_insight?.note === "string" && raw.wellbeing_insight.note.trim()
-          ? raw.wellbeing_insight.note
-          : (isKo ? "내일 회복 버퍼 1개를 먼저 고정하세요." : "Lock one recovery buffer first tomorrow."),
-    },
-    micro_advice: microRaw
-      .filter((it) => it && typeof it.action === "string" && typeof it.when === "string" && typeof it.reason === "string")
-      .map((it) => ({
-        action: it.action,
-        when: it.when,
-        reason: it.reason,
-        duration_min: Number.isFinite(Number(it.duration_min)) ? Math.min(20, Math.max(1, Number(it.duration_min))) : 5,
-      })),
-    weekly_pattern_insight:
-      typeof raw?.weekly_pattern_insight === "string" && raw.weekly_pattern_insight.trim()
-        ? raw.weekly_pattern_insight
-        : (isKo ? "주간 패턴은 최소 3일 기록 후 더 선명해집니다." : "Weekly pattern insight becomes clearer after at least 3 logged days."),
-    analysis_meta: {
-      input_quality_score: Number.isFinite(Number(metaRaw?.input_quality_score))
-        ? Math.max(0, Math.min(100, Number(metaRaw.input_quality_score)))
-        : 0,
-      profile_coverage_pct: Number.isFinite(Number(metaRaw?.profile_coverage_pct))
-        ? Math.max(0, Math.min(100, Number(metaRaw.profile_coverage_pct)))
-        : 0,
-      wellbeing_signals_count: Number.isFinite(Number(metaRaw?.wellbeing_signals_count))
-        ? Math.max(0, Math.min(6, Math.round(Number(metaRaw.wellbeing_signals_count))))
-        : 0,
-      logged_entry_count: Number.isFinite(Number(metaRaw?.logged_entry_count))
-        ? Math.max(0, Math.min(200, Math.round(Number(metaRaw.logged_entry_count))))
-        : 0,
-      schema_retry_count: Number.isFinite(Number(metaRaw?.schema_retry_count))
-        ? Math.max(0, Math.min(3, Math.round(Number(metaRaw.schema_retry_count))))
-        : 0,
-      personalization_tier,
-    },
-  };
-}
+
 
 export default function InsightsPage() {
   const locale = useLocale();
@@ -251,22 +170,22 @@ export default function InsightsPage() {
     if (isKo) {
       return {
         title: "나의 하루",
-        subtitle: "기록하고, 돌아보고, 내일을 준비합니다. 오늘 챙겨야 할 하나만 확인하세요.",
+        subtitle: "하루를 기록하고 내일을 준비해요.",
         todayLabel: "오늘",
         coachTitle: "오늘의 한 마디",
-        coachDesc: "기록을 바탕으로, 지금 실행할 행동 1개를 제안합니다.",
+        coachDesc: "기록을 바탕으로 지금 할 행동 1개를 알려줘요.",
         schemaLabel: "스키마",
         weeklyPatternLabel: "주간 패턴",
         microAdviceLabel: "5분 실행",
         coachEmptyTitle: "아직 오늘 리포트가 없어요",
-        coachEmptyBody_noLog: "먼저 Daily Flow를 기록하면, 오늘의 한 마디가 생성됩니다.",
-        coachEmptyBody_hasLog: "기록은 완료됐어요. AI로 정리하면 오늘의 한 마디가 바로 생성됩니다.",
-        coachEmptyHint: "오른쪽 '다음 단계'에서 바로 진행할 수 있어요.",
+        coachEmptyBody_noLog: "오늘 기록을 남기면 코칭이 생성돼요.",
+        coachEmptyBody_hasLog: "기록 완료! '정리하기'를 누르면 코칭이 나와요.",
+        coachEmptyHint: "'다음 단계' 카드에서 바로 진행할 수 있어요.",
         nextTitle: "다음 단계",
-        nextDesc_noLog: "아직 기록이 없네요. 일기를 3줄만 적어도 첫 분석을 시작할 수 있어요.",
-        nextDesc_noReport: "오늘 기록을 바탕으로, 내일 흐름을 같이 잡아봅니다.",
-        nextDesc_hasReport: "내일 일정을 미리 보고, 여유가 필요한 곳을 찾아보세요.",
-        cta_start3min: "3분 진단 시작",
+        nextDesc_noLog: "기록이 없어요. 3줄만 적으면 분석을 시작할 수 있어요.",
+        nextDesc_noReport: "오늘 기록으로 내일 흐름을 잡아봐요.",
+        nextDesc_hasReport: "내일 일정을 미리 보고 여유를 챙겨보세요.",
+        cta_start3min: "3분 만에 시작하기",
         cta_analyzeNow: "AI로 정리하기",
         cta_viewTomorrow: "내일 준비하기",
         cta_editLog: "기록 열기",
@@ -279,7 +198,7 @@ export default function InsightsPage() {
         analyzing: "정리하는 중...",
         loading: "불러오는 중...",
         tomorrowSchedule: "내일의 추천 흐름",
-        tomorrowScheduleDesc: "당신의 패턴에 맞춰, 무리 없는 내일을 그려봤어요.",
+        tomorrowScheduleDesc: "나의 패턴에 맞춘 내일 일정이에요.",
         scheduleEmptyTitle: "분석을 실행하면 내일 계획이 생성됩니다",
         scheduleEmptyBody: "시간표와 복구 규칙이 이 영역에 표시됩니다.",
         moreBlocks: (n: number) => `+ ${n}개 더 보기`,
@@ -299,12 +218,12 @@ export default function InsightsPage() {
         suffLow: "보강 필요",
         suffMedium: "보통",
         suffHigh: "충분",
-        lowSignalHint: "신호가 부족해 제안 확신도가 낮습니다. 내일 첫 2개 블록은 에너지/집중(1-5)을 꼭 남겨주세요.",
+        lowSignalHint: "데이터가 부족해 정확도가 낮아요. 내일 활동 2개에 에너지·집중 점수를 남겨주세요.",
         tierLow: "초기",
         tierMedium: "보통",
         tierHigh: "높음",
-        profileSetupTitle: "개인화 정확도를 올리려면 프로필을 완성하세요",
-        profileSetupBody: "연령대/성별/직군/근무 형태를 설정하면 추천 루틴의 현실성이 높아집니다.",
+        profileSetupTitle: "프로필을 완성하면 추천이 더 정확해져요",
+        profileSetupBody: "연령대·성별·직군·근무 형태를 설정하면 더 맞춤 추천을 받아요.",
         profileSetupCta: "설정 열기",
         peakHours: "집중 잘 되는 시간",
         peakHoursDesc: "몰입이 자연스럽게 일어나는 시간대입니다.",
@@ -332,7 +251,7 @@ export default function InsightsPage() {
         detailsTitle: "주간 지표 더보기",
         detailsSubtitle: "꾸준함 그래프와 주간 요약",
         cohortTitle: "나와 유사한 사용자 트렌드",
-        cohortDesc: "옵트인한 사용자의 익명 집계입니다. 비교 기준은 설정에서 조정할 수 있습니다.",
+        cohortDesc: "동의한 사용자의 익명 비교예요. 비교 기준은 설정에서 바꿀 수 있어요.",
         youVsSimilar: "나 vs 유사 사용자",
         similarUsers: (n: number) => `유사 사용자 ${n}명`,
         myFocusRate: "나의 집중 블록 유지율",
@@ -341,7 +260,7 @@ export default function InsightsPage() {
         average: "유사 사용자 평균",
         rank: "나의 위치",
         actionableTip: "실행 팁",
-        confidence: "데이터 신뢰도",
+        confidence: "데이터 정확도",
         confidenceLow: "낮음",
         confidenceMedium: "보통",
         confidenceHigh: "충분",
@@ -354,9 +273,9 @@ export default function InsightsPage() {
         dim_job_family: "직군",
         dim_work_mode: "근무 형태",
         trustBadge: "AI 참고 안내",
-        trustBadgeBody: "이 분석은 기록된 데이터 기반의 추정이며, 전문 진단이 아닙니다. 기록이 쌓일수록 정확도가 높아집니다.",
+        trustBadgeBody: "기록 기반 추정이에요. 전문 진단은 아니며, 기록이 쌓일수록 정확해져요.",
         recoveryTitle: "다시 시작해볼까요?",
-        recoveryBody: "기록이 며칠 비어 있어요. 한 줄만 적어도 흐름을 다시 이을 수 있습니다.",
+        recoveryBody: "기록이 며칠 비었어요. 한 줄만 적어도 다시 시작할 수 있어요.",
         recoveryCta: "오늘 기록 다시 시작",
         nudgeTitle: "복구 알림",
         nudgeDismiss: "확인",
@@ -1505,64 +1424,64 @@ export default function InsightsPage() {
                 </div>
               ) : (
                 <>
-              <div className="rounded-xl bg-white/50 p-4">
-                <p className="text-xs text-mutedFg">{t.totalBlocks7d}</p>
-                <p className="title-serif mt-1 text-3xl">{weekly.totalBlocks}</p>
-              </div>
-              <div className="rounded-xl border bg-white/50 p-4">
-                <p className="text-xs text-mutedFg">{t.deepMinutes7d}</p>
-                <p className="title-serif mt-1 text-3xl">{weekly.deepMinutes}</p>
-              </div>
-              <div className="rounded-xl border bg-white/50 p-4">
-                <p className="text-xs text-mutedFg">{t.currentStreak}</p>
-                <p className="title-serif mt-1 text-3xl">{streak.current}</p>
-              </div>
-              <div className="rounded-xl border bg-white/50 p-4">
-                <p className="text-xs text-mutedFg">{t.longestStreak}</p>
-                <p className="title-serif mt-1 text-3xl">{streak.longest}</p>
-              </div>
-              <div className="rounded-xl border bg-white/50 p-4">
-                {weekly.daysLogged === 0 ? (
-                  <>
-                    <p className="text-xs text-mutedFg">{t.emptyMetricsTitle}</p>
-                    <p className="mt-2 text-sm">{t.emptyMetricsBody}</p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button asChild size="sm">
-                        <Link href="/app/daily-flow">{t.cta_editLog}</Link>
-                      </Button>
+                  <div className="rounded-xl bg-white/50 p-4">
+                    <p className="text-xs text-mutedFg">{t.totalBlocks7d}</p>
+                    <p className="title-serif mt-1 text-3xl">{weekly.totalBlocks}</p>
+                  </div>
+                  <div className="rounded-xl border bg-white/50 p-4">
+                    <p className="text-xs text-mutedFg">{t.deepMinutes7d}</p>
+                    <p className="title-serif mt-1 text-3xl">{weekly.deepMinutes}</p>
+                  </div>
+                  <div className="rounded-xl border bg-white/50 p-4">
+                    <p className="text-xs text-mutedFg">{t.currentStreak}</p>
+                    <p className="title-serif mt-1 text-3xl">{streak.current}</p>
+                  </div>
+                  <div className="rounded-xl border bg-white/50 p-4">
+                    <p className="text-xs text-mutedFg">{t.longestStreak}</p>
+                    <p className="title-serif mt-1 text-3xl">{streak.longest}</p>
+                  </div>
+                  <div className="rounded-xl border bg-white/50 p-4">
+                    {weekly.daysLogged === 0 ? (
+                      <>
+                        <p className="text-xs text-mutedFg">{t.emptyMetricsTitle}</p>
+                        <p className="mt-2 text-sm">{t.emptyMetricsBody}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button asChild size="sm">
+                            <Link href="/app/daily-flow">{t.cta_editLog}</Link>
+                          </Button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-mutedFg">{t.nextTitle}</p>
+                        <p className="mt-2 text-sm">
+                          {isKo
+                            ? "무너지는 구간에 10분 버퍼를 넣고, 내일 다시 분석해 계획을 개선해보세요."
+                            : "Add a 10-min buffer where you break, then re-run Analyze tomorrow to improve the plan."}
+                        </p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          <Button asChild size="sm">
+                            <Link href="/app/daily-flow">{t.cta_editLog}</Link>
+                          </Button>
+                          <Button asChild variant="outline" size="sm">
+                            <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
+                          </Button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                  <div className="rounded-xl bg-white/50 p-4 md:col-span-5">
+                    <p className="text-xs text-mutedFg">{t.trendPattern}</p>
+                    <div className="mt-2 flex flex-wrap items-center gap-3">
+                      <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">{trendLabel}</span>
+                      <span className="text-xs text-mutedFg">
+                        {t.trendBlocksDelta}: <strong className="text-fg">{fmtPct(trend.blocksChangePct)}</strong>
+                      </span>
+                      <span className="text-xs text-mutedFg">
+                        {t.trendDeepDelta}: <strong className="text-fg">{fmtPct(trend.deepMinutesChangePct)}</strong>
+                      </span>
                     </div>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-xs text-mutedFg">{t.nextTitle}</p>
-                    <p className="mt-2 text-sm">
-                      {isKo
-                        ? "무너지는 구간에 10분 버퍼를 넣고, 내일 다시 분석해 계획을 개선해보세요."
-                        : "Add a 10-min buffer where you break, then re-run Analyze tomorrow to improve the plan."}
-                    </p>
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <Button asChild size="sm">
-                        <Link href="/app/daily-flow">{t.cta_editLog}</Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm">
-                        <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
-                      </Button>
-                    </div>
-                  </>
-                )}
-              </div>
-              <div className="rounded-xl bg-white/50 p-4 md:col-span-5">
-                <p className="text-xs text-mutedFg">{t.trendPattern}</p>
-                <div className="mt-2 flex flex-wrap items-center gap-3">
-                  <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">{trendLabel}</span>
-                  <span className="text-xs text-mutedFg">
-                    {t.trendBlocksDelta}: <strong className="text-fg">{fmtPct(trend.blocksChangePct)}</strong>
-                  </span>
-                  <span className="text-xs text-mutedFg">
-                    {t.trendDeepDelta}: <strong className="text-fg">{fmtPct(trend.deepMinutesChangePct)}</strong>
-                  </span>
-                </div>
-              </div>
+                  </div>
                 </>
               )}
             </CardContent>

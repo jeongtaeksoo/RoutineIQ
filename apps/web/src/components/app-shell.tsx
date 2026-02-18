@@ -210,7 +210,7 @@ export function AppShell({
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <main className="min-w-0 flex-1 px-5 py-6 pb-24 md:pb-6 fade-in">
+        <main className="min-w-0 flex-1 px-5 py-6 pb-bottom-safe md:pb-6 fade-in">
           <LocaleProvider locale={locale}>{children}</LocaleProvider>
         </main>
       </div>
