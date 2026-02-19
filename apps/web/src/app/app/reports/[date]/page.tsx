@@ -85,6 +85,27 @@ const PREVIEW_REPORT_KO: AIReport = {
 
 const REPORT_CACHE_TTL_MS = 1000 * 60 * 10;
 
+const ROUTINE_ACTIVITY_RENAME_KO: Record<string, string> = {
+  "핵심 집중 블록": "집중 작업 시간",
+  "회복 버퍼": "쉬는 시간",
+  "조정/커뮤니케이션 블록": "소통·정리 시간",
+};
+
+const ROUTINE_ACTIVITY_RENAME_EN: Record<string, string> = {
+  "Deep focus block": "Focused work session",
+  "Recovery buffer": "Recovery break",
+  "Coordination/communication block": "Coordination time",
+};
+
+function normalizeRoutineActivityLabel(activity: string, isKo: boolean): string {
+  const clean = activity.trim();
+  if (!clean) return activity;
+  if (isKo) {
+    return ROUTINE_ACTIVITY_RENAME_KO[clean] ?? clean;
+  }
+  return ROUTINE_ACTIVITY_RENAME_EN[clean] ?? clean;
+}
+
 function reportCacheKey(date: string, locale: string): string {
   return `routineiq:report-page:v1:${date}:${locale}`;
 }
@@ -196,7 +217,7 @@ export default function ReportPage() {
         exportIcs: "캘린더로 내보내기 (.ics)",
         exporting: "내보내는 중...",
         noOptimizedPlan: "아직 추천 일정이 없어요.",
-        goal: "목표",
+        goal: "실행 포인트",
         recoveryRules: "나를 위한 팁",
         recoveryRulesDesc: "힘들 때 꺼내 보는 짧은 조언이에요.",
         noRecovery: "아직 팁이 없어요.",
@@ -275,7 +296,7 @@ export default function ReportPage() {
       exportIcs: "Export to Calendar (.ics)",
       exporting: "Exporting...",
       noOptimizedPlan: "No optimized plan generated yet.",
-      goal: "Goal",
+      goal: "Action guide",
       recoveryRules: "Smart Recovery Rules",
       recoveryRulesDesc: "If-Then rules to recover fast.",
       noRecovery: "No recovery rules generated yet.",
@@ -534,7 +555,7 @@ export default function ReportPage() {
                   <p className="text-xs text-mutedFg">{t.optimizedPlan}</p>
                   <p className="mt-2 text-sm">
                     {PREVIEW_REPORT.tomorrow_routine[0]?.start}–{PREVIEW_REPORT.tomorrow_routine[0]?.end} ·{" "}
-                    {PREVIEW_REPORT.tomorrow_routine[0]?.activity}
+                    {normalizeRoutineActivityLabel(PREVIEW_REPORT.tomorrow_routine[0]?.activity || "", isKo)}
                   </p>
                   <p className="mt-1 text-xs text-mutedFg">
                     {t.goal}: {PREVIEW_REPORT.tomorrow_routine[0]?.goal}
@@ -814,7 +835,7 @@ export default function ReportPage() {
                   <div key={idx} className="rounded-xl border bg-white/50 p-4">
                     <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
                       <p className="text-sm font-semibold">
-                        {it.start}–{it.end} · {it.activity}
+                        {it.start}–{it.end} · {normalizeRoutineActivityLabel(it.activity, isKo)}
                       </p>
                       <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
                         {t.goal}: {it.goal}

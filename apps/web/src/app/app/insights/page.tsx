@@ -114,6 +114,27 @@ type RecoveryNudgeEnvelope = {
   correlation_id?: string;
 };
 
+const ROUTINE_ACTIVITY_RENAME_KO: Record<string, string> = {
+  "핵심 집중 블록": "집중 작업 시간",
+  "회복 버퍼": "쉬는 시간",
+  "조정/커뮤니케이션 블록": "소통·정리 시간",
+};
+
+const ROUTINE_ACTIVITY_RENAME_EN: Record<string, string> = {
+  "Deep focus block": "Focused work session",
+  "Recovery buffer": "Recovery break",
+  "Coordination/communication block": "Coordination time",
+};
+
+function normalizeRoutineActivityLabel(activity: string, isKo: boolean): string {
+  const clean = activity.trim();
+  if (!clean) return activity;
+  if (isKo) {
+    return ROUTINE_ACTIVITY_RENAME_KO[clean] ?? clean;
+  }
+  return ROUTINE_ACTIVITY_RENAME_EN[clean] ?? clean;
+}
+
 
 
 const INSIGHTS_REPORT_CACHE_TTL_MS = 1000 * 60 * 5;
@@ -284,7 +305,7 @@ export default function InsightsPage() {
         errorAnalyze: "분석에 실패했어요",
         errorQuickstart: "퀵스타트에 실패했어요",
         statusDone: "완료",
-        labelGoal: "목표",
+        labelGoal: "실행 포인트",
         errorCohort: "유사 사용자 트렌드를 불러오지 못했어요.",
         openSettings: "설정 열기",
         adjustCompare: "비교 기준 조정",
@@ -411,7 +432,7 @@ export default function InsightsPage() {
       errorAnalyze: "Analyze failed",
       errorQuickstart: "Quickstart failed",
       statusDone: "OK",
-      labelGoal: "Goal",
+      labelGoal: "Action guide",
       errorCohort: "Failed to load cohort trend.",
       openSettings: "Open Preferences",
       adjustCompare: "Adjust filters",
@@ -1150,7 +1171,7 @@ export default function InsightsPage() {
                   <div key={idx} className="inset-block">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold">
-                        {it.start}–{it.end} · {it.activity}
+                        {it.start}–{it.end} · {normalizeRoutineActivityLabel(it.activity, isKo)}
                       </p>
                       <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
                         {t.labelGoal}: {it.goal}
