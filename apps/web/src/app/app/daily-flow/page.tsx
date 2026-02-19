@@ -185,11 +185,6 @@ function entryAnchorTime(entry: ParsedEntry): string | null {
     extractAnchorTimeFromText(entry.activity)
   );
 }
-
-
-
-const TIME_WINDOWS: TimeWindow[] = ["dawn", "morning", "lunch", "afternoon", "evening", "night"];
-
 function parseIssueType(raw: string): ParseIssueType {
   const text = raw.toLowerCase();
   if (text.includes("no explicit time evidence") || text.includes("entry-level explicit evidence missing")) {
@@ -353,14 +348,13 @@ export default function DailyFlowPage() {
         windowTime: "시간대 기반",
         unknownTime: "확인 필요",
         noTimeInfo: "시간 정보 없음",
-        ambiguousTimeGuide: "시간 정보가 불분명해요. 시간대를 선택하면 분석이 더 정확해집니다.",
         timeWindowPrefix: "시간대",
         evidence: "원본",
         statusTitle: "상태",
         feelSummaryTitle: "느낌 요약",
         issueBannerTitle: "한번 확인하면 정확도가 올라가요",
         issueProgress: (current: number, total: number) => `확인 항목 ${current}/${total}`,
-        issueNoTime: "시간 정보가 명확하지 않아요. 시간대를 선택하거나 시간을 입력해 주세요.",
+        issueNoTime: "시간 정보가 명확하지 않아요. 필요하면 시간을 입력해 주세요.",
         issueNoSource: "근거 문장이 부족해요. 활동 내용을 한 번만 확인해 주세요.",
         issueOverlap: "시간이 겹치는 항목이 있어요. 시간을 조정해 주세요.",
         issueInvalidOrder: "종료 시간이 시작보다 빠른 항목이 있어요.",
@@ -403,8 +397,6 @@ export default function DailyFlowPage() {
         stress: "스트레스",
         energyLabel: "에너지",
         focusLabel: "집중",
-        pickWindow: "시간대 선택",
-        pickWindowHint: "시간이 애매하면 이 항목의 시간대를 지정해 주세요.",
         retryParse: "다시 분석하기",
         retryParseHint: "결과가 어색하면 다시 분석해 보세요",
         aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했어요`,
@@ -441,14 +433,13 @@ export default function DailyFlowPage() {
       windowTime: "Window-based",
       unknownTime: "Needs review",
       noTimeInfo: "No time information",
-      ambiguousTimeGuide: "Time is unclear. Selecting a time window improves accuracy.",
       timeWindowPrefix: "Window",
       evidence: "Evidence",
       statusTitle: "Status",
       feelSummaryTitle: "Feeling summary",
       issueBannerTitle: "A quick check makes this more accurate.",
       issueProgress: (current: number, total: number) => `Review item ${current}/${total}`,
-      issueNoTime: "Time is unclear. Pick a time window or set exact time.",
+      issueNoTime: "Time is unclear. Set exact time if needed.",
       issueNoSource: "Evidence text is weak. Please verify this activity.",
       issueOverlap: "Some entries overlap in time. Please adjust them.",
       issueInvalidOrder: "An entry ends before it starts.",
@@ -491,8 +482,6 @@ export default function DailyFlowPage() {
       stress: "Stress",
       energyLabel: "Energy",
       focusLabel: "Focus",
-      pickWindow: "Set time window",
-      pickWindowHint: "If time is unclear, pick a window for this entry.",
       retryParse: "Re-parse",
       retryParseHint: "Not quite right? Try parsing again",
       aiSourceHint: (n: number) => `AI parsed ${n} activity block${n !== 1 ? "s" : ""}`,
@@ -833,24 +822,6 @@ export default function DailyFlowPage() {
     if (state === "explicit") return t.explicitTime;
     if (state === "window") return t.windowTime;
     return t.unknownTime;
-  }
-
-  async function setWindowForEntry(idx: number, windowValue: TimeWindow): Promise<void> {
-    updateParsedEntry(idx, {
-      time_window: windowValue,
-      time_source: "window",
-      time_confidence: "low",
-      start: null,
-      end: null,
-      crosses_midnight: false,
-    });
-    await trackDailyFlowEvent("window_chip_selected", {
-      entry_id: `entry-${idx}`,
-      window_type: windowValue,
-      time_source: "window",
-      time_confidence: "low",
-    });
-    await markIssuesResolvedForEntry(idx, "window");
   }
 
   async function setExactTimeForEntry(idx: number, startValue: string | null, endValue: string | null): Promise<void> {
@@ -1279,9 +1250,6 @@ export default function DailyFlowPage() {
                         ) : (
                           <p className="mt-1 font-medium">{entry.activity}</p>
                         )}
-                        {timeState !== "explicit" ? (
-                          <p className="mt-1 text-xs text-amber-800">{t.ambiguousTimeGuide}</p>
-                        ) : null}
                         <div className="mt-2 rounded-lg border bg-white/70 p-2">
                           <p className="text-[11px] font-semibold text-mutedFg">{t.statusTitle}</p>
                           <p className="mt-1 text-xs text-mutedFg">
@@ -1302,38 +1270,6 @@ export default function DailyFlowPage() {
                           <p className="text-[11px] font-semibold text-mutedFg">{t.evidence}</p>
                           <p className="mt-1 text-xs text-mutedFg">&ldquo;{displayEvidence(entry)}&rdquo;</p>
                         </div>
-                        {timeState !== "explicit" ? (
-                          <div className="mt-2">
-                            {isEditing || isFocusedIssue ? (
-                              <div className="flex flex-wrap gap-1.5">
-                                {TIME_WINDOWS.map((windowValue) => (
-                                  <button
-                                    key={`${idx}-${windowValue}`}
-                                    type="button"
-                                    onClick={() => {
-                                      void setWindowForEntry(idx, windowValue);
-                                    }}
-                                    className={`rounded-full border px-2.5 py-1 text-[11px] ${entry.time_window === windowValue ? "border-brand bg-brand/10 text-brand" : "bg-white text-mutedFg"
-                                      }`}
-                                  >
-                                    {t.windowChip[windowValue]}
-                                  </button>
-                                ))}
-                              </div>
-                            ) : (
-                              <div className="flex flex-wrap items-center gap-2">
-                                <p className="text-[11px] text-mutedFg">{t.pickWindowHint}</p>
-                                <button
-                                  type="button"
-                                  onClick={() => setEditingIdx(idx)}
-                                  className="rounded-full border bg-white px-2.5 py-1 text-[11px] font-medium text-mutedFg hover:text-fg"
-                                >
-                                  {t.pickWindow}
-                                </button>
-                              </div>
-                            )}
-                          </div>
-                        ) : null}
                       </div>
                       <div className="shrink-0 text-right text-xs text-mutedFg">
                         <button

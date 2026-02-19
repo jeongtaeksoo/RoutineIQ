@@ -341,7 +341,7 @@ test.describe("RutineIQ core flows", () => {
     await expect(page.getByText(/AI가 (이렇게 파악했어요|정리한 결과예요)|AI parsed your day like this/i)).toBeVisible();
   });
 
-  test("F2d: unknown entry -> one-tap window chip -> save succeeds", async ({ page }) => {
+  test("F2d: unknown entry -> exact time edit -> save succeeds", async ({ page }) => {
     test.skip(e2eMode === "live", "Mock-only ambiguity resolution scenario");
     await installRoutineApiMock(page);
     await page.route("**/api/parse-diary", async (route) => {
@@ -384,7 +384,9 @@ test.describe("RutineIQ core flows", () => {
     await page.getByRole("button", { name: /AI 분석하기|Parse with AI/i }).first().click();
     await expect(page.getByText(/(확인하면 더 정확해져요|한번 확인하면 정확도가 올라가요)|quick check makes this more accurate/i)).toBeVisible();
 
-    await page.getByRole("button", { name: /아침|Morning/i }).first().click();
+    await page.getByRole("button", { name: /편집|Edit/i }).first().click();
+    await page.locator('input[type="time"]').first().fill("09:00");
+    await page.locator('input[type="time"]').nth(1).fill("10:00");
     await page.getByRole("button", { name: /확인\s*&\s*저장|Confirm\s*&\s*Save/i }).first().click();
     await page.getByRole("button", { name: /확정하기|Confirm save/i }).first().click();
     await expect(page.getByText(/저장 완료! AI 분석을 (시작할까요|해볼까요)\?|Saved! Start AI analysis\?/i)).toBeVisible();
