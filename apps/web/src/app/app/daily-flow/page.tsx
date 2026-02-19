@@ -421,7 +421,8 @@ export default function DailyFlowPage() {
     };
   }, [isKo]);
 
-  const [date, setDate] = React.useState(() => localYYYYMMDD());
+  const [mounted, setMounted] = React.useState(false);
+  const [date, setDate] = React.useState("");
   const [step, setStep] = React.useState<FlowStep>("write");
   const [diaryText, setDiaryText] = React.useState("");
   const [parsedEntries, setParsedEntries] = React.useState<ParsedEntry[]>([]);
@@ -442,7 +443,12 @@ export default function DailyFlowPage() {
   const entryRefs = React.useRef<Array<HTMLDivElement | null>>([]);
   const shownAmbiguityKeysRef = React.useRef<Set<string>>(new Set());
 
-  useSWR<LogsResponse>(`/logs?date=${date}`, apiFetch, {
+  React.useEffect(() => {
+    setDate(localYYYYMMDD());
+    setMounted(true);
+  }, []);
+
+  useSWR<LogsResponse>(mounted && date ? `/logs?date=${date}` : null, apiFetch, {
     revalidateOnFocus: true,
     onSuccess: (data) => {
       if (parsing || saving || analyzing) return;
@@ -596,12 +602,14 @@ export default function DailyFlowPage() {
   }
 
   function navigateDate(delta: number): void {
+    if (!date) return;
     setDate(addDays(date, delta));
     resetFlowState();
   }
 
   function goToday(): void {
-    setDate(localYYYYMMDD());
+    const today = localYYYYMMDD();
+    setDate(today);
     resetFlowState();
   }
 
@@ -742,6 +750,7 @@ export default function DailyFlowPage() {
   }
 
   async function parseDiary(): Promise<void> {
+    if (!date) return;
     setError(null);
     setShowParseRetry(false);
     if (diaryText.trim().length < 10) {
@@ -792,6 +801,7 @@ export default function DailyFlowPage() {
   }
 
   async function save(): Promise<void> {
+    if (!date) return;
     setError(null);
     setLoadWarning(null);
     setShowParseRetry(false);
@@ -830,6 +840,7 @@ export default function DailyFlowPage() {
   }
 
   async function saveAndAnalyze(options?: { skipSave?: boolean }): Promise<void> {
+    if (!date) return;
     setError(null);
     setLoadWarning(null);
     setShowParseRetry(false);
@@ -908,6 +919,20 @@ export default function DailyFlowPage() {
       });
     });
   }, [date, parsedEntries, step, trackDailyFlowEvent]);
+
+  if (!mounted || !date) {
+    return (
+      <div className="mx-auto w-full max-w-3xl space-y-5 pb-bottom-safe md:pb-6">
+        <div>
+          <h1 className="title-serif text-3xl">{t.title}</h1>
+          <p className="mt-1 text-sm text-mutedFg">{t.subtitle}</p>
+        </div>
+        <div className="rounded-xl border bg-white/60 px-4 py-10 text-center text-sm text-mutedFg">
+          {isKo ? "불러오는 중..." : "Loading..."}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

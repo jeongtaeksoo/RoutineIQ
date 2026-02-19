@@ -190,6 +190,63 @@ def test_post_logs_conflict_409_falls_back_to_insert_when_select_empty(
     assert supabase_mock["insert_one"].await_count == 1
 
 
+def test_post_logs_conflict_409_route_level_recovers_with_existing_id_upsert(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    conflict = SupabaseRestError(
+        status_code=409,
+        code="23505",
+        message='duplicate key value violates unique constraint "activity_logs_user_id_date_key"',
+    )
+    existing_row = {
+        "id": "log-existing-2",
+        "user_id": "00000000-0000-4000-8000-000000000001",
+        "date": "2026-02-15",
+        "entries": _log_payload("2026-02-15")["entries"],
+        "note": "old note",
+        "meta": {"mood": "neutral"},
+    }
+    refreshed_row = {
+        "id": "log-existing-2",
+        "user_id": "00000000-0000-4000-8000-000000000001",
+        "date": "2026-02-15",
+        "entries": _log_payload("2026-02-15")["entries"],
+        "note": "good session",
+        "meta": {"mood": "good"},
+    }
+
+    supabase_mock["upsert_one"].side_effect = [
+        conflict,  # activity_logs first upsert
+        conflict,  # activity_logs second upsert
+        refreshed_row,  # route-level fallback: update existing by id
+        {  # profiles upsert
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
+    ]
+    supabase_mock["insert_one"].side_effect = [
+        conflict,  # insert fallback also conflicts
+    ]
+    supabase_mock["select"].side_effect = [
+        [],  # helper recovery select after upsert conflicts
+        [],  # helper recovery select after insert conflict
+        [existing_row],  # route-level recovery select
+        [{"date": "2026-02-15"}],  # streak rows select
+    ]
+
+    response = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "log-existing-2"
+    assert body["note"] == "good session"
+    assert supabase_mock["upsert_one"].await_count == 4
+    route_level_upsert_call = supabase_mock["upsert_one"].await_args_list[2].kwargs
+    assert route_level_upsert_call["on_conflict"] == "id"
+    assert route_level_upsert_call["row"]["id"] == "log-existing-2"
+
+
 def test_get_logs_returns_saved_log(
     authenticated_client: TestClient, supabase_mock
 ) -> None:

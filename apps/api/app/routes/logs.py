@@ -138,6 +138,61 @@ async def _upsert_log_row_with_conflict_recovery(
     return {}
 
 
+async def _recover_log_from_route_level_conflict(
+    sb: SupabaseRest,
+    *,
+    bearer_token: str,
+    user_id: str,
+    date_iso: str,
+    row_with_meta: dict,
+    base_row: dict,
+) -> dict | None:
+    existing = await _select_existing_log_row(
+        sb,
+        bearer_token=bearer_token,
+        user_id=user_id,
+        date_iso=date_iso,
+        include_meta=True,
+    )
+    if existing is None:
+        return None
+
+    existing_id = existing.get("id")
+    if not isinstance(existing_id, str) or not existing_id:
+        return existing
+
+    try:
+        refreshed = await sb.upsert_one(
+            "activity_logs",
+            bearer_token=bearer_token,
+            on_conflict="id",
+            row={**row_with_meta, "id": existing_id},
+        )
+        if refreshed:
+            return refreshed
+    except SupabaseRestError as exc:
+        if _is_missing_meta_column(exc):
+            refreshed = await sb.upsert_one(
+                "activity_logs",
+                bearer_token=bearer_token,
+                on_conflict="id",
+                row={**base_row, "id": existing_id},
+            )
+            if refreshed:
+                return refreshed
+        elif not _is_conflict_error(exc):
+            raise
+
+    latest = await _select_existing_log_row(
+        sb,
+        bearer_token=bearer_token,
+        user_id=user_id,
+        date_iso=date_iso,
+        include_meta=True,
+    )
+    return latest or existing
+
+
 @router.post("/logs", response_model=ActivityLogRow)
 async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
@@ -166,17 +221,30 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
     except SupabaseRestError as exc:
         # Backward-compatible fallback for environments where `activity_logs.meta`
         # has not been migrated yet.
-        if not _is_missing_meta_column(exc):
+        if _is_missing_meta_column(exc):
+            row = await _upsert_log_row_with_conflict_recovery(
+                sb,
+                bearer_token=auth.access_token,
+                on_conflict="user_id,date",
+                row=base_row,
+                user_id=auth.user_id,
+                date_iso=date_iso,
+                include_meta=False,
+            )
+        elif _is_conflict_error(exc):
+            recovered = await _recover_log_from_route_level_conflict(
+                sb,
+                bearer_token=auth.access_token,
+                user_id=auth.user_id,
+                date_iso=date_iso,
+                row_with_meta=row_with_meta,
+                base_row=base_row,
+            )
+            if recovered is None:
+                raise
+            row = recovered
+        else:
             raise
-        row = await _upsert_log_row_with_conflict_recovery(
-            sb,
-            bearer_token=auth.access_token,
-            on_conflict="user_id,date",
-            row=base_row,
-            user_id=auth.user_id,
-            date_iso=date_iso,
-            include_meta=False,
-        )
 
     if not row:
         raise HTTPException(
