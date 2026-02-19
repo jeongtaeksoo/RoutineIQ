@@ -5,26 +5,31 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium transition-[color,background-color,border-color,opacity,filter] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-full text-sm font-medium transition-[color,background-color,border-color,opacity,transform,box-shadow] duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40 disabled:pointer-events-none disabled:opacity-50 active:scale-95",
   {
     variants: {
       variant: {
-        default: "bg-brand text-brandFg hover:brightness-[0.95]",
-        secondary: "bg-[#f5efe7] text-fg hover:bg-[#efe8dd]",
-        outline: "border bg-transparent hover:bg-[#faf5ee]",
-        ghost: "hover:bg-[#faf5ee]"
+        default: "bg-primary text-primary-fg shadow-md hover:brightness-[1.05] hover:shadow-lg hover:-translate-y-0.5",
+        destructive:
+          "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90",
+        outline:
+          "border border-input bg-transparent shadow-sm hover:bg-accent hover:text-accent-foreground",
+        secondary:
+          "bg-secondary text-secondary-foreground shadow-sm hover:bg-secondary/80",
+        ghost: "hover:bg-accent/10 hover:text-accent",
+        link: "text-primary underline-offset-4 hover:underline",
       },
       size: {
-        default: "h-10 px-4 py-2",
-        lg: "h-11 rounded-xl px-5",
-        sm: "h-9 rounded-xl px-3",
-        icon: "h-10 w-10"
-      }
+        default: "h-11 px-6 py-2", /* Slightly taller and wider for elegance */
+        sm: "h-9 rounded-full px-4 text-xs",
+        lg: "h-12 rounded-full px-8 text-base",
+        icon: "h-11 w-11",
+      },
     },
     defaultVariants: {
       variant: "default",
-      size: "default"
-    }
+      size: "default",
+    },
   }
 );
 

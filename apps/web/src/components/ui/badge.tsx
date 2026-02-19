@@ -1,23 +1,36 @@
-import * as React from "react";
+import * as React from "react"
+import { cva, type VariantProps } from "class-variance-authority"
 
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils"
 
-export function Badge({
-  className,
-  variant = "default",
-  ...props
-}: React.HTMLAttributes<HTMLSpanElement> & { variant?: "default" | "secondary" | "outline" | "destructive" }) {
+const badgeVariants = cva(
+  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  {
+    variants: {
+      variant: {
+        default:
+          "border-transparent bg-primary text-primary-fg shadow hover:bg-primary/80",
+        secondary:
+          "border-transparent bg-secondary text-secondary-fg hover:bg-secondary/80",
+        destructive:
+          "border-transparent bg-destructive text-destructive-fg shadow hover:bg-destructive/80",
+        outline: "text-fg",
+      },
+    },
+    defaultVariants: {
+      variant: "default",
+    },
+  }
+)
+
+export interface BadgeProps
+  extends React.HTMLAttributes<HTMLDivElement>,
+  VariantProps<typeof badgeVariants> { }
+
+function Badge({ className, variant, ...props }: BadgeProps) {
   return (
-    <span
-      className={cn(
-        "inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-medium",
-        variant === "default" && "bg-bg text-fg",
-        variant === "secondary" && "bg-white/70 text-mutedFg",
-        variant === "outline" && "bg-transparent text-mutedFg",
-        variant === "destructive" && "border-red-200 bg-red-50 text-red-700",
-        className
-      )}
-      {...props}
-    />
-  );
+    <div className={cn(badgeVariants({ variant }), className)} {...props} />
+  )
 }
+
+export { Badge, badgeVariants }

@@ -22,15 +22,32 @@ const config: Config = {
         fg: "hsl(var(--fg))",
         card: "hsl(var(--card))",
         cardFg: "hsl(var(--card-fg))",
+        popover: "hsl(var(--popover))",
+        popoverFg: "hsl(var(--popover-fg))",
+        primary: "hsl(var(--primary))",
+        primaryFg: "hsl(var(--primary-fg))",
+        secondary: "hsl(var(--secondary))",
+        secondaryFg: "hsl(var(--secondary-fg))",
         muted: "hsl(var(--muted))",
         mutedFg: "hsl(var(--muted-fg))",
+        accent: "hsl(var(--accent))",
+        accentFg: "hsl(var(--accent-fg))",
+        destructive: "hsl(var(--destructive))",
+        destructiveFg: "hsl(var(--destructive-fg))",
         border: "hsl(var(--border))",
+        input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
+        // Legacy mappings
         brand: "hsl(var(--brand))",
         brandFg: "hsl(var(--brand-fg))"
       },
+      borderRadius: {
+        lg: "var(--radius)",
+        md: "calc(var(--radius) - 2px)",
+        sm: "calc(var(--radius) - 4px)",
+      },
       boxShadow: {
-        soft: "0 10px 30px -12px rgba(0,0,0,0.25)"
+        soft: "0 10px 30px -12px rgba(0,0,0,0.15)"
       }
     }
   },

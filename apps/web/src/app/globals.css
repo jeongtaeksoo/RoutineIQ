@@ -5,18 +5,46 @@
 :root {
   --font-sans: "Inter", "Noto Sans KR", "Noto Sans JP", "Apple SD Gothic Neo", "Segoe UI", "PingFang SC", "Helvetica Neue", Arial, sans-serif;
   --font-serif: "Noto Serif KR", "Noto Serif JP", "Georgia", "Times New Roman", serif;
-  /* ─── Warm palette ─── */
-  --bg: 35 30% 96%;
-  --bg-soft: 33 25% 94%;
-  --fg: 30 25% 18%;
-  --card: 35 25% 99%;
-  --card-fg: 30 25% 18%;
-  --muted: 33 18% 91%;
-  --muted-fg: 30 12% 42%;
-  --border: 33 18% 82%;
-  --ring: 30 45% 50%;
-  --brand: 30 40% 38%;
-  --brand-fg: 40 30% 98%;
+  /* ─── Modern Wellness Palette ─── */
+  --bg: 35 30% 98%;
+  /* Ultra warm cream */
+  --bg-soft: 35 25% 96%;
+  /* Slightly darker cream */
+  --fg: 30 15% 25%;
+  /* Soft charcoal/brown */
+
+  --card: 0 0% 100%;
+  /* Pure white for contrast against cream bg */
+  --card-fg: 30 15% 25%;
+
+  --popover: 0 0% 100%;
+  --popover-fg: 30 15% 25%;
+
+  --primary: 14 75% 68%;
+  /* Soft Terracotta/Coral */
+  --primary-fg: 35 30% 98%;
+
+  --secondary: 35 25% 94%;
+  --secondary-fg: 30 15% 25%;
+
+  --muted: 35 20% 94%;
+  --muted-fg: 30 10% 50%;
+
+  --accent: 14 75% 68%;
+  --accent-fg: 35 30% 98%;
+
+  --destructive: 0 84% 60%;
+  --destructive-fg: 0 0% 98%;
+
+  --border: 30 20% 90%;
+  --input: 30 20% 90%;
+  --ring: 14 75% 68%;
+
+  --radius: 1.5rem;
+
+  /* Legacy mappings for compatibility */
+  --brand: 14 75% 68%;
+  --brand-fg: 35 30% 98%;
   color-scheme: light;
 
   /* ─── Spacing tokens ─── */

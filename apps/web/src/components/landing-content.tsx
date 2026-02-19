@@ -3,6 +3,8 @@
 import * as React from "react";
 import Link from "next/link";
 import { ArrowRight, Globe, Leaf, Heart, Moon, Sun } from "lucide-react";
+import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
 
 /* ─── Intersection Observer hook for scroll animations ─── */
 function useInView(threshold = 0.15) {
@@ -76,6 +78,7 @@ const COPY: Record<LangKey, {
     adSlot: string;
     privacy: string;
 }> = {
+    // ... [Content omitted for brevity as it is unchanged from original] ...
     ko: {
         tagline: "나를 위한 작은 루틴",
         heroTitle: "몰아붙이지 않아요.\n당신의 속도로, 충분합니다.",
@@ -203,7 +206,7 @@ const COPY: Record<LangKey, {
         closingSub: "Sin presión para registrarte o escribir.\nVuelve cuando te sientas listo.",
         closingCta: "Empezar gratis",
         sponsored: "Patrocinado",
-        adSlot: "Espacio de Banner Publicitario",
+        adSlot: "Patrocinado",
         privacy: "Tus datos se usan solo para analizar rutinas. Sin publicidad ni ventas.",
     },
 };
@@ -230,13 +233,13 @@ export function LandingContent() {
     };
 
     return (
-        <main className="min-h-screen pb-32 md:pb-24" style={{ background: "linear-gradient(180deg, #fdf9f4 0%, #faf6f0 40%, #f7f3ed 100%)" }}>
+        // Changed bg to use Tailwind gradient + css variable background
+        <main className="min-h-screen bg-gradient-to-b from-background via-background/95 to-secondary/30 pb-32 md:pb-24">
             {/* ─── Nav ─── */}
-            <nav className="sticky top-0 z-30 flex items-center justify-between px-6 py-4 md:px-10" style={{ background: "rgba(253,249,244,0.85)", backdropFilter: "blur(12px)" }}>
+            <nav className="sticky top-0 z-30 flex items-center justify-between border-b border-transparent bg-background/80 px-6 py-4 backdrop-blur-md md:px-10">
                 <Link
                     href="/"
-                    className="text-xl font-semibold tracking-tight"
-                    style={{ fontFamily: "var(--font-serif)", color: "#4a3f35" }}
+                    className="font-serif text-xl font-semibold tracking-tight text-foreground transition-opacity hover:opacity-80"
                 >
                     RutineIQ
                 </Link>
@@ -245,33 +248,23 @@ export function LandingContent() {
                 <div className="relative">
                     <button
                         onClick={() => setLangOpen(!langOpen)}
-                        className="flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs transition-all duration-200 hover:shadow-sm"
-                        style={{ border: "1px solid #e6ddd3", background: "rgba(255,255,255,0.7)", color: "#7a6e62" }}
+                        className="flex items-center gap-1.5 rounded-full border bg-background/50 px-3 py-1.5 text-xs text-muted-foreground transition-all duration-200 hover:bg-muted/50 hover:text-foreground hover:shadow-sm"
                     >
                         <Globe className="h-3.5 w-3.5" />
                         {LANG_LABELS[lang]}
                     </button>
                     {langOpen && (
                         <div
-                            className="absolute right-0 top-full z-40 mt-1.5 w-36 overflow-hidden rounded-2xl shadow-xl"
-                            style={{
-                                border: "1px solid #e6ddd3",
-                                background: "#fffcf8",
-                                animation: "dropdownIn 0.2s cubic-bezier(0.16,1,0.3,1)",
-                            }}
+                            className="absolute right-0 top-full z-40 mt-1.5 w-36 overflow-hidden rounded-2xl border bg-popover shadow-xl animate-in fade-in zoom-in-95 duration-200"
                         >
                             {(Object.keys(LANG_LABELS) as LangKey[]).map((k) => (
                                 <button
                                     key={k}
                                     onClick={() => { setLang(k); setLangOpen(false); }}
-                                    className="block w-full px-4 py-2.5 text-left text-sm transition-colors duration-150"
-                                    style={{
-                                        color: k === lang ? "#4a3f35" : "#7a6e62",
-                                        fontWeight: k === lang ? 600 : 400,
-                                        background: k === lang ? "#f5efe7" : "transparent",
-                                    }}
-                                    onMouseEnter={e => { if (k !== lang) (e.target as HTMLElement).style.background = "#faf5ee"; }}
-                                    onMouseLeave={e => { if (k !== lang) (e.target as HTMLElement).style.background = "transparent"; }}
+                                    className={cn(
+                                        "block w-full px-4 py-2.5 text-left text-sm transition-colors duration-150 hover:bg-muted/50",
+                                        k === lang ? "bg-muted font-semibold text-foreground" : "text-muted-foreground"
+                                    )}
                                 >
                                     {LANG_LABELS[k]}
                                 </button>
@@ -288,25 +281,18 @@ export function LandingContent() {
             <section className="mx-auto max-w-3xl px-6 pb-20 pt-14 text-center md:pt-24">
                 <div style={heroStyle}>
                     <p
-                        className="mb-8 inline-flex items-center gap-2 rounded-full px-4 py-2 text-xs"
-                        style={{ border: "1px solid #e6ddd3", background: "rgba(255,255,255,0.6)", color: "#9a8e80" }}
+                        className="mb-8 inline-flex items-center gap-2 rounded-full border bg-background/60 px-4 py-2 text-xs text-muted-foreground backdrop-blur-sm"
                     >
-                        <Leaf className="h-3.5 w-3.5" style={{ color: "#a3b89a" }} />
+                        <Leaf className="h-3.5 w-3.5 text-green-500/70" />
                         {t.tagline}
                     </p>
                     <h1
-                        className="whitespace-pre-line text-3xl leading-snug md:text-[3.2rem] md:leading-tight"
-                        style={{
-                            fontFamily: "var(--font-serif)",
-                            letterSpacing: "-0.025em",
-                            color: "#3e3529",
-                        }}
+                        className="font-serif whitespace-pre-line text-4xl font-medium leading-snug tracking-tight text-foreground md:text-[3.5rem] md:leading-tight"
                     >
                         {t.heroTitle}
                     </h1>
                     <p
-                        className="mx-auto mt-7 max-w-lg whitespace-pre-line text-[15px] leading-relaxed md:text-base"
-                        style={{ color: "#8a7e70", lineHeight: 1.8 }}
+                        className="mx-auto mt-7 max-w-lg whitespace-pre-line text-[15px] leading-relaxed text-muted-foreground md:text-base"
                     >
                         {t.heroSub}
                     </p>
@@ -320,43 +306,38 @@ export function LandingContent() {
                         transition: "opacity 0.7s cubic-bezier(0.16,1,0.3,1) 0.4s, transform 0.7s cubic-bezier(0.16,1,0.3,1) 0.4s",
                     }}
                 >
-                    <Link
-                        href="/login"
-                        className="group inline-flex items-center gap-2 rounded-full px-9 py-3.5 text-sm font-medium text-white transition-all duration-300 hover:shadow-xl"
-                        style={{ background: "#4a3f35", boxShadow: "0 4px 20px rgba(74,63,53,0.15)" }}
-                        onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#3e3529"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(74,63,53,0.25)"; }}
-                        onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#4a3f35"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 20px rgba(74,63,53,0.15)"; }}
-                    >
-                        {t.ctaStart}
-                        <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    <Link href="/login" passHref>
+                        <Button size="lg" className="h-14 px-10 text-base shadow-elevated hover:shadow-xl">
+                            {t.ctaStart}
+                            <ArrowRight className="ml-2 h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+                        </Button>
                     </Link>
                 </div>
             </section>
 
             {/* ─── 3 Cards ─── */}
-            <section className="mx-auto max-w-4xl px-6 pb-24">
-                <div className="grid gap-5 md:grid-cols-3">
+            <section className="mx-auto max-w-5xl px-6 pb-24">
+                <div className="grid gap-6 md:grid-cols-3">
                     {[
-                        { icon: <Sun className="h-6 w-6" style={{ color: "#c8a06a" }} />, title: t.card1Title, desc: t.card1Desc, bg: "#fdf6ec", borderColor: "#f0e4d0" },
-                        { icon: <Heart className="h-6 w-6" style={{ color: "#b8909e" }} />, title: t.card2Title, desc: t.card2Desc, bg: "#faf2f4", borderColor: "#f0dde2" },
-                        { icon: <Moon className="h-6 w-6" style={{ color: "#8e9eb5" }} />, title: t.card3Title, desc: t.card3Desc, bg: "#f2f4f9", borderColor: "#dde2ee" },
+                        { icon: <Sun className="h-6 w-6 text-amber-400" />, title: t.card1Title, desc: t.card1Desc, bg: "bg-orange-50/50", border: "border-orange-100" },
+                        { icon: <Heart className="h-6 w-6 text-rose-400" />, title: t.card2Title, desc: t.card2Desc, bg: "bg-rose-50/50", border: "border-rose-100" },
+                        { icon: <Moon className="h-6 w-6 text-indigo-400" />, title: t.card3Title, desc: t.card3Desc, bg: "bg-indigo-50/50", border: "border-indigo-100" },
                     ].map((card, i) => (
                         <FadeUp key={i} delay={i * 0.12} className="h-full">
                             <div
-                                className="h-full rounded-[20px] p-7 transition-all duration-300 hover:-translate-y-1 hover:shadow-lg"
-                                style={{
-                                    background: card.bg,
-                                    border: `1px solid ${card.borderColor}`,
-                                }}
+                                className={cn(
+                                    "group h-full rounded-[2rem] border p-8 transition-all duration-300 hover:-translate-y-1 hover:shadow-soft",
+                                    card.bg,
+                                    card.border
+                                )}
                             >
                                 <div
-                                    className="mb-5 inline-flex rounded-2xl p-3"
-                                    style={{ background: "rgba(255,255,255,0.7)" }}
+                                    className="mb-6 inline-flex rounded-2xl bg-white/80 p-4 shadow-sm backdrop-blur-sm"
                                 >
                                     {card.icon}
                                 </div>
-                                <h3 className="text-[15px] font-semibold" style={{ color: "#3e3529" }}>{card.title}</h3>
-                                <p className="mt-2.5 whitespace-pre-line text-sm leading-relaxed" style={{ color: "#8a7e70" }}>{card.desc}</p>
+                                <h3 className="text-lg font-semibold text-foreground">{card.title}</h3>
+                                <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-muted-foreground">{card.desc}</p>
                             </div>
                         </FadeUp>
                     ))}
@@ -364,21 +345,20 @@ export function LandingContent() {
             </section>
 
             {/* ─── Feature Section ─── */}
-            <section style={{ background: "rgba(255,252,248,0.5)", borderTop: "1px solid #ede6dc", borderBottom: "1px solid #ede6dc" }}>
-                <div className="mx-auto max-w-3xl px-6 py-20 md:py-24">
+            <section className="border-y border-border/50 bg-secondary/20">
+                <div className="mx-auto max-w-3xl px-6 py-24 md:py-32">
                     <FadeUp>
-                        <div className="mb-14 text-center">
+                        <div className="mb-16 text-center">
                             <h2
-                                className="whitespace-pre-line text-2xl tracking-tight md:text-[2rem]"
-                                style={{ fontFamily: "var(--font-serif)", letterSpacing: "-0.02em", color: "#3e3529" }}
+                                className="font-serif whitespace-pre-line text-3xl font-medium tracking-tight text-foreground md:text-[2.5rem]"
                             >
                                 {t.sectionTitle}
                             </h2>
-                            <p className="mt-4 text-sm" style={{ color: "#9a8e80" }}>{t.sectionSub}</p>
+                            <p className="mt-5 text-base text-muted-foreground">{t.sectionSub}</p>
                         </div>
                     </FadeUp>
 
-                    <div className="space-y-5">
+                    <div className="space-y-4">
                         {[
                             { title: t.feat1Title, desc: t.feat1Desc, emoji: "🌱" },
                             { title: t.feat2Title, desc: t.feat2Desc, emoji: "🌊" },
@@ -386,18 +366,12 @@ export function LandingContent() {
                         ].map((feat, i) => (
                             <FadeUp key={i} delay={i * 0.1}>
                                 <div
-                                    className="flex gap-5 rounded-[20px] p-6 transition-all duration-300 hover:shadow-md"
-                                    style={{
-                                        border: "1px solid #ede6dc",
-                                        background: "#fdf9f4",
-                                    }}
-                                    onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#fffcf8"; }}
-                                    onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#fdf9f4"; }}
+                                    className="group flex gap-6 rounded-[1.5rem] border border-border/50 bg-white/60 p-8 transition-all duration-300 hover:shadow-soft hover:bg-white/80"
                                 >
-                                    <span className="mt-0.5 shrink-0 text-2xl">{feat.emoji}</span>
+                                    <span className="mt-0.5 shrink-0 text-3xl opacity-80 grayscale transition-all group-hover:grayscale-0">{feat.emoji}</span>
                                     <div>
-                                        <h3 className="text-sm font-semibold" style={{ color: "#3e3529" }}>{feat.title}</h3>
-                                        <p className="mt-1.5 text-sm leading-relaxed" style={{ color: "#8a7e70" }}>{feat.desc}</p>
+                                        <h3 className="text-base font-semibold text-foreground">{feat.title}</h3>
+                                        <p className="mt-2 text-[15px] leading-relaxed text-muted-foreground">{feat.desc}</p>
                                     </div>
                                 </div>
                             </FadeUp>
@@ -407,32 +381,26 @@ export function LandingContent() {
             </section>
 
             {/* ─── Closing CTA ─── */}
-            <section className="mx-auto max-w-3xl px-6 py-24 text-center">
+            <section className="mx-auto max-w-3xl px-6 py-32 text-center">
                 <FadeUp>
                     <h2
-                        className="text-2xl tracking-tight md:text-[2rem]"
-                        style={{ fontFamily: "var(--font-serif)", letterSpacing: "-0.02em", color: "#3e3529" }}
+                        className="font-serif text-3xl font-medium tracking-tight text-foreground md:text-[2.5rem]"
                     >
                         {t.closingTitle}
                     </h2>
                     <p
-                        className="mx-auto mt-5 max-w-md whitespace-pre-line text-sm leading-relaxed"
-                        style={{ color: "#8a7e70", lineHeight: 1.8 }}
+                        className="mx-auto mt-6 max-w-md whitespace-pre-line text-[15px] leading-relaxed text-muted-foreground"
                     >
                         {t.closingSub}
                     </p>
                 </FadeUp>
                 <FadeUp delay={0.15}>
-                    <div className="mt-10">
-                        <Link
-                            href="/login"
-                            className="group inline-flex items-center gap-2 rounded-full px-9 py-3.5 text-sm font-medium text-white transition-all duration-300"
-                            style={{ background: "#4a3f35", boxShadow: "0 4px 20px rgba(74,63,53,0.15)" }}
-                            onMouseEnter={e => { (e.currentTarget as HTMLElement).style.background = "#3e3529"; (e.currentTarget as HTMLElement).style.boxShadow = "0 8px 32px rgba(74,63,53,0.25)"; }}
-                            onMouseLeave={e => { (e.currentTarget as HTMLElement).style.background = "#4a3f35"; (e.currentTarget as HTMLElement).style.boxShadow = "0 4px 20px rgba(74,63,53,0.15)"; }}
-                        >
-                            {t.closingCta}
-                            <ArrowRight className="h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    <div className="mt-12">
+                        <Link href="/login" passHref>
+                            <Button size="lg" className="h-14 px-12 text-lg shadow-elevated hover:shadow-xl">
+                                {t.closingCta}
+                                <ArrowRight className="ml-2 h-5 w-5 transition-transform group-hover:translate-x-0.5" />
+                            </Button>
                         </Link>
                     </div>
                 </FadeUp>
@@ -440,30 +408,19 @@ export function LandingContent() {
 
             {/* ─── Fixed Footer ─── */}
             <footer
-                className="fixed bottom-0 left-0 right-0 z-40 border-t px-4 py-3 md:px-6"
-                style={{
-                    borderColor: "#e9dfd2",
-                    background: "rgba(253,249,244,0.94)",
-                    backdropFilter: "blur(10px)",
-                }}
+                className="fixed bottom-0 left-0 right-0 z-40 border-t border-border/50 bg-background/80 px-4 py-3 backdrop-blur-lg md:px-6"
             >
                 <div className="mx-auto flex max-w-6xl flex-col gap-2 md:flex-row md:items-center md:justify-between">
                     <div className="flex flex-wrap items-center gap-2">
                         <span
-                            className="inline-flex rounded-full px-2 py-1 text-[10px] font-medium uppercase tracking-wide"
-                            style={{ color: "#8d806f", background: "#f4ece1", border: "1px solid #e2d6c8" }}
+                            className="inline-flex rounded-full border bg-muted/50 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
                         >
                             {t.sponsored}
                         </span>
                         {sponsorSlots.map((idx) => (
                             <div
                                 key={idx}
-                                className="inline-flex h-7 items-center rounded-md px-3 text-[11px] font-semibold"
-                                style={{
-                                    color: "#6f6559",
-                                    border: "1px solid #ddcfbe",
-                                    background: "linear-gradient(180deg, #fffdfa 0%, #f8efe4 100%)",
-                                }}
+                                className="inline-flex h-7 items-center rounded-md border bg-white/50 px-3 text-[11px] font-medium text-muted-foreground"
                             >
                                 {t.adSlot} {idx}
                             </div>
@@ -471,19 +428,13 @@ export function LandingContent() {
                     </div>
 
                     <div className="text-left md:text-right">
-                        <p className="text-[11px]" style={{ color: "#a89f92" }}>{t.privacy}</p>
-                        <p className="mt-0.5 text-[11px]" style={{ color: "#c3b9ab" }}>© 2026 RutineIQ</p>
+                        <p className="text-[11px] text-muted-foreground/80">{t.privacy}</p>
+                        <p className="mt-0.5 text-[11px] text-muted-foreground/60">© 2026 RutineIQ</p>
                     </div>
                 </div>
             </footer>
-
-            {/* ─── Global animation keyframes ─── */}
-            <style jsx global>{`
-        @keyframes dropdownIn {
-          from { opacity: 0; transform: translateY(-6px) scale(0.97); }
-          to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-      `}</style>
         </main>
     );
 }
+
+// Removing local style jsx as tailwind-animate provides animations

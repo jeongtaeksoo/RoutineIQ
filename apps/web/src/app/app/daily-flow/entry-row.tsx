@@ -89,47 +89,47 @@ function DailyEntryRowComponent({
     t
 }: DailyEntryRowProps) {
     const avg = ((entry.energy ?? 3) + (entry.focus ?? 3)) / 2;
-    let barColor = "bg-red-400";
-    if (avg >= 4) barColor = "bg-emerald-400";
-    else if (avg >= 3) barColor = "bg-amber-400";
+    let barColor = "bg-[#e08d79]"; // Muted Coral (Low)
+    if (avg >= 4) barColor = "bg-[#8ab8a8]"; // Sage (High)
+    else if (avg >= 3) barColor = "bg-[#e6c785]"; // Sand (Medium)
 
     return (
-        <div className="entry-animate rounded-xl border bg-white/70 shadow-sm backdrop-blur transition-shadow hover:shadow-md">
-            <div className="flex gap-3 p-3">
+        <div className="entry-animate rounded-[1.25rem] border border-white/40 bg-white/60 shadow-sm backdrop-blur-md transition-all hover:shadow-soft hover:bg-white/80">
+            <div className="flex gap-3 p-3.5">
                 {/* Color bar */}
-                <div className={`timeline-bar ${barColor} shrink-0`} />
+                <div className={`timeline-bar ${barColor} w-1.5 rounded-full shrink-0 opacity-80`} />
 
                 {/* Content */}
-                <div className="min-w-0 flex-1 space-y-2.5">
+                <div className="min-w-0 flex-1 space-y-3">
                     {/* Row 1: Time + Activity + Delete */}
-                    <div className="flex items-start gap-2">
-                        <div className="flex shrink-0 flex-col gap-0.5">
-                            <div className="flex items-center gap-1">
+                    <div className="flex items-start gap-3">
+                        <div className="flex shrink-0 flex-col gap-1">
+                            <div className="flex items-center gap-1.5">
                                 <Input
                                     type="time"
                                     step={1800}
                                     value={entry.start}
                                     onChange={(ev) => onUpdate(idx, { start: ev.target.value })}
-                                    className="h-7 w-[88px] px-1.5 text-xs"
+                                    className="h-8 w-[92px] rounded-lg border-black/5 bg-transparent px-2 text-xs font-medium focus:bg-white/50"
                                 />
-                                <span className="text-xs text-mutedFg">–</span>
+                                <span className="text-xs text-muted-foreground">–</span>
                                 <Input
                                     type="time"
                                     step={1800}
                                     value={entry.end}
                                     onChange={(ev) => onUpdate(idx, { end: ev.target.value })}
-                                    className="h-7 w-[88px] px-1.5 text-xs"
+                                    className="h-8 w-[92px] rounded-lg border-black/5 bg-transparent px-2 text-xs font-medium focus:bg-white/50"
                                 />
                             </div>
-                            <div className="flex gap-1">
+                            <div className="flex gap-1.5">
                                 <button
-                                    className="rounded px-1 py-0.5 text-[10px] text-mutedFg hover:bg-muted hover:text-fg"
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground"
                                     onClick={() => onSetNow(idx, "start")}
                                 >
                                     {t.now} ↓
                                 </button>
                                 <button
-                                    className="rounded px-1 py-0.5 text-[10px] text-mutedFg hover:bg-muted hover:text-fg"
+                                    className="rounded-full px-2 py-0.5 text-[10px] font-medium text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground"
                                     onClick={() => onSetNow(idx, "end")}
                                 >
                                     {t.now} ↓
@@ -141,22 +141,24 @@ function DailyEntryRowComponent({
                                 value={entry.activity}
                                 list="activity-suggestions"
                                 onChange={(ev) => onUpdate(idx, { activity: ev.target.value })}
-                                className="h-7 pr-8 text-sm font-medium"
+                                className="h-8 w-full rounded-lg border-black/5 bg-transparent px-3 text-sm font-medium focus:bg-white/50"
                                 placeholder={t.activity}
                             />
-                            <button
-                                type="button"
-                                onClick={() => onSuggest(idx)}
-                                disabled={analyzing}
-                                className="absolute right-2 top-1/2 -translate-y-1/2 text-mutedFg hover:text-brand disabled:cursor-not-allowed disabled:opacity-30"
-                                title={t.suggest_activity}
-                            >
-                                <Sparkles className={`h-3.5 w-3.5 ${analyzing ? "animate-pulse" : ""}`} />
-                            </button>
+                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+                                <button
+                                    type="button"
+                                    onClick={() => onSuggest(idx)}
+                                    disabled={analyzing}
+                                    className="flex h-6 w-6 items-center justify-center rounded-full text-muted-foreground transition-all hover:bg-brand/10 hover:text-brand disabled:opacity-30"
+                                    title={t.suggest_activity}
+                                >
+                                    <Sparkles className={`h-3.5 w-3.5 ${analyzing ? "animate-pulse" : ""}`} />
+                                </button>
+                            </div>
                         </div>
                         <button
                             onClick={() => onRemove(idx)}
-                            className="shrink-0 rounded-lg p-1 text-mutedFg hover:bg-red-50 hover:text-red-500"
+                            className="shrink-0 rounded-full p-2 text-muted-foreground opacity-60 transition-all hover:bg-destructive/10 hover:text-destructive hover:opacity-100"
                             aria-label={t.remove}
                         >
                             <X className="h-4 w-4" />
@@ -164,14 +166,14 @@ function DailyEntryRowComponent({
                     </div>
 
                     {/* Row 2: Energy + Focus level bars */}
-                    <div className="flex flex-col gap-1.5">
+                    <div className="flex flex-col gap-2">
                         <LevelBar
                             label={t.energy}
                             lowLabel={t.low}
                             highLabel={t.high}
                             value={entry.energy}
                             onChange={(v) => onSetRating(idx, "energy", v)}
-                            colorClass="bg-emerald-500"
+                            colorClass="bg-[#8ab8a8]" /* Sage */
                         />
                         <LevelBar
                             label={t.focus}
@@ -179,7 +181,7 @@ function DailyEntryRowComponent({
                             highLabel={t.high}
                             value={entry.focus}
                             onChange={(v) => onSetRating(idx, "focus", v)}
-                            colorClass="bg-blue-500"
+                            colorClass="bg-[#7da0c4]" /* Soft Blue */
                         />
                     </div>
 
