@@ -167,6 +167,12 @@ async def delete_my_data(auth: AuthDep) -> dict[str, bool]:
 
 @router.delete("/preferences/account")
 async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
+    if not settings.supabase_service_role_key:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account deletion is temporarily unavailable",
+        )
+
     sb_service = SupabaseRest(
         str(settings.supabase_url), settings.supabase_service_role_key
     )
@@ -209,11 +215,17 @@ async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
                 "apikey": service_token,
                 "Authorization": f"Bearer {service_token}",
             },
+            json={"should_soft_delete": False},
         )
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to delete auth user",
+        )
+    if resp.status_code in {401, 403}:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account deletion is temporarily unavailable",
         )
     if resp.status_code >= 400 and resp.status_code != 404:
         raise HTTPException(

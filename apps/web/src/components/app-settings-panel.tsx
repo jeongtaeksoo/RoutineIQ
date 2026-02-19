@@ -645,9 +645,14 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
       await apiFetch<{ ok: boolean }>("/preferences/account", {
         method: "DELETE",
         timeoutMs: 120_000,
+        retryOnTimeout: true,
       });
-      await supabaseRef.current.auth.signOut();
-      window.location.href = "/login?deleted=1";
+      // Never block redirect on signOut network latency; account deletion already succeeded.
+      await Promise.race([
+        supabaseRef.current.auth.signOut().catch(() => null),
+        new Promise((resolve) => window.setTimeout(resolve, 1_500)),
+      ]);
+      window.location.assign("/login?deleted=1");
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       setError(err instanceof Error ? `${err.message}${hint}` : t.delete_failed);

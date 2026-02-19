@@ -224,6 +224,10 @@ async function handleApiRoute(
     return json(route, 200, { ok: true });
   }
 
+  if (path === "/preferences/account" && method === "DELETE") {
+    return json(route, 200, { ok: true });
+  }
+
   if (path === "/recovery/active" && method === "GET") {
     return json(route, 200, {
       has_open_session: false,

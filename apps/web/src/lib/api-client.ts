@@ -252,8 +252,8 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
     typeof init?.timeoutMs === "number"
       ? Math.max(1_000, Number(init.timeoutMs))
       : method === "GET" || method === "HEAD"
-        ? 8_000
-        : 35_000;
+        ? 12_000
+        : 45_000;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
   const { timeoutMs: _timeoutMs, retryOnTimeout: _retryOnTimeout, _retryAttempt: _retryAttempt, ...requestInit } = init ?? {};
@@ -280,16 +280,18 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   } catch (err) {
     clearTimeout(timeoutId);
     if (err instanceof DOMException && err.name === "AbortError") {
+      const retryEnabled =
+        init?.retryOnTimeout === true ||
+        (init?.retryOnTimeout !== false && !explicitTimeout);
       const shouldRetryOnTimeout =
         canRetry &&
         retryAttempt < 1 &&
         !(init?.signal?.aborted) &&
-        !explicitTimeout &&
-        init?.retryOnTimeout === true;
+        retryEnabled;
       if (shouldRetryOnTimeout) {
         return apiFetch<T>(path, {
           ...init,
-          timeoutMs: Math.min(Math.round(timeoutMs * 1.25), 10_000),
+          timeoutMs: Math.min(Math.round(timeoutMs * 1.5), 20_000),
           _retryAttempt: retryAttempt + 1,
         });
       }

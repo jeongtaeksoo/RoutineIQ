@@ -124,6 +124,8 @@ def test_delete_account_returns_ok_and_calls_account_deletes(
     assert "profiles" in tables
     assert set(tables) == {"ai_reports", "activity_logs", "usage_events", "subscriptions", "profiles"}
     assert fake_http.delete.await_count == 1
+    delete_kwargs = fake_http.delete.await_args.kwargs
+    assert delete_kwargs["json"] == {"should_soft_delete": False}
 
 
 def test_delete_account_treats_missing_auth_user_as_success(
@@ -143,6 +145,16 @@ def test_delete_account_treats_missing_auth_user_as_success(
     assert response.status_code == 200
     assert response.json() == {"ok": True}
     assert fake_http.delete.await_count == 1
+
+
+def test_delete_account_returns_503_when_service_role_key_missing(
+    authenticated_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(preferences_route.settings, "supabase_service_role_key", "")
+
+    response = authenticated_client.delete("/api/preferences/account")
+
+    assert response.status_code == 503
 
 
 @pytest.mark.parametrize(

@@ -707,7 +707,7 @@ export default function DailyFlowPage() {
     try {
       const res = await apiFetch<ParseDiaryResponse>("/parse-diary", {
         method: "POST",
-        timeoutMs: 20_000,
+        timeoutMs: 40_000,
         body: JSON.stringify({
           date,
           diary_text: diaryText.trim(),
@@ -762,7 +762,7 @@ export default function DailyFlowPage() {
     const payload = buildLogPayload();
     await mutate(`/logs?date=${date}`, payload, false);
     try {
-      await apiFetch("/logs", { method: "POST", timeoutMs: 12_000, body: JSON.stringify(payload) });
+      await apiFetch("/logs", { method: "POST", timeoutMs: 20_000, body: JSON.stringify(payload) });
       await mutate(`/logs?date=${date}`);
       await trackDailyFlowEvent("save_succeeded", {
         ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
@@ -799,7 +799,7 @@ export default function DailyFlowPage() {
       });
       const payload = buildLogPayload();
       try {
-        await apiFetch("/logs", { method: "POST", timeoutMs: 12_000, body: JSON.stringify(payload) });
+        await apiFetch("/logs", { method: "POST", timeoutMs: 20_000, body: JSON.stringify(payload) });
         await mutate(`/logs?date=${date}`);
         await trackDailyFlowEvent("save_succeeded", {
           ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
@@ -816,7 +816,7 @@ export default function DailyFlowPage() {
 
     setAnalyzing(true);
     try {
-      await apiFetch("/analyze", { method: "POST", timeoutMs: 25_000, body: JSON.stringify({ date, force: true }) });
+      await apiFetch("/analyze", { method: "POST", timeoutMs: 45_000, body: JSON.stringify({ date, force: true }) });
       router.push(`/app/reports/${date}`);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
