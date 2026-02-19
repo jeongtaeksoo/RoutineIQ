@@ -604,12 +604,6 @@ export default function ReportPage() {
               <CardDescription>{t.wellbeingDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border bg-white/50 p-3">
-                <p className="text-xs text-mutedFg">{t.burnoutRisk}</p>
-                <span className={`rounded-full border px-2 py-1 text-xs font-semibold ${burnoutBadgeClass}`}>
-                  {burnoutRiskLabel}
-                </span>
-              </div>
               <div className="rounded-xl border bg-white/50 p-4">
                 <p className="text-xs text-mutedFg">{t.energyForecast}</p>
                 <p className="mt-1 text-sm">{report.wellbeing_insight?.energy_curve_forecast}</p>

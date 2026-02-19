@@ -185,7 +185,7 @@ export default function InsightsPage() {
         coachEmptyHint: "'다음 단계' 카드에서 바로 진행할 수 있어요.",
         nextTitle: "다음 단계",
         nextDesc_noLog: "기록이 없어요. 3줄만 적으면 분석을 시작할 수 있어요.",
-        nextDesc_noReport: "오늘 기록으로 내일 흐름을 잡아봐요.",
+        nextDesc_noReport: "기록이 저장되어 있어요. ‘AI로 정리하기’를 누르면 리포트에서 확인할 수 있어요.",
         nextDesc_hasReport: "내일 일정을 미리 보고 여유를 챙겨보세요.",
         cta_start3min: "3분 만에 시작하기",
         cta_analyzeNow: "AI로 정리하기",
@@ -200,17 +200,12 @@ export default function InsightsPage() {
         analyzing: "정리하는 중...",
         loading: "불러오는 중...",
         tomorrowSchedule: "내일의 추천 흐름",
-        tomorrowScheduleDesc: "나의 패턴에 맞춘 내일 일정이에요.",
+        tomorrowScheduleDesc: "핵심 블록만 먼저 확인하고, 자세한 내용은 리포트에서 보세요.",
         scheduleEmptyTitle: "분석을 실행하면 내일 계획이 생성돼요",
         scheduleEmptyBody: "시간표와 복구 규칙이 여기에 표시돼요.",
         moreBlocks: (n: number) => `+ ${n}개 더 보기`,
         coachTip: "오늘의 팁",
         coachTipDesc: "부담 없이 실천할 수 있는 한 줄.",
-        reportDeepDiveTitle: "리포트 상세 보기",
-        reportDeepDiveDesc: "방해 패턴, 집중 시간, 대응 규칙은 리포트에서 확인하세요.",
-        reportDeepDivePeak: "대표 집중 시간",
-        reportDeepDiveBreak: "대표 방해 패턴",
-        reportDeepDiveEmpty: "오늘 리포트가 없어서 상세 요약을 아직 만들 수 없어요.",
         profileSetupTitle: "프로필을 완성하면 추천이 더 정확해져요",
         profileSetupBody: "연령대·성별·직군·근무 형태를 설정하면 더 맞춤 추천을 받아요.",
         profileSetupCta: "설정 열기",
@@ -287,7 +282,6 @@ export default function InsightsPage() {
         adjustCompare: "비교 기준 조정",
         labelMe: "나",
         changeCompare: "비교 기준 변경",
-        labelTrigger: "트리거",
         labelOpen: "열기",
         labelClose: "닫기",
       };
@@ -311,7 +305,7 @@ export default function InsightsPage() {
       coachEmptyHint: "Use the Next Action card on the right to continue.",
       nextTitle: "Next Action",
       nextDesc_noLog: "No log yet. A short 3-line diary is enough to start your first analysis.",
-      nextDesc_noReport: "Turn your log into a coached tomorrow plan.",
+      nextDesc_noReport: "Your log is saved. Tap Analyze to generate a full report.",
       nextDesc_hasReport: "Review tomorrow’s plan and add buffers where you usually break.",
       cta_start3min: "Start 3-min check",
       cta_analyzeNow: "Analyze my day",
@@ -326,17 +320,12 @@ export default function InsightsPage() {
       analyzing: "Analyzing...",
       loading: "Loading...",
       tomorrowSchedule: "Tomorrow’s Smart Schedule",
-      tomorrowScheduleDesc: "Auto-designed routine based on your actual day patterns.",
+      tomorrowScheduleDesc: "See only key blocks here. Open the report for full details.",
       scheduleEmptyTitle: "Run Analyze to generate tomorrow's plan",
       scheduleEmptyBody: "Your timeline and recovery rules will appear here.",
       moreBlocks: (n: number) => `+ ${n} more blocks`,
       coachTip: "Coach Tip of the Day",
       coachTipDesc: "One actionable sentence, no fluff.",
-      reportDeepDiveTitle: "Open full report details",
-      reportDeepDiveDesc: "View full trigger analysis, peak hours, and If-Then rules in the report page.",
-      reportDeepDivePeak: "Top peak window",
-      reportDeepDiveBreak: "Top break trigger",
-      reportDeepDiveEmpty: "No report yet, so detailed breakdown is not available.",
       profileSetupTitle: "Complete your profile to improve personalization",
       profileSetupBody: "Age, gender, job family, and work mode make tomorrow plans more realistic.",
       profileSetupCta: "Open preferences",
@@ -413,7 +402,6 @@ export default function InsightsPage() {
       adjustCompare: "Adjust filters",
       labelMe: "You",
       changeCompare: "Change dimensions",
-      labelTrigger: "Trigger",
       labelOpen: "Open",
       labelClose: "Close",
     };
@@ -1070,7 +1058,7 @@ export default function InsightsPage() {
               </div>
             ) : report?.tomorrow_routine?.length ? (
               <div className="space-y-3">
-                {report.tomorrow_routine.slice(0, 6).map((it, idx) => (
+                {report.tomorrow_routine.slice(0, 3).map((it, idx) => (
                   <div key={idx} className="inset-block">
                     <div className="flex items-center justify-between gap-3">
                       <p className="text-sm font-semibold">
@@ -1082,9 +1070,12 @@ export default function InsightsPage() {
                     </div>
                   </div>
                 ))}
-                {report.tomorrow_routine.length > 6 ? (
-                  <p className="text-xs text-mutedFg">{t.moreBlocks(report.tomorrow_routine.length - 6)}</p>
+                {report.tomorrow_routine.length > 3 ? (
+                  <p className="text-xs text-mutedFg">{t.moreBlocks(report.tomorrow_routine.length - 3)}</p>
                 ) : null}
+                <Button asChild variant="outline" size="sm">
+                  <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
+                </Button>
               </div>
             ) : (
               <div className="flex flex-col items-center py-6 text-center">
@@ -1248,56 +1239,6 @@ export default function InsightsPage() {
           </CardContent>
         </Card>
 
-        <Card className="lg:col-span-12">
-          <CardHeader>
-            <CardTitle>{t.reportDeepDiveTitle}</CardTitle>
-            <CardDescription>{t.reportDeepDiveDesc}</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {reportLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-16 w-full rounded-lg" />
-                <Skeleton className="h-16 w-full rounded-lg" />
-              </div>
-            ) : report ? (
-              <div className="space-y-3">
-                <div className="grid gap-3 md:grid-cols-2">
-                  <div className="inset-block">
-                    <p className="text-xs text-mutedFg">{t.reportDeepDivePeak}</p>
-                    {topPeak ? (
-                      <>
-                        <p className="mt-1 text-sm font-semibold">
-                          {topPeak.start}–{topPeak.end}
-                        </p>
-                        <p className="mt-1 text-xs text-mutedFg">{topPeak.reason}</p>
-                      </>
-                    ) : (
-                      <p className="mt-1 text-sm text-mutedFg">{t.peakHoursEmpty}</p>
-                    )}
-                  </div>
-                  <div className="inset-block">
-                    <p className="text-xs text-mutedFg">{t.reportDeepDiveBreak}</p>
-                    {topFailure ? (
-                      <>
-                        <p className="mt-1 text-sm font-semibold">{topFailure.pattern}</p>
-                        <p className="mt-1 text-xs text-mutedFg">
-                          {t.labelTrigger}: {topFailure.trigger}
-                        </p>
-                      </>
-                    ) : (
-                      <p className="mt-1 text-sm text-mutedFg">{t.breakTriggersEmpty}</p>
-                    )}
-                  </div>
-                </div>
-                <Button asChild variant="outline" size="sm">
-                  <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
-                </Button>
-              </div>
-            ) : (
-              <p className="text-sm text-mutedFg">{t.reportDeepDiveEmpty}</p>
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       <Card>
