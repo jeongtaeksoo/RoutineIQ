@@ -226,6 +226,13 @@ _FALLBACK_AI_NOTE = {
     "zh": "AI 解析暂时不稳定，已采用保守结构化。缺少依据的时间将保持为 null。",
     "es": "El análisis de IA fue inestable, por lo que se aplicó un parsing conservador. Si falta evidencia, la hora queda en null.",
 }
+_RULE_BASED_AI_NOTE = {
+    "ko": "형식이 명확한 일기라 규칙 기반으로 빠르게 정리했습니다. 필요하면 시간대만 가볍게 보정해 주세요.",
+    "en": "The diary format was clear, so we applied fast rule-based structuring. Adjust only the time windows if needed.",
+    "ja": "日記の形式が明確だったため、ルールベースで素早く構造化しました。必要なら時間帯だけ補正してください。",
+    "zh": "日记格式较清晰，已使用规则快速结构化。若需要，请仅补充时间段。",
+    "es": "El formato del diario era claro, así que aplicamos estructuración rápida por reglas. Si hace falta, ajusta solo las franjas horarias.",
+}
 
 _POSITIVE_HINTS = (
     "집중",
@@ -253,6 +260,11 @@ _ACTIVITY_LABEL_RE = re.compile(
 )
 _MOOD_LABEL_RE = re.compile(
     r"^\s*(?:기분|mood)\s*[:：]\s*(?P<value>.+)\s*$",
+    flags=re.IGNORECASE,
+)
+_LEADING_TIME_LINE_RE = re.compile(
+    r"^\s*[•·▪︎◦\-*]?\s*(?:(?:오전|오후|am|pm)\s*)?"
+    r"\d{1,2}(?::\d{2}|시(?:\s*\d{1,2}\s*분?|\s*반)?)",
     flags=re.IGNORECASE,
 )
 
@@ -982,6 +994,43 @@ def _fallback_response(
     )
 
 
+def _is_structured_diary_fastpath_candidate(
+    diary_text: str, time_candidates: list[dict[str, Any]]
+) -> bool:
+    if len(time_candidates) < 2:
+        return False
+    lines = [line.strip() for line in diary_text.splitlines() if line.strip()]
+    if len(lines) < 4:
+        return False
+    activity_count = sum(1 for line in lines if _ACTIVITY_LABEL_RE.match(line))
+    mood_count = sum(1 for line in lines if _MOOD_LABEL_RE.match(line))
+    leading_time_lines = sum(1 for line in lines if _LEADING_TIME_LINE_RE.match(line))
+    if len(time_candidates) >= 3 and leading_time_lines >= 3:
+        return True
+    if activity_count < 2:
+        return False
+    if mood_count == 0 and activity_count < 3:
+        return False
+    return True
+
+
+def _rule_based_response(
+    *, diary_text: str, locale: str, time_candidates: list[dict[str, Any]]
+) -> ParseDiaryResponse:
+    safe_locale = _locale_or_default(locale)
+    response = ParseDiaryResponse(
+        entries=_build_fallback_entries(diary_text, safe_locale, time_candidates),
+        meta=_infer_meta(diary_text),
+        ai_note=_RULE_BASED_AI_NOTE[safe_locale],
+    )
+    return _post_validate_response(
+        response=response,
+        diary_text=diary_text,
+        time_candidates=time_candidates,
+        locale=locale,
+    )
+
+
 @router.post("/parse-diary", response_model=ParseDiaryResponse)
 async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryResponse:
     await consume(key=f"parse-diary:{auth.user_id}", limit=5, window_seconds=60)
@@ -1030,12 +1079,25 @@ async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryRespo
         for c in time_candidates
     ]
 
+    if _is_structured_diary_fastpath_candidate(body.diary_text, time_candidates):
+        return _rule_based_response(
+            diary_text=body.diary_text,
+            locale=auth.locale,
+            time_candidates=time_candidates,
+        )
+
     user_prompt = (
         f"date: {body.date.isoformat()}\n"
         f"locale: {auth.locale}\n"
         f'diary_text:\n"""\n{safe_diary_text}\n"""\n\n'
         "extracted_time_candidates:\n"
         + json.dumps(candidate_payload, ensure_ascii=False)
+    )
+    repair_user_prompt = (
+        f"date: {body.date.isoformat()}\n"
+        f"locale: {auth.locale}\n"
+        "Return valid JSON matching the schema exactly.\n"
+        f'diary_text:\n"""\n{safe_diary_text}\n"""'
     )
 
     request_id = uuid4().hex[:12]
@@ -1049,90 +1111,85 @@ async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryRespo
         "time_candidate_count": len(candidate_payload),
     }
 
-    try:
-        obj, _usage = await call_openai_structured(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_schema=PARSE_DIARY_JSON_SCHEMA,
-            schema_name="parse_diary_response",
-        )
-    except HTTPException:
-        raise
-    except httpx.TimeoutException as exc:
-        await log_system_error(
-            route="/api/parse-diary",
-            message="AI diary parsing timed out",
-            user_id=auth.user_id,
-            err=exc,
-            meta={**request_meta, "code": "PARSE_UPSTREAM_TIMEOUT"},
-        )
-        return _fallback_response(
-            diary_text=body.diary_text,
-            locale=auth.locale,
-            time_candidates=time_candidates,
-        )
-    except httpx.HTTPStatusError as exc:
-        await log_system_error(
-            route="/api/parse-diary",
-            message="AI diary parsing upstream HTTP error",
-            user_id=auth.user_id,
-            err=exc,
-            meta={
-                **request_meta,
-                "code": "PARSE_UPSTREAM_HTTP_ERROR",
-                "status_code": exc.response.status_code,
-            },
-        )
-        return _fallback_response(
-            diary_text=body.diary_text,
-            locale=auth.locale,
-            time_candidates=time_candidates,
-        )
-    except Exception as exc:
-        if isinstance(exc, (ValidationError, JSONDecodeError, ValueError)):
+    attempt_plan = (
+        ("primary", system_prompt, user_prompt),
+        (
+            "repair",
+            system_prompt
+            + "\nSECOND ATTEMPT\nReturn strictly valid JSON matching schema with conservative nulls.",
+            repair_user_prompt,
+        ),
+    )
+
+    for attempt_name, attempt_system_prompt, attempt_user_prompt in attempt_plan:
+        try:
+            obj, _usage = await call_openai_structured(
+                system_prompt=attempt_system_prompt,
+                user_prompt=attempt_user_prompt,
+                response_schema=PARSE_DIARY_JSON_SCHEMA,
+                schema_name="parse_diary_response",
+            )
+            parsed = ParseDiaryResponse.model_validate(obj)
+            return _post_validate_response(
+                response=parsed,
+                diary_text=body.diary_text,
+                time_candidates=time_candidates,
+                locale=auth.locale,
+            )
+        except HTTPException:
+            raise
+        except httpx.TimeoutException as exc:
+            await log_system_error(
+                route="/api/parse-diary",
+                message="AI diary parsing timed out",
+                user_id=auth.user_id,
+                err=exc,
+                meta={
+                    **request_meta,
+                    "code": "PARSE_UPSTREAM_TIMEOUT",
+                    "attempt": attempt_name,
+                },
+            )
+        except httpx.HTTPStatusError as exc:
+            await log_system_error(
+                route="/api/parse-diary",
+                message="AI diary parsing upstream HTTP error",
+                user_id=auth.user_id,
+                err=exc,
+                meta={
+                    **request_meta,
+                    "code": "PARSE_UPSTREAM_HTTP_ERROR",
+                    "status_code": exc.response.status_code,
+                    "attempt": attempt_name,
+                },
+            )
+        except (ValidationError, JSONDecodeError, ValueError) as exc:
             await log_system_error(
                 route="/api/parse-diary",
                 message="AI diary parsing schema validation failed",
                 user_id=auth.user_id,
                 err=exc,
-                meta={**request_meta, "code": "PARSE_SCHEMA_INVALID"},
+                meta={
+                    **request_meta,
+                    "code": "PARSE_SCHEMA_INVALID",
+                    "attempt": attempt_name,
+                },
             )
-            return _fallback_response(
-                diary_text=body.diary_text,
-                locale=auth.locale,
-                time_candidates=time_candidates,
+        except Exception as exc:
+            await log_system_error(
+                route="/api/parse-diary",
+                message="AI diary parsing failed",
+                user_id=auth.user_id,
+                err=exc,
+                meta={
+                    **request_meta,
+                    "code": "PARSE_UPSTREAM_FAILURE",
+                    "attempt": attempt_name,
+                },
             )
-        await log_system_error(
-            route="/api/parse-diary",
-            message="AI diary parsing failed",
-            user_id=auth.user_id,
-            err=exc,
-            meta={**request_meta, "code": "PARSE_UPSTREAM_FAILURE"},
-        )
-        return _fallback_response(
-            diary_text=body.diary_text,
-            locale=auth.locale,
-            time_candidates=time_candidates,
-        )
 
-    try:
-        parsed = ParseDiaryResponse.model_validate(obj)
-        return _post_validate_response(
-            response=parsed,
-            diary_text=body.diary_text,
-            time_candidates=time_candidates,
-            locale=auth.locale,
-        )
-    except ValidationError as exc:
-        await log_system_error(
-            route="/api/parse-diary",
-            message="AI diary parsing schema validation failed",
-            user_id=auth.user_id,
-            err=exc,
-            meta={**request_meta, "code": "PARSE_SCHEMA_INVALID"},
-        )
-        return _fallback_response(
-            diary_text=body.diary_text,
-            locale=auth.locale,
-            time_candidates=time_candidates,
-        )
+    return _fallback_response(
+        diary_text=body.diary_text,
+        locale=auth.locale,
+        time_candidates=time_candidates,
+    )

@@ -261,3 +261,60 @@ def test_parse_diary_fallback_groups_structured_blocks_and_avoids_partial_time(
     assert all("partial time detected" not in issue for issue in body["meta"]["parse_issues"])
     assert body["meta"].get("mood") in {"neutral", "good", None}
     assert body["meta"].get("sleep_hours") is None
+
+
+def test_parse_diary_structured_fastpath_skips_llm_and_avoids_fallback_note(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    mock_openai = AsyncMock()
+    monkeypatch.setattr(parse_route, "call_openai_structured", mock_openai)
+
+    diary_text = (
+        "09:10 — 루틴 점검\n"
+        "13:30 — 점심 후 산책\n"
+        "16:00 — 카피 단순화 메모\n"
+        "20:40 — 하루 정리"
+    )
+
+    res = authenticated_client.post(
+        "/api/parse-diary",
+        json={"date": "2026-02-19", "diary_text": diary_text},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert mock_openai.await_count == 0
+    assert body["ai_note"] == parse_route._RULE_BASED_AI_NOTE["ko"]  # noqa: SLF001
+    assert len(body["entries"]) >= 3
+
+
+def test_parse_diary_repair_attempt_recovers_before_fallback(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    bad_shape = (
+        {"entries": "broken-shape", "meta": {}, "ai_note": "bad"},
+        {"input_tokens": 20, "output_tokens": 20, "total_tokens": 40},
+    )
+    repaired = (
+        {
+            **_parsed_response(),
+            "ai_note": "repair success",
+        },
+        {"input_tokens": 30, "output_tokens": 40, "total_tokens": 70},
+    )
+    mock_openai = AsyncMock(side_effect=[bad_shape, repaired])
+    monkeypatch.setattr(parse_route, "call_openai_structured", mock_openai)
+    monkeypatch.setattr(parse_route, "log_system_error", AsyncMock(return_value=None))
+
+    res = authenticated_client.post(
+        "/api/parse-diary",
+        json={
+            "date": "2026-02-15",
+            "diary_text": "09시부터 집중해서 기능 개발을 했고, 오후에는 회의가 있었습니다.",
+        },
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    assert body["ai_note"] == "repair success"
+    assert mock_openai.await_count == 2

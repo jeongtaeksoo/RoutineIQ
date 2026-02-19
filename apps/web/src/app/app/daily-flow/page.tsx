@@ -79,6 +79,32 @@ type TrackEventType =
   | "save_attempted"
   | "save_succeeded";
 
+const SYSTEM_PARSE_NOTE_MARKERS = [
+  "AI 파싱이 불안정하여 보수적으로 구조화했습니다.",
+  "형식이 명확한 일기라 규칙 기반으로 빠르게 정리했습니다.",
+  "AI parsing was unstable, so fallback parsing was conservative.",
+  "The diary format was clear, so we applied fast rule-based structuring.",
+  "AI解析が不安定だったため保守的に構造化しました。",
+  "日記の形式が明確だったため、ルールベースで素早く構造化しました。",
+  "AI 解析暂时不稳定，已采用保守结构化。",
+  "日记格式较清晰，已使用规则快速结构化。",
+  "El análisis de IA fue inestable, por lo que se aplicó un parsing conservador.",
+  "El formato del diario era claro, así que aplicamos estructuración rápida por reglas.",
+] as const;
+
+function isSystemParseNote(note: string): boolean {
+  const normalized = note.trim();
+  if (!normalized) return false;
+  return SYSTEM_PARSE_NOTE_MARKERS.some((marker) => normalized.includes(marker));
+}
+
+function shouldShowNonBlockingLoadWarning(err: unknown): boolean {
+  if (!isApiFetchError(err)) return false;
+  if (typeof err.status === "number" && err.status >= 500) return true;
+  const message = (err.message || "").toLowerCase();
+  return message.includes("supabase") || message.includes("request failed");
+}
+
 
 
 function isToday(dateStr: string): boolean {
@@ -282,6 +308,7 @@ export default function DailyFlowPage() {
         analyze: "AI 분석",
         analyzing: "분석 중...",
         failedLoad: "불러오기 실패",
+        loadWarning: "이전 기록을 잠시 불러오지 못했어요. 새 기록 작성은 정상적으로 가능합니다.",
         parseFailed: "일기 정리 실패",
         parseTimeout: "AI가 느려요. 잠시 후 다시 시도해 주세요.",
         parseSchemaInvalid: "AI가 불안정했어요. 다시 시도하면 보통 해결돼요.",
@@ -353,6 +380,7 @@ export default function DailyFlowPage() {
       analyze: "AI Analyze",
       analyzing: "Analyzing...",
       failedLoad: "Failed to load",
+      loadWarning: "We couldn't load previous logs right now. You can still continue writing a new entry.",
       parseFailed: "Diary parsing failed",
       parseTimeout: "AI response timed out. Please retry in a moment.",
       parseSchemaInvalid: "AI returned an invalid format. Retrying usually fixes this.",
@@ -406,6 +434,7 @@ export default function DailyFlowPage() {
   const [saving, setSaving] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [loadWarning, setLoadWarning] = React.useState<string | null>(null);
   const [showParseRetry, setShowParseRetry] = React.useState(false);
   const [hasLocalDraft, setHasLocalDraft] = React.useState(false);
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
@@ -430,10 +459,20 @@ export default function DailyFlowPage() {
       setFocusedIssueIdx(0);
       setStep(entries.length > 0 ? "confirm" : "write");
       setHasLocalDraft(false);
+      setLoadWarning(null);
     },
     onError: (err) => {
+      setHasLocalDraft(false);
+      setParsedEntries([]);
+      setParsedMeta({});
+      setParseIssues([]);
+      setStep("write");
+      if (shouldShowNonBlockingLoadWarning(err)) {
+        setLoadWarning(t.loadWarning);
+        return;
+      }
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setError(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
+      setLoadWarning(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
     },
   });
 
@@ -550,6 +589,7 @@ export default function DailyFlowPage() {
     setParseIssues([]);
     setFocusedIssueIdx(null);
     setError(null);
+    setLoadWarning(null);
     setShowParseRetry(false);
     setEditingIdx(null);
     setHasLocalDraft(false);
@@ -725,7 +765,11 @@ export default function DailyFlowPage() {
       setParsedMeta(normalizedMeta);
       setParseIssues(issues);
       setFocusedIssueIdx(0);
-      setAiNote(typeof res.ai_note === "string" ? res.ai_note : "");
+      setAiNote(
+        typeof res.ai_note === "string" && !isSystemParseNote(res.ai_note)
+          ? res.ai_note
+          : "",
+      );
       setStep("confirm");
       setHasLocalDraft(true);
     } catch (err) {
@@ -749,6 +793,7 @@ export default function DailyFlowPage() {
 
   async function save(): Promise<void> {
     setError(null);
+    setLoadWarning(null);
     setShowParseRetry(false);
     if (!parsedEntries.length) {
       setError(t.needEntries);
@@ -786,6 +831,7 @@ export default function DailyFlowPage() {
 
   async function saveAndAnalyze(options?: { skipSave?: boolean }): Promise<void> {
     setError(null);
+    setLoadWarning(null);
     setShowParseRetry(false);
 
     if (!options?.skipSave) {
@@ -915,6 +961,12 @@ export default function DailyFlowPage() {
               </Button>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {loadWarning ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {loadWarning}
         </div>
       ) : null}
 
