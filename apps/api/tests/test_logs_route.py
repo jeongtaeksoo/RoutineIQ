@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from unittest.mock import AsyncMock
+
 from fastapi.testclient import TestClient
 
 from app.services.supabase_rest import SupabaseRestError
@@ -260,6 +262,61 @@ def test_post_logs_ignores_profile_conflict_error(
 
     assert response.status_code == 200
     assert response.json()["id"] == "log-7"
+
+
+def test_post_logs_returns_200_when_streak_select_side_effect_fails(
+    authenticated_client: TestClient, supabase_mock, monkeypatch
+) -> None:
+    supabase_mock["upsert_one"].return_value = {
+        "id": "log-sidefx-1",
+        "user_id": "00000000-0000-4000-8000-000000000001",
+        "date": "2026-02-15",
+        "entries": _log_payload("2026-02-15")["entries"],
+        "note": "good session",
+        "meta": {},
+    }
+    supabase_mock["select"].side_effect = SupabaseRestError(
+        status_code=500,
+        code="XX000",
+        message="temporary read failure",
+    )
+    log_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr("app.routes.logs.log_system_error", log_mock)
+
+    response = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "log-sidefx-1"
+    assert log_mock.await_count == 1
+
+
+def test_post_logs_returns_200_when_profile_upsert_side_effect_fails(
+    authenticated_client: TestClient, supabase_mock, monkeypatch
+) -> None:
+    supabase_mock["upsert_one"].side_effect = [
+        {
+            "id": "log-sidefx-2",
+            "user_id": "00000000-0000-4000-8000-000000000001",
+            "date": "2026-02-15",
+            "entries": _log_payload("2026-02-15")["entries"],
+            "note": "good session",
+            "meta": {},
+        },
+        SupabaseRestError(
+            status_code=400,
+            code="23502",
+            message='null value in column "age_group" violates not-null constraint',
+        ),
+    ]
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
+    log_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr("app.routes.logs.log_system_error", log_mock)
+
+    response = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
+
+    assert response.status_code == 200
+    assert response.json()["id"] == "log-sidefx-2"
+    assert log_mock.await_count == 1
 
 
 def test_post_logs_persists_optional_daily_meta(

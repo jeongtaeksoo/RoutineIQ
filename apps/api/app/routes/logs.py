@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from app.core.config import settings
 from app.core.security import AuthDep
 from app.schemas.logs import ActivityLogRow, UpsertLogRequest
+from app.services.error_log import log_system_error
 from app.services.streaks import compute_streaks, extract_log_dates
 from app.services.supabase_rest import SupabaseRest, SupabaseRestError
 
@@ -159,22 +160,23 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
         )
 
     # Keep streak fields persisted on profile for fast dashboard access.
-    streak_rows = await sb.select(
-        "activity_logs",
-        bearer_token=auth.access_token,
-        params={
-            "select": "date",
-            "user_id": f"eq.{auth.user_id}",
-            "date": f"lte.{date_iso}",
-            "order": "date.asc",
-            "limit": 5000,
-        },
-    )
-    current_streak, longest_streak = compute_streaks(
-        log_dates=extract_log_dates(streak_rows),
-        anchor_date=body.date,
-    )
+    # This must be best-effort: never fail the main /logs save on auxiliary errors.
     try:
+        streak_rows = await sb.select(
+            "activity_logs",
+            bearer_token=auth.access_token,
+            params={
+                "select": "date",
+                "user_id": f"eq.{auth.user_id}",
+                "date": f"lte.{date_iso}",
+                "order": "date.asc",
+                "limit": 5000,
+            },
+        )
+        current_streak, longest_streak = compute_streaks(
+            log_dates=extract_log_dates(streak_rows),
+            anchor_date=body.date,
+        )
         await sb.upsert_one(
             "profiles",
             bearer_token=auth.access_token,
@@ -186,16 +188,17 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
             },
         )
     except SupabaseRestError as exc:
-        # Backward-compatible fallback for environments where the streak migration
-        # has not been applied yet.
-        detail = str(exc).lower()
-        missing_streak_column = (
-            exc.code == "42703"
-            or "current_streak" in detail
-            or "longest_streak" in detail
+        await log_system_error(
+            route="/api/logs",
+            message="streak/profile side-effect failed (non-blocking)",
+            user_id=auth.user_id,
+            err=exc,
+            meta={
+                "code": exc.code,
+                "status_code": exc.status_code,
+                "date": date_iso,
+            },
         )
-        if not missing_streak_column and not _is_conflict_error(exc):
-            raise
 
     return ActivityLogRow.model_validate(row)
 
