@@ -244,7 +244,7 @@ async def _ensure_cron_runtime_ready(
 ) -> str:
     service_token = (settings.supabase_service_role_key or "").strip()
     if not service_token:
-        detail = {
+        detail: dict[str, Any] = {
             "error": "recovery_cron_preflight_failed",
             "reason": "service_role_key_missing",
             "action": "Set SUPABASE_SERVICE_ROLE_KEY before running recovery cron endpoints.",

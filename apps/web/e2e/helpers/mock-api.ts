@@ -217,7 +217,30 @@ async function handleApiRoute(
   }
 
   if (path === "/preferences/profile" && method === "GET") {
-    return json(route, 200, { goal_keyword: null, goal_minutes_per_day: null });
+    return json(route, 200, {
+      age_group: "unknown",
+      gender: "unknown",
+      job_family: "unknown",
+      work_mode: "unknown",
+      trend_opt_in: true,
+      trend_compare_by: ["age_group", "job_family", "work_mode"],
+      goal_keyword: null,
+      goal_minutes_per_day: null,
+    });
+  }
+
+  if (path === "/preferences/profile" && method === "PUT") {
+    const body = parseJsonSafe(request.postData()) || {};
+    return json(route, 200, {
+      age_group: typeof body.age_group === "string" ? body.age_group : "unknown",
+      gender: typeof body.gender === "string" ? body.gender : "unknown",
+      job_family: typeof body.job_family === "string" ? body.job_family : "unknown",
+      work_mode: typeof body.work_mode === "string" ? body.work_mode : "unknown",
+      trend_opt_in: typeof body.trend_opt_in === "boolean" ? body.trend_opt_in : true,
+      trend_compare_by: Array.isArray(body.trend_compare_by) ? body.trend_compare_by : ["age_group", "job_family", "work_mode"],
+      goal_keyword: typeof body.goal_keyword === "string" ? body.goal_keyword : null,
+      goal_minutes_per_day: typeof body.goal_minutes_per_day === "number" ? body.goal_minutes_per_day : null,
+    });
   }
 
   if (path === "/preferences/data" && method === "DELETE") {

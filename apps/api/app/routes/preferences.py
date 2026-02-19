@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
@@ -172,7 +174,7 @@ async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
     }
 
     async def _auth_delete(*, send_body: bool) -> int:
-        kwargs = {"headers": headers}
+        kwargs: dict[str, Any] = {"headers": headers}
         if send_body:
             kwargs["json"] = {"should_soft_delete": False}
         resp = await get_http().delete(admin_url, **kwargs)
