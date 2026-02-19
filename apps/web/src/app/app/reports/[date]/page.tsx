@@ -203,6 +203,8 @@ export default function ReportPage() {
         weeklyPattern: "주간 패턴",
         microAdviceTitle: "5분 실행 가이드",
         microAdviceDesc: "5분 안에 바로 해볼 수 있는 행동이에요.",
+        showMoreAdvice: "더 보기",
+        showLessAdvice: "접기",
         durationMin: "소요",
         comparisonNote: "비교 메모",
         topDeviation: "주요 원인",
@@ -284,6 +286,8 @@ export default function ReportPage() {
       weeklyPattern: "Weekly pattern signal",
       microAdviceTitle: "5-Minute Micro Advice",
       microAdviceDesc: "Short actions you can execute right away.",
+      showMoreAdvice: "Show more",
+      showLessAdvice: "Show less",
       durationMin: "Duration",
       comparisonNote: "Comparison Note",
       topDeviation: "Top Deviation",
@@ -327,6 +331,7 @@ export default function ReportPage() {
   const [analyzing, setAnalyzing] = React.useState(false);
   const [exporting, setExporting] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
+  const [showAllMicroAdvice, setShowAllMicroAdvice] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<AIReport | null>(null);
   const burnoutRisk =
@@ -379,6 +384,8 @@ export default function ReportPage() {
         widthPct: number;
       }>;
   }, [report]);
+  const microAdviceList = report?.micro_advice ?? [];
+  const visibleMicroAdvice = showAllMicroAdvice ? microAdviceList : microAdviceList.slice(0, 1);
 
   async function load(opts?: { background?: boolean }) {
     setError(null);
@@ -465,6 +472,10 @@ export default function ReportPage() {
     void load({ background: Boolean(cached) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [date, locale, isKo]);
+
+  React.useEffect(() => {
+    setShowAllMicroAdvice(false);
+  }, [date, report?.schema_version]);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -739,9 +750,10 @@ export default function ReportPage() {
               <CardTitle>{t.microAdviceTitle}</CardTitle>
               <CardDescription>{t.microAdviceDesc}</CardDescription>
             </CardHeader>
-            <CardContent className="space-y-3">
-              {report.micro_advice?.length ? (
-                report.micro_advice.map((item, idx) => (
+              <CardContent className="space-y-3">
+              {microAdviceList.length ? (
+                <>
+                  {visibleMicroAdvice.map((item, idx) => (
                   <div key={idx} className="rounded-xl border bg-white/50 p-4">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <p className="text-sm font-semibold">{item.action}</p>
@@ -752,7 +764,19 @@ export default function ReportPage() {
                     <p className="mt-1 text-xs text-mutedFg">{item.when}</p>
                     <p className="mt-2 text-sm">{item.reason}</p>
                   </div>
-                ))
+                  ))}
+                  {microAdviceList.length > 1 ? (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowAllMicroAdvice((prev) => !prev)}
+                      className="self-start"
+                    >
+                      {showAllMicroAdvice ? t.showLessAdvice : `${t.showMoreAdvice} (${microAdviceList.length - 1})`}
+                    </Button>
+                  ) : null}
+                </>
               ) : (
                 <p className="text-sm text-mutedFg">{t.labelNoAdvice}</p>
               )}
@@ -765,7 +789,7 @@ export default function ReportPage() {
               <CardDescription>{t.powerHoursDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {report.productivity_peaks.length ? (
+              {peakTimeline.length ? (
                 <>
                   <div className="rounded-xl border bg-white/50 p-3">
                     <div className="relative h-10 rounded-lg bg-[#f4eee6]">
@@ -784,7 +808,7 @@ export default function ReportPage() {
                       <span>23:59</span>
                     </div>
                   </div>
-                  {report.productivity_peaks.map((p, idx) => (
+                  {peakTimeline.map((p, idx) => (
                     <div key={idx} className="rounded-xl border bg-white/50 p-4">
                       <p className="text-sm font-semibold">
                         {p.start}–{p.end}

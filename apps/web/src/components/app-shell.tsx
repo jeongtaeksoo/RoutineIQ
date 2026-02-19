@@ -163,13 +163,19 @@ export function AppShell({
           <div className="flex items-center justify-between">
             <div>
               <div className="title-serif text-xl leading-none">RutineIQ</div>
+              {resolvedEmail ? <div className="mt-1 text-[11px] text-mutedFg">{maskEmail(resolvedEmail)}</div> : null}
             </div>
-            {resolvedRole === "admin" ? (
-              <span className="inline-flex items-center gap-1 rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
-                <Shield className="h-3.5 w-3.5" />
-                {strings.nav_admin}
-              </span>
-            ) : null}
+            <div className="flex items-center gap-2">
+              {resolvedRole === "admin" ? (
+                <span className="inline-flex items-center gap-1 rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
+                  <Shield className="h-3.5 w-3.5" />
+                  {strings.nav_admin}
+                </span>
+              ) : null}
+              <Button variant="ghost" size="icon" onClick={signOut} disabled={signingOut} aria-label={strings.sign_out}>
+                <LogOut className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           <nav className="flex flex-col gap-1">
@@ -210,16 +216,7 @@ export function AppShell({
             ) : null}
           </nav>
 
-          <div className="mt-auto space-y-3">
-            <div className="rounded-xl border bg-[hsl(var(--muted)/0.45)] p-3 text-xs text-mutedFg">
-              {strings.signed_in_as}
-              <div className="mt-1 truncate text-sm font-medium text-fg">{maskEmail(resolvedEmail) || strings.visitor}</div>
-            </div>
-            <Button variant="outline" className="w-full justify-between" onClick={signOut} disabled={signingOut}>
-              <span>{strings.sign_out}</span>
-              <LogOut className="h-4 w-4" />
-            </Button>
-          </div>
+          <div className="mt-auto" />
         </div>
       </aside>
 

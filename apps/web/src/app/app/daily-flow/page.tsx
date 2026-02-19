@@ -92,10 +92,27 @@ const SYSTEM_PARSE_NOTE_MARKERS = [
   "El formato del diario era claro, así que aplicamos estructuración rápida por reglas.",
 ] as const;
 
+const DIARY_HELPER_TEXT_MARKERS = [
+  "오늘 하루를 돌아보며 자유롭게 적어주세요...",
+  "시간·활동·기분을 적으면 분석이 정확해져요",
+  "Write freely about your day...",
+  "Include time, activity, and mood for better parsing.",
+] as const;
+
 function isSystemParseNote(note: string): boolean {
   const normalized = note.trim();
   if (!normalized) return false;
   return SYSTEM_PARSE_NOTE_MARKERS.some((marker) => normalized.includes(marker));
+}
+
+function sanitizeLoadedDiaryNote(note: string | null | undefined): string {
+  if (!note) return "";
+  const normalized = note.trim();
+  if (!normalized) return "";
+  if (DIARY_HELPER_TEXT_MARKERS.some((marker) => normalized === marker)) {
+    return "";
+  }
+  return note;
 }
 
 function shouldShowNonBlockingLoadWarning(err: unknown): boolean {
@@ -349,7 +366,7 @@ export default function DailyFlowPage() {
         reviewNow: "지금 확인",
         saveLater: "나중에 저장",
         unresolvedHint: (count: number) => `시간 미확정 항목 ${count}개가 남아 있어요`,
-        lowConfidence: "추정 정확도 낮음",
+        lowConfidence: "검토 필요",
         parsedMeta: "정리된 메타",
         edit: "수정하기",
         editEntry: "편집",
@@ -431,7 +448,7 @@ export default function DailyFlowPage() {
       reviewNow: "Review now",
       saveLater: "Save later",
       unresolvedHint: (count: number) => `${count} entries are still time-unconfirmed.`,
-      lowConfidence: "Low confidence",
+      lowConfidence: "Needs review",
       parsedMeta: "Parsed meta",
       edit: "Edit",
       editEntry: "Edit",
@@ -525,7 +542,7 @@ export default function DailyFlowPage() {
       setParsedEntries(entries);
       setParsedMeta(meta);
       setParseIssues(issues);
-      setDiaryText(data?.note || "");
+      setDiaryText(sanitizeLoadedDiaryNote(data?.note || ""));
       setAiNote("");
       setEditingIdx(null);
       setFocusedIssueIdx(0);
