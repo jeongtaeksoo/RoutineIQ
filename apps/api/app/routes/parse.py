@@ -276,11 +276,7 @@ def _parse_time_token(token: str, *, allow_plain_hour: bool = False) -> int | No
         return None
 
     raw = token.strip().lower()
-    has_marker = (
-        ":" in raw
-        or "시" in token
-        or bool(m.group("ap"))
-    )
+    has_marker = ":" in raw or "시" in token or bool(m.group("ap"))
     if not has_marker and not allow_plain_hour:
         return None
 
@@ -333,14 +329,19 @@ def _extract_explicit_time_candidates(diary_text: str) -> list[dict[str, Any]]:
     ) -> None:
         key = (start_idx, end_idx, start_min, end_min, kind)
         if any(
-            (c["start_idx"], c["end_idx"], c.get("start_min"), c.get("end_min"), c["kind"]) == key
+            (
+                c["start_idx"],
+                c["end_idx"],
+                c.get("start_min"),
+                c.get("end_min"),
+                c["kind"],
+            )
+            == key
             for c in candidates
         ):
             return
         crosses_midnight = (
-            start_min is not None
-            and end_min is not None
-            and end_min < start_min
+            start_min is not None and end_min is not None and end_min < start_min
         )
         candidates.append(
             {
@@ -571,7 +572,9 @@ def _post_validate_response(
         time_source = (entry.time_source or "").strip().lower()
         if time_source not in _TIME_SOURCE_VALUES:
             if entry.start is None and entry.end is None:
-                time_source = "window" if _infer_time_window(source_for_window) else "unknown"
+                time_source = (
+                    "window" if _infer_time_window(source_for_window) else "unknown"
+                )
             else:
                 time_source = "explicit"
         entry.time_source = time_source
@@ -591,7 +594,9 @@ def _post_validate_response(
         if entry.time_window is None and entry.start is None and entry.end is None:
             entry.time_window = _infer_time_window(source_for_window)
 
-        if not has_explicit_candidates and (entry.start is not None or entry.end is not None):
+        if not has_explicit_candidates and (
+            entry.start is not None or entry.end is not None
+        ):
             _downgrade_entry_time(
                 entry=entry,
                 idx=idx,
@@ -601,7 +606,9 @@ def _post_validate_response(
             )
             continue
 
-        if time_source in {"window", "unknown"} and (entry.start is not None or entry.end is not None):
+        if time_source in {"window", "unknown"} and (
+            entry.start is not None or entry.end is not None
+        ):
             _downgrade_entry_time(
                 entry=entry,
                 idx=idx,
@@ -621,9 +628,13 @@ def _post_validate_response(
             )
             continue
 
-        if entry.start is not None and entry.end is not None and not _entry_has_explicit_time_evidence(
-            entry=entry,
-            time_candidates=time_candidates,
+        if (
+            entry.start is not None
+            and entry.end is not None
+            and not _entry_has_explicit_time_evidence(
+                entry=entry,
+                time_candidates=time_candidates,
+            )
         ):
             _downgrade_entry_time(
                 entry=entry,
@@ -691,7 +702,9 @@ def _build_fallback_entries(
     segments = [line.strip() for line in diary_text.splitlines() if line.strip()]
     if len(segments) <= 1:
         segments = [
-            seg.strip() for seg in _SENTENCE_SPLIT_RE.split(diary_text) if seg and seg.strip()
+            seg.strip()
+            for seg in _SENTENCE_SPLIT_RE.split(diary_text)
+            if seg and seg.strip()
         ]
 
     if not segments:
@@ -750,7 +763,9 @@ def _build_fallback_entries(
                     tags=[],
                     confidence="low",
                     source_text=segment if segment in diary_text else None,
-                    time_source="window" if _infer_time_window(source_for_window) else "unknown",
+                    time_source=(
+                        "window" if _infer_time_window(source_for_window) else "unknown"
+                    ),
                     time_confidence="low",
                     time_window=_infer_time_window(source_for_window),
                     crosses_midnight=False,
@@ -850,7 +865,7 @@ async def parse_diary(body: ParseDiaryRequest, auth: AuthDep) -> ParseDiaryRespo
     user_prompt = (
         f"date: {body.date.isoformat()}\n"
         f"locale: {auth.locale}\n"
-        f"diary_text:\n\"\"\"\n{safe_diary_text}\n\"\"\"\n\n"
+        f'diary_text:\n"""\n{safe_diary_text}\n"""\n\n'
         "extracted_time_candidates:\n"
         + json.dumps(candidate_payload, ensure_ascii=False)
     )

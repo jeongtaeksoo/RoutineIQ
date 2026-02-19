@@ -611,7 +611,9 @@ async def track_cohort_event(
             tokens_completion=None,
             tokens_total=None,
             cost_usd=None,
-            meta={k: v for k, v in meta.items() if v is not None and v != [] and v != {}},
+            meta={
+                k: v for k, v in meta.items() if v is not None and v != [] and v != {}
+            },
             access_token=auth.access_token,
         )
         return {"ok": True}

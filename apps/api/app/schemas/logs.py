@@ -30,9 +30,13 @@ class ActivityLogEntry(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=12)
     note: str | None = Field(default=None, max_length=280)
     source_text: str | None = Field(default=None, max_length=300)
-    time_source: Literal["explicit", "relative", "window", "unknown", "user_exact"] | None = None
+    time_source: (
+        Literal["explicit", "relative", "window", "unknown", "user_exact"] | None
+    ) = None
     time_confidence: Literal["high", "medium", "low"] | None = None
-    time_window: Literal["dawn", "morning", "lunch", "afternoon", "evening", "night"] | None = None
+    time_window: (
+        Literal["dawn", "morning", "lunch", "afternoon", "evening", "night"] | None
+    ) = None
     crosses_midnight: bool = False
 
     @model_validator(mode="after")
