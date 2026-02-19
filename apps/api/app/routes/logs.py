@@ -18,13 +18,108 @@ def _is_missing_meta_column(exc: SupabaseRestError) -> bool:
     return exc.code == "42703" or ("column" in msg and "meta" in msg)
 
 
+def _is_conflict_error(exc: SupabaseRestError) -> bool:
+    msg = str(exc).lower()
+    details = str(exc.details).lower() if exc.details is not None else ""
+    return (
+        exc.status_code == 409
+        or exc.code == "23505"
+        or "duplicate key" in msg
+        or "duplicate key" in details
+        or "conflict" in msg
+    )
+
+
+async def _select_existing_log_row(
+    sb: SupabaseRest,
+    *,
+    bearer_token: str,
+    user_id: str,
+    date_iso: str,
+    include_meta: bool,
+) -> dict | None:
+    select_fields = (
+        "id,user_id,date,entries,note,meta,created_at,updated_at"
+        if include_meta
+        else "id,user_id,date,entries,note,created_at,updated_at"
+    )
+    try:
+        rows = await sb.select(
+            "activity_logs",
+            bearer_token=bearer_token,
+            params={
+                "select": select_fields,
+                "user_id": f"eq.{user_id}",
+                "date": f"eq.{date_iso}",
+                "limit": 1,
+            },
+        )
+    except SupabaseRestError as exc:
+        if include_meta and _is_missing_meta_column(exc):
+            return await _select_existing_log_row(
+                sb,
+                bearer_token=bearer_token,
+                user_id=user_id,
+                date_iso=date_iso,
+                include_meta=False,
+            )
+        raise
+
+    if not rows:
+        return None
+    row = dict(rows[0])
+    if not isinstance(row.get("meta"), dict):
+        row["meta"] = {}
+    return row
+
+
+async def _upsert_log_row_with_conflict_recovery(
+    sb: SupabaseRest,
+    *,
+    bearer_token: str,
+    on_conflict: str,
+    row: dict,
+    user_id: str,
+    date_iso: str,
+    include_meta: bool,
+) -> dict:
+    last_conflict: SupabaseRestError | None = None
+    for _ in range(2):
+        try:
+            return await sb.upsert_one(
+                "activity_logs",
+                bearer_token=bearer_token,
+                on_conflict=on_conflict,
+                row=row,
+            )
+        except SupabaseRestError as exc:
+            if _is_conflict_error(exc):
+                last_conflict = exc
+                continue
+            raise
+
+    recovered = await _select_existing_log_row(
+        sb,
+        bearer_token=bearer_token,
+        user_id=user_id,
+        date_iso=date_iso,
+        include_meta=include_meta,
+    )
+    if recovered is not None:
+        return recovered
+    if last_conflict is not None:
+        raise last_conflict
+    return {}
+
+
 @router.post("/logs", response_model=ActivityLogRow)
 async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
+    date_iso = body.date.isoformat()
 
     base_row = {
         "user_id": auth.user_id,
-        "date": body.date.isoformat(),
+        "date": date_iso,
         "entries": [e.model_dump() for e in body.entries],
         "note": body.note,
     }
@@ -33,22 +128,28 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
         "meta": body.meta.model_dump(exclude_none=True) if body.meta else {},
     }
     try:
-        row = await sb.upsert_one(
-            "activity_logs",
+        row = await _upsert_log_row_with_conflict_recovery(
+            sb,
             bearer_token=auth.access_token,
             on_conflict="user_id,date",
             row=row_with_meta,
+            user_id=auth.user_id,
+            date_iso=date_iso,
+            include_meta=True,
         )
     except SupabaseRestError as exc:
         # Backward-compatible fallback for environments where `activity_logs.meta`
         # has not been migrated yet.
         if not _is_missing_meta_column(exc):
             raise
-        row = await sb.upsert_one(
-            "activity_logs",
+        row = await _upsert_log_row_with_conflict_recovery(
+            sb,
             bearer_token=auth.access_token,
             on_conflict="user_id,date",
             row=base_row,
+            user_id=auth.user_id,
+            date_iso=date_iso,
+            include_meta=False,
         )
 
     if not row:
@@ -64,7 +165,7 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
         params={
             "select": "date",
             "user_id": f"eq.{auth.user_id}",
-            "date": f"lte.{body.date.isoformat()}",
+            "date": f"lte.{date_iso}",
             "order": "date.asc",
             "limit": 5000,
         },
@@ -93,7 +194,7 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
             or "current_streak" in detail
             or "longest_streak" in detail
         )
-        if not missing_streak_column:
+        if not missing_streak_column and not _is_conflict_error(exc):
             raise
 
     return ActivityLogRow.model_validate(row)
