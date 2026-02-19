@@ -265,6 +265,8 @@ test.describe("RutineIQ core flows", () => {
     await parseButton.click();
     await expect(page.getByText(/AI가 (이렇게 파악했어요|정리한 결과예요)|AI parsed your day like this/i)).toBeVisible();
     await page.getByRole("button", { name: /확인\s*&\s*저장|Confirm\s*&\s*Save/i }).first().click();
+    await expect(page.getByText(/이 구조로 오늘을 정리할까요\?|Would you like to save this structure for today\?/i)).toBeVisible();
+    await page.getByRole("button", { name: /확정하기|Confirm save/i }).first().click();
     await expect(page.getByText(/저장 완료! AI 분석을 (시작할까요|해볼까요)\?|Saved! Start AI analysis\?/i)).toBeVisible();
     await page.getByRole("button", { name: /AI 분석|AI Analyze/i }).first().click();
 
@@ -274,9 +276,7 @@ test.describe("RutineIQ core flows", () => {
     await expect(page.getByRole("heading", { name: /나의 하루 리포트|AI Coach Report/i })).toBeVisible();
     await expect(page.getByText(/오늘의 요약|Your Day in Review/i)).toBeVisible();
     await expect(page.getByText("지금은 25분 한 번만 끝내세요.")).toBeVisible();
-    await expect(
-      page.getByText(/(신호가 부족해 분석 확신도가 낮습니다|데이터가 부족해 정확도가 낮아요)|Signal quality is limited/i),
-    ).toBeVisible();
+    await expect(page.getByText(/집중 패턴|Focus pattern/i)).toBeVisible();
   });
 
   test("F2b: parse-diary 502 shows retry, then succeeds", async ({ page }) => {
@@ -386,6 +386,7 @@ test.describe("RutineIQ core flows", () => {
 
     await page.getByRole("button", { name: /아침|Morning/i }).first().click();
     await page.getByRole("button", { name: /확인\s*&\s*저장|Confirm\s*&\s*Save/i }).first().click();
+    await page.getByRole("button", { name: /확정하기|Confirm save/i }).first().click();
     await expect(page.getByText(/저장 완료! AI 분석을 (시작할까요|해볼까요)\?|Saved! Start AI analysis\?/i)).toBeVisible();
   });
 

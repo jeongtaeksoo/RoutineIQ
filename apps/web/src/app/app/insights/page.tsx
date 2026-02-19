@@ -3,56 +3,33 @@
 import * as React from "react";
 import { Sparkles, FileText, Clock, AlertTriangle, CheckCircle2, ShieldCheck, RotateCcw } from "lucide-react";
 import Link from "next/link";
-import dynamic from "next/dynamic";
 import { Skeleton } from "@/components/ui/skeleton";
 
 import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-const ConsistencyBarChart = dynamic(
-  () => import("@/components/consistency-bar-chart").then((m) => m.ConsistencyBarChart),
-  { ssr: false }
-);
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { DAILY_FLOW_TEMPLATES, DEFAULT_TEMPLATE_NAME } from "@/lib/daily-flow-templates";
 import { localYYYYMMDD } from "@/lib/date-utils";
 import { type AIReport, normalizeReport } from "@/lib/report-utils";
-import { downloadWeeklyShareCard } from "@/lib/share-card";
 import { isE2ETestMode } from "@/lib/supabase/env";
 
 
 
-type GoalPrefs = {
-  keyword: string;
-  minutesPerDay: number;
-};
-
 type WeeklyInsightsResponse = {
   from_date: string;
   to_date: string;
-  consistency: {
-    score: number;
-    days_logged: number;
-    days_total: number;
-    series: { date: string; day: string; blocks: number }[];
-  };
   weekly: {
     days_logged: number;
     days_total: number;
     total_blocks: number;
     deep_minutes: number;
-    goal: { keyword: string; minutes_per_day: number } | null;
-  };
-  streak: {
+  } & Record<string, unknown>;
+  streak?: {
     current: number;
     longest: number;
   };
-  trend: {
-    blocks_change_pct: number | null;
-    deep_minutes_change_pct: number | null;
-    pattern: "improving" | "declining" | "stable" | "insufficient_data";
-    series: { date: string; day: string; blocks: number; deep_minutes: number }[];
-  };
+  trend?: Record<string, unknown>;
 };
 
 type CohortTrend = {
@@ -195,6 +172,11 @@ export default function InsightsPage() {
         todayLabel: "오늘",
         coachTitle: "오늘의 한 마디",
         coachDesc: "기록을 바탕으로 지금 할 행동 1개를 알려줘요.",
+        coreSentenceTitle: "오늘의 핵심 문장",
+        reasonTitle: "이유",
+        reasonEmpty: "오늘 기록이 쌓이면 이유를 함께 보여드릴게요.",
+        oneActionTitle: "지금 할 한 가지",
+        oneActionEmpty: "추천 행동이 아직 없어요.",
         schemaLabel: "스키마",
         weeklyPatternLabel: "주간 패턴",
         microAdviceLabel: "5분 실행",
@@ -260,6 +242,11 @@ export default function InsightsPage() {
         tip: "팁: 매일 조금씩 기록하면, 나에게 더 잘 맞는 제안을 받을 수 있어요.",
         weeklyTitle: "이번 주 요약",
         weeklyDesc: "지난 7일간의 나의 모습입니다.",
+        weeklySimpleTitle: "주간 요약",
+        weeklySimpleDesc: "핵심 3가지만 간단히 확인하세요.",
+        avgFocusTime: "평균 집중 시간",
+        commonFailurePattern: "가장 흔한 방해 패턴",
+        noPattern: "아직 충분한 패턴이 없어요",
         totalBlocks7d: "기록한 활동 수",
         deepMinutes7d: "집중한 시간 (7일)",
         currentStreak: "연속 기록",
@@ -325,6 +312,11 @@ export default function InsightsPage() {
       todayLabel: "Today",
       coachTitle: "One-line Coaching",
       coachDesc: "Based on your log, we suggest one action you can do now.",
+      coreSentenceTitle: "Today’s core sentence",
+      reasonTitle: "Why",
+      reasonEmpty: "We’ll explain the reason once enough daily signals are available.",
+      oneActionTitle: "Do this now",
+      oneActionEmpty: "No immediate action yet.",
       schemaLabel: "Schema",
       weeklyPatternLabel: "Weekly pattern",
       microAdviceLabel: "5-min action",
@@ -390,6 +382,11 @@ export default function InsightsPage() {
       tip: "Tip: log a little daily so the AI loop can improve.",
       weeklyTitle: "Weekly Trend Snapshot",
       weeklyDesc: "Simple metrics from your last 7 days (no extra AI calls).",
+      weeklySimpleTitle: "Weekly summary",
+      weeklySimpleDesc: "Keep it simple with 3 key indicators.",
+      avgFocusTime: "Average focus time",
+      commonFailurePattern: "Most common blocker",
+      noPattern: "Not enough pattern data yet",
       totalBlocks7d: "Total blocks (7d)",
       deepMinutes7d: "Deep Work Minutes (7d)",
       currentStreak: "Current streak",
@@ -459,23 +456,13 @@ export default function InsightsPage() {
   const [analyzing, setAnalyzing] = React.useState(false);
   const [todayLogBlocks, setTodayLogBlocks] = React.useState<number>(0);
 
-  const [consistency, setConsistency] = React.useState<{
-    score: number;
-    series: { day: string; blocks: number }[];
-  }>({ score: 0, series: [] });
   const [weekly, setWeekly] = React.useState<{
     daysLogged: number;
     daysTotal: number;
     totalBlocks: number;
     deepMinutes: number;
-    goal: GoalPrefs | null;
-  }>({ daysLogged: 0, daysTotal: 0, totalBlocks: 0, deepMinutes: 0, goal: null });
+  }>({ daysLogged: 0, daysTotal: 0, totalBlocks: 0, deepMinutes: 0 });
   const [streak, setStreak] = React.useState<{ current: number; longest: number }>({ current: 0, longest: 0 });
-  const [trend, setTrend] = React.useState<{
-    blocksChangePct: number | null;
-    deepMinutesChangePct: number | null;
-    pattern: "improving" | "declining" | "stable" | "insufficient_data";
-  }>({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
   const [metricsLoading, setMetricsLoading] = React.useState(true);
   const [cohortTrend, setCohortTrend] = React.useState<CohortTrend | null>(null);
   const [cohortLoading, setCohortLoading] = React.useState(true);
@@ -600,21 +587,8 @@ export default function InsightsPage() {
     setMetricsLoading(true);
     try {
       if (isE2ETestMode()) {
-        setConsistency({
-          score: 0,
-          series: [
-            { day: "02-01", blocks: 0 },
-            { day: "02-02", blocks: 0 },
-            { day: "02-03", blocks: 0 },
-            { day: "02-04", blocks: 0 },
-            { day: "02-05", blocks: 0 },
-            { day: "02-06", blocks: 0 },
-            { day: "02-07", blocks: 0 },
-          ],
-        });
-        setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
+        setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0 });
         setStreak({ current: 0, longest: 0 });
-        setTrend({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
         return;
       }
 
@@ -625,58 +599,21 @@ export default function InsightsPage() {
       const res = await apiFetch<WeeklyInsightsResponse>(`/insights/weekly?from=${from}&to=${today}`, {
         timeoutMs: 15_000,
       });
-      setConsistency({
-        score: Math.max(0, Math.min(100, Math.round(Number(res.consistency.score) || 0))),
-        series: Array.isArray(res.consistency.series)
-          ? res.consistency.series.map((s) => ({
-            day: String(s.day || "").slice(0, 5),
-            blocks: Number.isFinite(Number(s.blocks)) ? Number(s.blocks) : 0,
-          }))
-          : [],
-      });
-
-      const goal: GoalPrefs | null =
-        res.weekly.goal && typeof res.weekly.goal.keyword === "string"
-          ? {
-            keyword: res.weekly.goal.keyword,
-            minutesPerDay: Number.isFinite(Number(res.weekly.goal.minutes_per_day))
-              ? Math.round(Number(res.weekly.goal.minutes_per_day))
-              : 0,
-          }
-          : null;
-
       setWeekly({
         daysLogged: Number.isFinite(Number(res.weekly.days_logged)) ? Number(res.weekly.days_logged) : 0,
         daysTotal: Number.isFinite(Number(res.weekly.days_total)) ? Number(res.weekly.days_total) : 0,
         totalBlocks: Number.isFinite(Number(res.weekly.total_blocks)) ? Number(res.weekly.total_blocks) : 0,
         deepMinutes: Number.isFinite(Number(res.weekly.deep_minutes)) ? Number(res.weekly.deep_minutes) : 0,
-        goal: goal && goal.minutesPerDay > 0 ? goal : null,
       });
+      const streakCurrent = Number.isFinite(Number(res.streak?.current)) ? Number(res.streak?.current) : 0;
+      const streakLongest = Number.isFinite(Number(res.streak?.longest)) ? Number(res.streak?.longest) : 0;
       setStreak({
-        current: Number.isFinite(Number(res.streak?.current)) ? Number(res.streak.current) : 0,
-        longest: Number.isFinite(Number(res.streak?.longest)) ? Number(res.streak.longest) : 0,
-      });
-      setTrend({
-        blocksChangePct:
-          res.trend?.blocks_change_pct === null || res.trend?.blocks_change_pct === undefined
-            ? null
-            : Number(res.trend.blocks_change_pct),
-        deepMinutesChangePct:
-          res.trend?.deep_minutes_change_pct === null || res.trend?.deep_minutes_change_pct === undefined
-            ? null
-            : Number(res.trend.deep_minutes_change_pct),
-        pattern:
-          res.trend?.pattern === "improving" ||
-            res.trend?.pattern === "declining" ||
-            res.trend?.pattern === "stable"
-            ? res.trend.pattern
-            : "insufficient_data",
+        current: streakCurrent,
+        longest: streakLongest,
       });
     } catch {
-      setConsistency({ score: 0, series: [] });
-      setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0, goal: null });
+      setWeekly({ daysLogged: 0, daysTotal: 7, totalBlocks: 0, deepMinutes: 0 });
       setStreak({ current: 0, longest: 0 });
-      setTrend({ blocksChangePct: null, deepMinutesChangePct: null, pattern: "insufficient_data" });
     } finally {
       setMetricsLoading(false);
     }
@@ -868,27 +805,26 @@ export default function InsightsPage() {
   const hasLog = todayLogBlocks > 0 || hasReport;
   const topPeak = report?.productivity_peaks?.[0] ?? null;
   const topFailure = report?.failure_patterns?.[0] ?? null;
-  const inputQualityScore = Math.round(report?.analysis_meta?.input_quality_score || 0);
-  const dataSufficiency =
-    inputQualityScore >= 75 ? t.suffHigh : inputQualityScore >= 50 ? t.suffMedium : t.suffLow;
-  const lowSignalMode = hasReport && inputQualityScore < 50;
-  const trendLabel =
-    trend.pattern === "improving"
+  const reasonLines = React.useMemo(() => {
+    if (!report) return [] as string[];
+    const lines = [topPeak
       ? isKo
-        ? "개선 중"
-        : "Improving"
-      : trend.pattern === "declining"
+        ? `오늘 ${topPeak.start}~${topPeak.end} 구간에서 집중 패턴이 나타났어요.`
+        : `You showed strong focus around ${topPeak.start}-${topPeak.end}.`
+      : null,
+      report.wellbeing_insight?.energy_curve_forecast || null,
+      topFailure
         ? isKo
-          ? "하락 중"
-          : "Declining"
-        : trend.pattern === "stable"
-          ? isKo
-            ? "유지 중"
-            : "Stable"
-          : isKo
-            ? "데이터 부족"
-            : "Insufficient data";
-  const fmtPct = (value: number | null) => (value === null ? "—" : `${value > 0 ? "+" : ""}${value}%`);
+          ? `${topFailure.trigger} 때문에 흐름이 끊기는 경향이 보여요.`
+          : `Your flow tends to break around: ${topFailure.trigger}.`
+        : null]
+      .filter((line): line is string => Boolean(line && line.trim()))
+      .slice(0, 3);
+    return lines;
+  }, [report, topPeak, topFailure, isKo]);
+  const primaryAction = report?.micro_advice?.[0] ?? null;
+  const averageFocusMinutes = weekly.daysLogged > 0 ? Math.round(weekly.deepMinutes / weekly.daysLogged) : 0;
+  const commonFailurePattern = topFailure?.pattern || t.noPattern;
   const fmtRate = (value: number | null) => (value === null ? "—" : `${Math.round(value)}%`);
   const fmtDelta = (value: number | null) => {
     if (value === null) return t.noPrevWeek;
@@ -997,43 +933,32 @@ export default function InsightsPage() {
               </div>
             ) : report ? (
               <div className="space-y-3">
-                <p className="title-serif text-2xl leading-snug">{report.coach_one_liner}</p>
-                <p className="text-sm text-mutedFg">{report.summary}</p>
-                <div className="inset-block">
-                  <p className="text-xs text-mutedFg">
-                    {t.schemaLabel}: v{report.schema_version ?? 1}
-                  </p>
-                  <p className="mt-1 text-xs text-mutedFg">
-                    {t.weeklyPatternLabel}: {report.weekly_pattern_insight}
-                  </p>
-                  <p className="mt-1 text-xs text-mutedFg">
-                    {t.aiQualityScore}: {inputQualityScore}
-                  </p>
-                  <p className="mt-1 text-xs text-mutedFg">
-                    {t.aiQualityProfile}: {Math.round(report.analysis_meta?.profile_coverage_pct || 0)}%
-                  </p>
-                  <p className="mt-1 text-xs text-mutedFg">
-                    {t.aiQualitySufficiency}: {dataSufficiency}
-                  </p>
-                  <p className="mt-1 text-xs text-mutedFg">
-                    {t.aiQualityTier}:{" "}
-                    {report.analysis_meta?.personalization_tier === "high"
-                      ? t.tierHigh
-                      : report.analysis_meta?.personalization_tier === "medium"
-                        ? t.tierMedium
-                        : t.tierLow}
-                  </p>
-                  {report.micro_advice?.[0] ? (
-                    <p className="mt-2 text-sm">
-                      <span className="font-semibold">{t.microAdviceLabel}:</span>{" "}
-                      {report.micro_advice[0].action} ({report.micro_advice[0].duration_min}m)
+                <div className="rounded-xl border bg-white/60 p-3">
+                  <p className="text-xs text-mutedFg">{t.coreSentenceTitle}</p>
+                  <p className="title-serif mt-1 text-2xl leading-snug">{report.coach_one_liner}</p>
+                </div>
+                <div className="rounded-xl border bg-white/60 p-3">
+                  <p className="text-xs text-mutedFg">{t.reasonTitle}</p>
+                  {reasonLines.length ? (
+                    <ul className="mt-1 list-disc space-y-1 pl-4 text-sm text-mutedFg">
+                      {reasonLines.map((line, idx) => (
+                        <li key={`${idx}-${line}`}>{line}</li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="mt-1 text-sm text-mutedFg">{t.reasonEmpty}</p>
+                  )}
+                </div>
+                <div className="rounded-xl border bg-brand/5 p-3">
+                  <p className="text-xs text-mutedFg">{t.oneActionTitle}</p>
+                  {primaryAction ? (
+                    <p className="mt-1 text-sm font-medium">
+                      {primaryAction.action}
+                      <span className="ml-2 text-xs text-mutedFg">({primaryAction.duration_min}m)</span>
                     </p>
-                  ) : null}
-                  {lowSignalMode ? (
-                    <p className="mt-2 rounded-md border border-amber-300 bg-amber-50/90 px-2 py-1 text-xs text-amber-900">
-                      {t.lowSignalHint}
-                    </p>
-                  ) : null}
+                  ) : (
+                    <p className="mt-1 text-sm text-mutedFg">{t.oneActionEmpty}</p>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2 pt-1">
                   <Button asChild variant="outline" size="sm">
@@ -1403,138 +1328,36 @@ export default function InsightsPage() {
         </Card>
       </div>
 
-      <details className="group rounded-2xl border bg-white/55 p-4 shadow-soft">
-        <summary className="cursor-pointer list-none">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <p className="text-sm font-semibold">{t.detailsTitle}</p>
-              <p className="mt-1 text-xs text-mutedFg">{t.detailsSubtitle}</p>
-            </div>
-            <span className="rounded-full border bg-white/70 px-3 py-1 text-xs text-mutedFg group-open:hidden">
-              {t.labelOpen}
-            </span>
-            <span className="rounded-full border bg-white/70 px-3 py-1 text-xs text-mutedFg hidden group-open:inline-flex">
-              {t.labelClose}
-            </span>
-          </div>
-        </summary>
-
-        <div className="mt-4 grid gap-4 lg:grid-cols-12">
-          <Card className="lg:col-span-12">
-            <CardHeader>
-              <CardTitle>{t.consistency}</CardTitle>
-              <CardDescription>{t.consistencyDesc}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {metricsLoading ? (
-                <div className="space-y-3">
-                  <Skeleton className="h-10 w-24" />
-                  <Skeleton className="h-10 w-full rounded-lg" />
-                  <Skeleton className="h-32 w-full rounded-lg" />
-                  <Skeleton className="h-8 w-48 rounded-md" />
-                </div>
-              ) : (
-                <>
-                  <div className="flex items-baseline justify-between">
-                    <p className="title-serif text-4xl">{consistency.score}</p>
-                    <p className="text-sm text-mutedFg">/ 100</p>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg bg-white/50 p-3 text-sm">
-                    <span className="text-mutedFg">{t.daysLogged}</span>
-                    <span className="font-semibold">
-                      {weekly.daysLogged}/{weekly.daysTotal}
-                    </span>
-                  </div>
-                  <div className="h-32 rounded-lg bg-white/40 p-2">
-                    <ConsistencyBarChart data={consistency.series} />
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      onClick={() =>
-                        downloadWeeklyShareCard({
-                          score: consistency.score,
-                          daysLogged: weekly.daysLogged,
-                          daysTotal: weekly.daysTotal || 7,
-                          totalBlocks: weekly.totalBlocks,
-                          deepMinutes: weekly.deepMinutes,
-                          goalMinutesPerDay: weekly.goal?.minutesPerDay,
-                          goalKeyword: weekly.goal?.keyword
-                        })
-                      }
-                      disabled={!weekly.daysTotal}
-                    >
-                      {t.downloadShare}
-                    </Button>
-                    <p className="text-xs text-mutedFg">{t.tip}</p>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="mt-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>{t.weeklyTitle}</CardTitle>
-              <CardDescription>{t.weeklyDesc}</CardDescription>
-            </CardHeader>
-            <CardContent className="grid gap-4 md:grid-cols-5">
-              {metricsLoading ? (
-                <div className="md:col-span-5 grid gap-4 md:grid-cols-5">
-                  <Skeleton className="h-28 w-full rounded-xl" />
-                  <Skeleton className="h-28 w-full rounded-xl" />
-                  <Skeleton className="h-28 w-full rounded-xl" />
-                  <Skeleton className="h-28 w-full rounded-xl" />
-                  <Skeleton className="h-28 w-full rounded-xl" />
-                </div>
-              ) : (
-                <>
-                  <div className="rounded-xl bg-white/50 p-4">
-                    <p className="text-xs text-mutedFg">{t.totalBlocks7d}</p>
-                    <p className="title-serif mt-1 text-3xl">{weekly.totalBlocks}</p>
-                  </div>
-                  <div className="rounded-xl border bg-white/50 p-4">
-                    <p className="text-xs text-mutedFg">{t.deepMinutes7d}</p>
-                    <p className="title-serif mt-1 text-3xl">{weekly.deepMinutes}</p>
-                  </div>
-                  <div className="rounded-xl border bg-white/50 p-4">
-                    <p className="text-xs text-mutedFg">{t.currentStreak}</p>
-                    <p className="title-serif mt-1 text-3xl">{streak.current}</p>
-                  </div>
-                  <div className="rounded-xl border bg-white/50 p-4">
-                    <p className="text-xs text-mutedFg">{t.longestStreak}</p>
-                    <p className="title-serif mt-1 text-3xl">{streak.longest}</p>
-                  </div>
-                  <div className="rounded-xl border bg-white/50 p-4">
-                    <p className="text-xs text-mutedFg">{t.weeklyNoteTitle}</p>
-                    <p className="mt-2 text-sm">{weekly.daysLogged === 0 ? t.weeklyNoteEmpty : t.weeklyNoteActive}</p>
-                    {weekly.goal ? (
-                      <p className="mt-2 text-xs text-mutedFg">
-                        {isKo ? "현재 목표" : "Current goal"}: {weekly.goal.keyword} · {weekly.goal.minutesPerDay}m
-                      </p>
-                    ) : null}
-                  </div>
-                  <div className="rounded-xl bg-white/50 p-4 md:col-span-5">
-                    <p className="text-xs text-mutedFg">{t.trendPattern}</p>
-                    <div className="mt-2 flex flex-wrap items-center gap-3">
-                      <span className="rounded-full border bg-white/70 px-3 py-1 text-xs">{trendLabel}</span>
-                      <span className="text-xs text-mutedFg">
-                        {t.trendBlocksDelta}: <strong className="text-fg">{fmtPct(trend.blocksChangePct)}</strong>
-                      </span>
-                      <span className="text-xs text-mutedFg">
-                        {t.trendDeepDelta}: <strong className="text-fg">{fmtPct(trend.deepMinutesChangePct)}</strong>
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </details>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t.weeklySimpleTitle}</CardTitle>
+          <CardDescription>{t.weeklySimpleDesc}</CardDescription>
+        </CardHeader>
+        <CardContent className="grid gap-4 md:grid-cols-3">
+          {metricsLoading ? (
+            <>
+              <Skeleton className="h-28 w-full rounded-xl" />
+              <Skeleton className="h-28 w-full rounded-xl" />
+              <Skeleton className="h-28 w-full rounded-xl" />
+            </>
+          ) : (
+            <>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.currentStreak}</p>
+                <p className="title-serif mt-1 text-3xl">{streak.current}</p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.avgFocusTime}</p>
+                <p className="title-serif mt-1 text-3xl">{averageFocusMinutes}m</p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.commonFailurePattern}</p>
+                <p className="mt-2 text-sm">{commonFailurePattern}</p>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 }

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { ChevronLeft, ChevronRight, Clock, Pencil, Sparkles, Target, Zap } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock, Pencil, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
 import useSWR, { useSWRConfig } from "swr";
 
@@ -353,8 +353,11 @@ export default function DailyFlowPage() {
         windowTime: "시간대 기반",
         unknownTime: "확인 필요",
         noTimeInfo: "시간 정보 없음",
+        ambiguousTimeGuide: "시간 정보가 불분명해요. 시간대를 선택하면 분석이 더 정확해집니다.",
         timeWindowPrefix: "시간대",
         evidence: "원본",
+        statusTitle: "상태",
+        feelSummaryTitle: "느낌 요약",
         issueBannerTitle: "한번 확인하면 정확도가 올라가요",
         issueProgress: (current: number, total: number) => `확인 항목 ${current}/${total}`,
         issueNoTime: "시간 정보가 명확하지 않아요. 시간대를 선택하거나 시간을 입력해 주세요.",
@@ -371,6 +374,9 @@ export default function DailyFlowPage() {
         edit: "수정하기",
         editEntry: "편집",
         confirmAndSave: "확인 & 저장",
+        finalizePrompt: "이 구조로 오늘을 정리할까요?",
+        finalizeEdit: "수정하기",
+        finalizeConfirm: "확정하기",
         saving: "저장 중...",
         doneTitle: "저장 완료! AI 분석을 해볼까요?",
         doneHint: "오늘 기록으로 내일 계획을 만들어요.",
@@ -435,8 +441,11 @@ export default function DailyFlowPage() {
       windowTime: "Window-based",
       unknownTime: "Needs review",
       noTimeInfo: "No time information",
+      ambiguousTimeGuide: "Time is unclear. Selecting a time window improves accuracy.",
       timeWindowPrefix: "Window",
       evidence: "Evidence",
+      statusTitle: "Status",
+      feelSummaryTitle: "Feeling summary",
       issueBannerTitle: "A quick check makes this more accurate.",
       issueProgress: (current: number, total: number) => `Review item ${current}/${total}`,
       issueNoTime: "Time is unclear. Pick a time window or set exact time.",
@@ -453,6 +462,9 @@ export default function DailyFlowPage() {
       edit: "Edit",
       editEntry: "Edit",
       confirmAndSave: "Confirm & Save",
+      finalizePrompt: "Would you like to save this structure for today?",
+      finalizeEdit: "Edit again",
+      finalizeConfirm: "Confirm save",
       saving: "Saving...",
       doneTitle: "Saved! Start AI analysis?",
       doneHint: "Generate tomorrow's optimized routine from today's log.",
@@ -514,6 +526,7 @@ export default function DailyFlowPage() {
   const [parseIssues, setParseIssues] = React.useState<ParseIssue[]>([]);
   const [focusedIssueIdx, setFocusedIssueIdx] = React.useState<number | null>(null);
   const [editingIdx, setEditingIdx] = React.useState<number | null>(null);
+  const [confirmingSave, setConfirmingSave] = React.useState(false);
   const [parsing, setParsing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
@@ -681,6 +694,7 @@ export default function DailyFlowPage() {
     setLoadWarning(null);
     setShowParseRetry(false);
     setEditingIdx(null);
+    setConfirmingSave(false);
     setHasLocalDraft(false);
   }
 
@@ -745,7 +759,22 @@ export default function DailyFlowPage() {
 
   function updateParsedEntry(idx: number, patch: Partial<ParsedEntry>) {
     setHasLocalDraft(true);
+    setConfirmingSave(false);
     setParsedEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
+  }
+
+  function energyLabel(value: number | null | undefined): string {
+    if (value == null) return "-";
+    if (value >= 4) return isKo ? "높음" : "High";
+    if (value >= 3) return isKo ? "보통" : "Medium";
+    return isKo ? "낮음" : "Low";
+  }
+
+  function focusLabel(value: number | null | undefined): string {
+    if (value == null) return "-";
+    if (value >= 4) return isKo ? "안정" : "Stable";
+    if (value >= 3) return isKo ? "보통" : "Moderate";
+    return isKo ? "흔들림" : "Unstable";
   }
 
   function entryTimeState(entry: ParsedEntry): "explicit" | "window" | "unknown" {
@@ -858,6 +887,7 @@ export default function DailyFlowPage() {
   async function parseDiary(): Promise<void> {
     if (!date) return;
     setError(null);
+    setConfirmingSave(false);
     setShowParseRetry(false);
     if (diaryText.trim().length < 10) {
       setError(t.needDiary);
@@ -909,6 +939,7 @@ export default function DailyFlowPage() {
   async function save(): Promise<void> {
     if (!date) return;
     setError(null);
+    setConfirmingSave(false);
     setLoadWarning(null);
     setShowParseRetry(false);
     if (!parsedEntries.length) {
@@ -1248,13 +1279,29 @@ export default function DailyFlowPage() {
                         ) : (
                           <p className="mt-1 font-medium">{entry.activity}</p>
                         )}
-                        {entry.note ? <p className="mt-1 text-xs text-mutedFg">{entry.note}</p> : null}
+                        {timeState !== "explicit" ? (
+                          <p className="mt-1 text-xs text-amber-800">{t.ambiguousTimeGuide}</p>
+                        ) : null}
+                        <div className="mt-2 rounded-lg border bg-white/70 p-2">
+                          <p className="text-[11px] font-semibold text-mutedFg">{t.statusTitle}</p>
+                          <p className="mt-1 text-xs text-mutedFg">
+                            {t.energyLabel}: <span className="font-medium text-fg">{energyLabel(entry.energy)}</span>
+                          </p>
+                          <p className="text-xs text-mutedFg">
+                            {t.focusLabel}: <span className="font-medium text-fg">{focusLabel(entry.focus)}</span>
+                          </p>
+                        </div>
+                        <div className="mt-2 rounded-lg border bg-white/70 p-2">
+                          <p className="text-[11px] font-semibold text-mutedFg">{t.feelSummaryTitle}</p>
+                          <p className="mt-1 text-xs text-mutedFg">{entry.note?.trim() || "-"}</p>
+                        </div>
                         {entry.tags && entry.tags.length > 0 ? (
                           <p className="mt-1 text-[11px] text-mutedFg">#{entry.tags.join(" #")}</p>
                         ) : null}
-                        <p className="mt-2 text-xs text-mutedFg">
-                          {t.evidence}: <span className="font-medium">&ldquo;{displayEvidence(entry)}&rdquo;</span>
-                        </p>
+                        <div className="mt-2 rounded-lg border bg-white/70 p-2">
+                          <p className="text-[11px] font-semibold text-mutedFg">{t.evidence}</p>
+                          <p className="mt-1 text-xs text-mutedFg">&ldquo;{displayEvidence(entry)}&rdquo;</p>
+                        </div>
                         {timeState !== "explicit" ? (
                           <div className="mt-2">
                             {isEditing || isFocusedIssue ? (
@@ -1298,23 +1345,8 @@ export default function DailyFlowPage() {
                           {t.editEntry}
                         </button>
                         {entry.crosses_midnight ? <p className="mb-1 text-[10px] text-mutedFg">+1 day</p> : null}
-                        {entry.energy != null ? (
-                          <p>
-                            <Zap className="mr-1 inline h-3.5 w-3.5" />
-                            <span className="mr-1">{t.energyLabel}</span>
-                            {entry.energy}
-                          </p>
-                        ) : null}
-                        {entry.focus != null ? (
-                          <p className="mt-1">
-                            <Target className="mr-1 inline h-3.5 w-3.5" />
-                            <span className="mr-1">{t.focusLabel}</span>
-                            {entry.focus}
-                          </p>
-                        ) : null}
                       </div>
                     </div>
-                    {lowConfidence ? <p className="mt-2 text-[11px] font-medium text-amber-800">{t.lowConfidence}</p> : null}
                   </div>
                 );
               })}
@@ -1339,15 +1371,41 @@ export default function DailyFlowPage() {
           ) : null}
 
           <div className="flex items-center justify-end gap-2">
-            <Button variant="outline" onClick={() => setStep("write")} disabled={isBusy}>
-              {t.edit}
-            </Button>
-            {unresolvedIssues.length > 0 ? (
-              <span className="text-xs text-mutedFg">{t.unresolvedHint(unresolvedIssues.length)}</span>
-            ) : null}
-            <Button onClick={save} disabled={isBusy || parsedEntries.length === 0}>
-              {saving ? t.saving : t.confirmAndSave}
-            </Button>
+            {confirmingSave ? (
+              <div className="w-full rounded-xl border bg-white/70 p-3">
+                <p className="text-sm font-medium">{t.finalizePrompt}</p>
+                <div className="mt-2 flex items-center justify-end gap-2">
+                  <Button variant="outline" onClick={() => setConfirmingSave(false)} disabled={isBusy}>
+                    {t.finalizeEdit}
+                  </Button>
+                  <Button onClick={save} disabled={isBusy || parsedEntries.length === 0}>
+                    {saving ? t.saving : t.finalizeConfirm}
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setConfirmingSave(false);
+                    setStep("write");
+                  }}
+                  disabled={isBusy}
+                >
+                  {t.edit}
+                </Button>
+                {unresolvedIssues.length > 0 ? (
+                  <span className="text-xs text-mutedFg">{t.unresolvedHint(unresolvedIssues.length)}</span>
+                ) : null}
+                <Button
+                  onClick={() => setConfirmingSave(true)}
+                  disabled={isBusy || parsedEntries.length === 0}
+                >
+                  {t.confirmAndSave}
+                </Button>
+              </>
+            )}
           </div>
         </div>
       ) : null}

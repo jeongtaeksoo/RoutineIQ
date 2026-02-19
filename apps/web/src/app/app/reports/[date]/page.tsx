@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { buildTomorrowRoutineIcs } from "@/lib/ics";
-import { addDays, localYYYYMMDD, toMinutes } from "@/lib/date-utils";
+import { addDays, localYYYYMMDD } from "@/lib/date-utils";
 import { type AIReport, normalizeReport } from "@/lib/report-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -202,7 +202,9 @@ export default function ReportPage() {
         wellbeingNote: "웰빙 메모",
         weeklyPattern: "주간 패턴",
         microAdviceTitle: "5분 실행 가이드",
-        microAdviceDesc: "5분 안에 바로 해볼 수 있는 행동이에요.",
+        microAdviceDesc: "지금 바로 실행할 우선순위예요.",
+        primaryAction: "Primary",
+        secondaryActions: "Secondary",
         showMoreAdvice: "더 보기",
         showLessAdvice: "접기",
         durationMin: "소요",
@@ -210,6 +212,11 @@ export default function ReportPage() {
         topDeviation: "주요 원인",
         powerHours: "집중이 잘 된 시간",
         powerHoursDesc: "자연스럽게 집중했던 시간들.",
+        focusPatternTitle: "집중 패턴",
+        focusPatternDesc: "대표 집중 시간과 저하 구간을 정리했어요.",
+        focusPatternRepresentative: "대표 집중 시간",
+        focusPatternDrop: "저하 구간",
+        focusPatternCause: "원인",
         noPowerHours: "아직 데이터가 충분하지 않아요.",
         brokeFocus: "방해가 되었던 것들",
         brokeFocusDesc: "원인과 해결 제안.",
@@ -285,7 +292,9 @@ export default function ReportPage() {
       wellbeingNote: "Wellbeing note",
       weeklyPattern: "Weekly pattern signal",
       microAdviceTitle: "5-Minute Micro Advice",
-      microAdviceDesc: "Short actions you can execute right away.",
+      microAdviceDesc: "Execution priorities you can act on now.",
+      primaryAction: "Primary",
+      secondaryActions: "Secondary",
       showMoreAdvice: "Show more",
       showLessAdvice: "Show less",
       durationMin: "Duration",
@@ -293,6 +302,11 @@ export default function ReportPage() {
       topDeviation: "Top Deviation",
       powerHours: "Your Power Hours",
       powerHoursDesc: "When you naturally perform best.",
+      focusPatternTitle: "Focus pattern",
+      focusPatternDesc: "Representative focus window and drop segment.",
+      focusPatternRepresentative: "Representative focus window",
+      focusPatternDrop: "Drop segment",
+      focusPatternCause: "Cause",
       noPowerHours: "No power hours detected yet.",
       brokeFocus: "What Broke Your Focus",
       brokeFocusDesc: "Triggers + specific fixes.",
@@ -334,6 +348,8 @@ export default function ReportPage() {
   const [showAllMicroAdvice, setShowAllMicroAdvice] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<AIReport | null>(null);
+  const topPeak = report?.productivity_peaks?.[0] ?? null;
+  const topFailure = report?.failure_patterns?.[0] ?? null;
   const burnoutRisk =
     report?.wellbeing_insight?.burnout_risk === "low" || report?.wellbeing_insight?.burnout_risk === "high"
       ? report.wellbeing_insight.burnout_risk
@@ -350,40 +366,6 @@ export default function ReportPage() {
       : burnoutRisk === "low"
         ? "border-emerald-300 bg-emerald-50 text-emerald-700"
         : "border-amber-300 bg-amber-50 text-amber-700";
-  const personalizationTier = report?.analysis_meta?.personalization_tier || "low";
-  const personalizationTierLabel =
-    personalizationTier === "high"
-      ? t.tierHigh
-      : personalizationTier === "medium"
-        ? t.tierMedium
-        : t.tierLow;
-  const inputQualityScore = Math.round(report?.analysis_meta?.input_quality_score || 0);
-  const dataSufficiency =
-    inputQualityScore >= 75 ? t.suffHigh : inputQualityScore >= 50 ? t.suffMedium : t.suffLow;
-  const lowSignalMode = inputQualityScore < 50;
-  const peakTimeline = React.useMemo(() => {
-    if (!report?.productivity_peaks?.length) return [];
-    return report.productivity_peaks
-      .map((p) => {
-        const s = toMinutes(p.start);
-        const e = toMinutes(p.end);
-        if (s == null || e == null || e <= s) return null;
-        return {
-          start: p.start,
-          end: p.end,
-          reason: p.reason,
-          leftPct: (s / 1440) * 100,
-          widthPct: ((e - s) / 1440) * 100,
-        };
-      })
-      .filter(Boolean) as Array<{
-        start: string;
-        end: string;
-        reason: string;
-        leftPct: number;
-        widthPct: number;
-      }>;
-  }, [report]);
   const microAdviceList = report?.micro_advice ?? [];
   const visibleMicroAdvice = showAllMicroAdvice ? microAdviceList : microAdviceList.slice(0, 1);
 
@@ -588,7 +570,7 @@ export default function ReportPage() {
 
       {!loading && report ? (
         <div className="grid gap-4 lg:grid-cols-12">
-          {/* ─── Hero first fold: Coach tip + 1 next action + 3 key metrics ─── */}
+          {/* ─── Hero first fold: core sentence + one action ─── */}
           <Card className="lg:col-span-12 border-brand/20 shadow-elevated">
             <CardHeader>
               <CardTitle>{t.coachOneLiner}</CardTitle>
@@ -612,30 +594,12 @@ export default function ReportPage() {
                 </div>
               ) : null}
 
-              {/* 3 Key metrics */}
-              <div>
-                <p className="text-xs text-mutedFg mb-2">{t.heroKeyMetrics}</p>
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="rounded-xl bg-white/50 p-3 text-center">
-                    <p className="text-[11px] text-mutedFg">{t.burnoutRisk}</p>
-                    <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${burnoutBadgeClass}`}>
-                      {burnoutRiskLabel}
-                    </span>
-                  </div>
-                  <div className="rounded-xl bg-white/50 p-3 text-center">
-                    <p className="text-[11px] text-mutedFg">{t.qualityScore}</p>
-                    <p className="mt-1 text-xl font-semibold">{inputQualityScore}</p>
-                  </div>
-                  <div className="rounded-xl bg-white/50 p-3 text-center">
-                    <p className="text-[11px] text-mutedFg">{t.qualityTier}</p>
-                    <p className="mt-1 text-xl font-semibold">{personalizationTierLabel}</p>
-                  </div>
-                </div>
+              <div className="rounded-xl bg-white/60 p-3">
+                <p className="text-xs text-mutedFg">{t.burnoutRisk}</p>
+                <span className={`mt-1 inline-flex rounded-full border px-2 py-0.5 text-xs font-semibold ${burnoutBadgeClass}`}>
+                  {burnoutRiskLabel}
+                </span>
               </div>
-
-              <p className="text-xs text-mutedFg">
-                {t.schemaBadge}: v{report.schema_version ?? 1}
-              </p>
             </CardContent>
           </Card>
 
@@ -647,56 +611,6 @@ export default function ReportPage() {
               <p className="mt-0.5 text-xs text-blue-800">{t.trustBadgeBody}</p>
             </div>
           </div>
-
-          {report.analysis_meta ? (
-            <Card className="lg:col-span-12">
-              <CardHeader>
-                <CardTitle>{t.qualityTitle}</CardTitle>
-                <CardDescription>{t.qualityDesc}</CardDescription>
-              </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border bg-white/50 p-4">
-                  <p className="text-xs text-mutedFg">{t.qualityScore}</p>
-                  <p className="mt-1 text-lg font-semibold">{inputQualityScore}</p>
-                </div>
-                <div className="rounded-xl border bg-white/50 p-4">
-                  <p className="text-xs text-mutedFg">{t.qualityProfile}</p>
-                  <p className="mt-1 text-lg font-semibold">
-                    {Math.round(report.analysis_meta.profile_coverage_pct || 0)}%
-                  </p>
-                </div>
-                <div className="rounded-xl border bg-white/50 p-4">
-                  <p className="text-xs text-mutedFg">{t.qualityTier}</p>
-                  <p className="mt-1 text-lg font-semibold">{personalizationTierLabel}</p>
-                </div>
-                <div className="rounded-xl border bg-white/50 p-4">
-                  <p className="text-xs text-mutedFg">{t.qualitySignals}</p>
-                  <p className="mt-1 text-sm">
-                    {report.analysis_meta.wellbeing_signals_count || 0}/6
-                  </p>
-                </div>
-                <div className="rounded-xl border bg-white/50 p-4">
-                  <p className="text-xs text-mutedFg">{t.qualityEntries}</p>
-                  <p className="mt-1 text-sm">{report.analysis_meta.logged_entry_count || 0}</p>
-                </div>
-                <div className="rounded-xl border bg-white/50 p-4">
-                  <p className="text-xs text-mutedFg">{t.qualityRetry}</p>
-                  <p className="mt-1 text-sm">{report.analysis_meta.schema_retry_count || 0}</p>
-                </div>
-                <div className="rounded-xl border bg-white/50 p-4">
-                  <p className="text-xs text-mutedFg">{t.qualitySufficiency}</p>
-                  <p className="mt-1 text-sm font-semibold">{dataSufficiency}</p>
-                </div>
-              </CardContent>
-              {lowSignalMode ? (
-                <div className="px-6 pb-6">
-                  <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-3 text-sm text-amber-900">
-                    {t.lowSignalWarning}
-                  </div>
-                </div>
-              ) : null}
-            </Card>
-          ) : null}
 
           <Card className="lg:col-span-12">
             <CardHeader>
@@ -750,31 +664,41 @@ export default function ReportPage() {
               <CardTitle>{t.microAdviceTitle}</CardTitle>
               <CardDescription>{t.microAdviceDesc}</CardDescription>
             </CardHeader>
-              <CardContent className="space-y-3">
+            <CardContent className="space-y-3">
               {microAdviceList.length ? (
                 <>
-                  {visibleMicroAdvice.map((item, idx) => (
-                  <div key={idx} className="rounded-xl border bg-white/50 p-4">
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <p className="text-sm font-semibold">{item.action}</p>
-                      <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
-                        {t.durationMin}: {item.duration_min}m
-                      </span>
+                  {microAdviceList[0] ? (
+                    <div className="rounded-xl border bg-brand/5 p-4">
+                      <p className="text-xs font-semibold text-brand">{t.primaryAction}</p>
+                      <p className="mt-1 text-sm font-semibold">{microAdviceList[0].action}</p>
+                      <p className="mt-1 text-xs text-mutedFg">{microAdviceList[0].when}</p>
+                      <p className="mt-2 text-sm">{microAdviceList[0].reason}</p>
                     </div>
-                    <p className="mt-1 text-xs text-mutedFg">{item.when}</p>
-                    <p className="mt-2 text-sm">{item.reason}</p>
-                  </div>
-                  ))}
+                  ) : null}
                   {microAdviceList.length > 1 ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowAllMicroAdvice((prev) => !prev)}
-                      className="self-start"
-                    >
-                      {showAllMicroAdvice ? t.showLessAdvice : `${t.showMoreAdvice} (${microAdviceList.length - 1})`}
-                    </Button>
+                    <details className="rounded-xl border bg-white/50 p-3">
+                      <summary className="cursor-pointer text-sm font-medium">
+                        {t.secondaryActions} ({microAdviceList.length - 1})
+                      </summary>
+                      <div className="mt-2 space-y-2">
+                        {(showAllMicroAdvice ? microAdviceList.slice(1) : microAdviceList.slice(1, 3)).map((item, idx) => (
+                          <div key={idx} className="rounded-lg border bg-white/70 p-3">
+                            <p className="text-sm font-semibold">{item.action}</p>
+                            <p className="mt-1 text-xs text-mutedFg">{item.when}</p>
+                          </div>
+                        ))}
+                        {microAdviceList.length > 3 ? (
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setShowAllMicroAdvice((prev) => !prev)}
+                          >
+                            {showAllMicroAdvice ? t.showLessAdvice : `${t.showMoreAdvice} (${microAdviceList.length - 3})`}
+                          </Button>
+                        ) : null}
+                      </div>
+                    </details>
                   ) : null}
                 </>
               ) : (
@@ -785,41 +709,26 @@ export default function ReportPage() {
 
           <Card className="lg:col-span-6">
             <CardHeader>
-              <CardTitle>{t.powerHours}</CardTitle>
-              <CardDescription>{t.powerHoursDesc}</CardDescription>
+              <CardTitle>{t.focusPatternTitle}</CardTitle>
+              <CardDescription>{t.focusPatternDesc}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              {peakTimeline.length ? (
-                <>
-                  <div className="rounded-xl border bg-white/50 p-3">
-                    <div className="relative h-10 rounded-lg bg-[#f4eee6]">
-                      {peakTimeline.map((p, idx) => (
-                        <div
-                          key={`${p.start}-${p.end}-${idx}`}
-                          className="absolute top-1/2 h-5 -translate-y-1/2 rounded-md bg-[#d7a86e]/70 ring-1 ring-[#b9803f]/40"
-                          style={{ left: `${p.leftPct}%`, width: `${Math.max(p.widthPct, 2)}%` }}
-                          title={`${p.start}-${p.end}`}
-                        />
-                      ))}
-                    </div>
-                    <div className="mt-2 flex items-center justify-between text-[10px] text-mutedFg">
-                      <span>00:00</span>
-                      <span>12:00</span>
-                      <span>23:59</span>
-                    </div>
-                  </div>
-                  {peakTimeline.map((p, idx) => (
-                    <div key={idx} className="rounded-xl border bg-white/50 p-4">
-                      <p className="text-sm font-semibold">
-                        {p.start}–{p.end}
-                      </p>
-                      <p className="mt-1 text-xs text-mutedFg">{p.reason}</p>
-                    </div>
-                  ))}
-                </>
-              ) : (
-                <p className="text-sm text-mutedFg">{t.noPowerHours}</p>
-              )}
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.focusPatternRepresentative}</p>
+                <p className="mt-1 text-sm font-semibold">
+                  {topPeak ? `${topPeak.start}–${topPeak.end}` : t.noPowerHours}
+                </p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.focusPatternDrop}</p>
+                <p className="mt-1 text-sm">
+                  {topFailure?.trigger || (isKo ? "13:30 이후" : "After the first focus peak")}
+                </p>
+              </div>
+              <div className="rounded-xl border bg-white/50 p-4">
+                <p className="text-xs text-mutedFg">{t.focusPatternCause}</p>
+                <p className="mt-1 text-sm">{topPeak?.reason || topFailure?.trigger || t.noPowerHours}</p>
+              </div>
             </CardContent>
           </Card>
 
@@ -868,14 +777,17 @@ export default function ReportPage() {
               {report.tomorrow_routine.length ? (
                 report.tomorrow_routine.map((it, idx) => (
                   <div key={idx} className="rounded-xl border bg-white/50 p-4">
-                    <div className="flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
-                      <p className="text-sm font-semibold">
-                        {it.start}–{it.end} · {normalizeRoutineActivityLabel(it.activity, isKo)}
-                      </p>
-                      <span className="rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
+                    <p className="text-sm font-semibold">
+                      {it.start}–{it.end} · {normalizeRoutineActivityLabel(it.activity, isKo)}
+                    </p>
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-mutedFg">
+                        {isKo ? "(접기) 실행 포인트 보기" : "(Toggle) View action point"}
+                      </summary>
+                      <p className="mt-2 rounded-lg border bg-white/70 px-2 py-1 text-sm">
                         {t.goal}: {it.goal}
-                      </span>
-                    </div>
+                      </p>
+                    </details>
                   </div>
                 ))
               ) : (
