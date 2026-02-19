@@ -78,7 +78,7 @@ const KO: Strings = {
   nav_short_billing: "결제",
   nav_short_preferences: "설정",
 
-  signed_in_as: "로그인",
+  signed_in_as: "계정",
   visitor: "방문자",
   sign_out: "로그아웃",
 

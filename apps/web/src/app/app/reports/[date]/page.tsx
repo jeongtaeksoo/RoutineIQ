@@ -10,7 +10,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { buildTomorrowRoutineIcs } from "@/lib/ics";
-import { addDays, toMinutes } from "@/lib/date-utils";
+import { addDays, localYYYYMMDD, toMinutes } from "@/lib/date-utils";
 import { type AIReport, normalizeReport } from "@/lib/report-utils";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -153,6 +153,7 @@ export default function ReportPage() {
   const router = useRouter();
   const params = useParams<{ date: string }>();
   const date = params.date;
+  const today = React.useMemo(() => localYYYYMMDD(), []);
 
   const locale = useLocale();
   const isKo = locale === "ko";
@@ -163,6 +164,7 @@ export default function ReportPage() {
         title: "나의 하루 리포트",
         subtitle: "오늘을 돌아보고 내일을 준비해요.",
         date: "날짜",
+        today: "오늘",
         analyze: "이 날의 기록 정리하기",
         analyzing: "정리하는 중...",
         refresh: "다시 불러오기",
@@ -243,6 +245,7 @@ export default function ReportPage() {
       title: "AI Coach Report",
       subtitle: "Date-based report. Find what broke and design a better tomorrow.",
       date: "Date",
+      today: "Today",
       analyze: "Analyze this day",
       analyzing: "Analyzing...",
       refresh: "Reload report",
@@ -479,6 +482,9 @@ export default function ReportPage() {
               onChange={(e) => router.push(`/app/reports/${e.target.value}`)}
               className="w-[160px]"
             />
+            <Button variant="ghost" size="sm" onClick={() => router.push(`/app/reports/${today}`)} disabled={date === today}>
+              {t.today}
+            </Button>
           </div>
           <Button onClick={analyze} disabled={analyzing}>
             <Sparkles className="h-4 w-4" />

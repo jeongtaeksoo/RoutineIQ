@@ -38,6 +38,14 @@ function sanitizeEmailDisplay(value: string | null | undefined): string | null {
   return clean || null;
 }
 
+function maskEmail(value: string | null): string | null {
+  if (!value) return null;
+  const [local, domain] = value.split("@");
+  if (!local || !domain) return value;
+  const head = local.slice(0, 2);
+  return `${head}${"*".repeat(Math.max(local.length - 2, 1))}@${domain}`;
+}
+
 export function AppShell({
   children,
   email,
@@ -205,7 +213,7 @@ export function AppShell({
           <div className="mt-auto space-y-3">
             <div className="rounded-xl border bg-[hsl(var(--muted)/0.45)] p-3 text-xs text-mutedFg">
               {strings.signed_in_as}
-              <div className="mt-1 truncate text-sm font-medium text-fg">{resolvedEmail || strings.visitor}</div>
+              <div className="mt-1 truncate text-sm font-medium text-fg">{maskEmail(resolvedEmail) || strings.visitor}</div>
             </div>
             <Button variant="outline" className="w-full justify-between" onClick={signOut} disabled={signingOut}>
               <span>{strings.sign_out}</span>

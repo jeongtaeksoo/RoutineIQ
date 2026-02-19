@@ -267,6 +267,9 @@ export default function InsightsPage() {
         trendPattern: "주간 변화",
         trendBlocksDelta: "활동 수 변화",
         trendDeepDelta: "집중 시간 변화",
+        weeklyNoteTitle: "이번 주 메모",
+        weeklyNoteEmpty: "데이터가 쌓이면 이곳에 다음 액션이 자동으로 제안됩니다.",
+        weeklyNoteActive: "가장 자주 흐름이 끊긴 구간에 10분 여유 시간을 먼저 넣어보세요.",
         emptyMetricsTitle: "데이터가 쌓이고 있어요",
         emptyMetricsBody: "오늘 첫 기록을 남겨보세요. 3일만 쌓여도 내 패턴이 보이기 시작합니다.",
         detailsTitle: "이번 주 한눈에 보기",
@@ -394,6 +397,9 @@ export default function InsightsPage() {
       trendPattern: "Weekly pattern",
       trendBlocksDelta: "Blocks delta",
       trendDeepDelta: "Deep-work delta",
+      weeklyNoteTitle: "Weekly note",
+      weeklyNoteEmpty: "As data accumulates, the next best action will be suggested here.",
+      weeklyNoteActive: "Add a 10-minute buffer to the block where your flow breaks most often.",
       emptyMetricsTitle: "Building your baseline",
       emptyMetricsBody: "Your first log starts the score. After 3 days, patterns show up fast.",
       detailsTitle: "More weekly metrics",
@@ -1503,34 +1509,13 @@ export default function InsightsPage() {
                     <p className="title-serif mt-1 text-3xl">{streak.longest}</p>
                   </div>
                   <div className="rounded-xl border bg-white/50 p-4">
-                    {weekly.daysLogged === 0 ? (
-                      <>
-                        <p className="text-xs text-mutedFg">{t.emptyMetricsTitle}</p>
-                        <p className="mt-2 text-sm">{t.emptyMetricsBody}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Button asChild size="sm">
-                            <Link href="/app/daily-flow">{t.cta_editLog}</Link>
-                          </Button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs text-mutedFg">{t.nextTitle}</p>
-                        <p className="mt-2 text-sm">
-                          {isKo
-                            ? "흐름이 끊기는 구간에 10분 여유 시간을 넣고, 내일 다시 분석해 보세요."
-                            : "Add a 10-min buffer where you break, then re-run Analyze tomorrow to improve the plan."}
-                        </p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          <Button asChild size="sm">
-                            <Link href="/app/daily-flow">{t.cta_editLog}</Link>
-                          </Button>
-                          <Button asChild variant="outline" size="sm">
-                            <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
-                          </Button>
-                        </div>
-                      </>
-                    )}
+                    <p className="text-xs text-mutedFg">{t.weeklyNoteTitle}</p>
+                    <p className="mt-2 text-sm">{weekly.daysLogged === 0 ? t.weeklyNoteEmpty : t.weeklyNoteActive}</p>
+                    {weekly.goal ? (
+                      <p className="mt-2 text-xs text-mutedFg">
+                        {isKo ? "현재 목표" : "Current goal"}: {weekly.goal.keyword} · {weekly.goal.minutesPerDay}m
+                      </p>
+                    ) : null}
                   </div>
                   <div className="rounded-xl bg-white/50 p-4 md:col-span-5">
                     <p className="text-xs text-mutedFg">{t.trendPattern}</p>

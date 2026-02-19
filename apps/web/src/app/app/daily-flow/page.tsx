@@ -380,6 +380,8 @@ export default function DailyFlowPage() {
         stress: "스트레스",
         energyLabel: "에너지",
         focusLabel: "집중",
+        pickWindow: "시간대 선택",
+        pickWindowHint: "시간이 애매하면 이 항목의 시간대를 지정해 주세요.",
         retryParse: "다시 분석하기",
         retryParseHint: "결과가 어색하면 다시 분석해 보세요",
         aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했어요`,
@@ -460,6 +462,8 @@ export default function DailyFlowPage() {
       stress: "Stress",
       energyLabel: "Energy",
       focusLabel: "Focus",
+      pickWindow: "Set time window",
+      pickWindowHint: "If time is unclear, pick a window for this entry.",
       retryParse: "Re-parse",
       retryParseHint: "Not quite right? Try parsing again",
       aiSourceHint: (n: number) => `AI parsed ${n} activity block${n !== 1 ? "s" : ""}`,
@@ -1235,20 +1239,35 @@ export default function DailyFlowPage() {
                           {t.evidence}: <span className="font-medium">&ldquo;{displayEvidence(entry)}&rdquo;</span>
                         </p>
                         {timeState !== "explicit" ? (
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            {TIME_WINDOWS.map((windowValue) => (
-                              <button
-                                key={`${idx}-${windowValue}`}
-                                type="button"
-                                onClick={() => {
-                                  void setWindowForEntry(idx, windowValue);
-                                }}
-                                className={`rounded-full border px-2.5 py-1 text-[11px] ${entry.time_window === windowValue ? "border-brand bg-brand/10 text-brand" : "bg-white text-mutedFg"
-                                  }`}
-                              >
-                                {t.windowChip[windowValue]}
-                              </button>
-                            ))}
+                          <div className="mt-2">
+                            {isEditing || isFocusedIssue ? (
+                              <div className="flex flex-wrap gap-1.5">
+                                {TIME_WINDOWS.map((windowValue) => (
+                                  <button
+                                    key={`${idx}-${windowValue}`}
+                                    type="button"
+                                    onClick={() => {
+                                      void setWindowForEntry(idx, windowValue);
+                                    }}
+                                    className={`rounded-full border px-2.5 py-1 text-[11px] ${entry.time_window === windowValue ? "border-brand bg-brand/10 text-brand" : "bg-white text-mutedFg"
+                                      }`}
+                                  >
+                                    {t.windowChip[windowValue]}
+                                  </button>
+                                ))}
+                              </div>
+                            ) : (
+                              <div className="flex flex-wrap items-center gap-2">
+                                <p className="text-[11px] text-mutedFg">{t.pickWindowHint}</p>
+                                <button
+                                  type="button"
+                                  onClick={() => setEditingIdx(idx)}
+                                  className="rounded-full border bg-white px-2.5 py-1 text-[11px] font-medium text-mutedFg hover:text-fg"
+                                >
+                                  {t.pickWindow}
+                                </button>
+                              </div>
+                            )}
                           </div>
                         ) : null}
                       </div>
