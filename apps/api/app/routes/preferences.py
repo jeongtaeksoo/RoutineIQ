@@ -165,8 +165,31 @@ async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
             detail="Account deletion is temporarily unavailable",
         )
 
+    sb_service = SupabaseRest(str(settings.supabase_url), service_token)
+    user_id = auth.user_id
+
+    # ── Step 1: Wipe all user data with service role (bypasses RLS) ───────────
+    # Best-effort: a wipe error never blocks the auth-user deletion.
+    # Child tables of profiles are listed first; profiles itself last.
+    for table, filter_key in (
+        ("usage_events", "user_id"),
+        ("ai_reports", "user_id"),
+        ("activity_logs", "user_id"),
+        ("subscriptions", "user_id"),
+        ("profiles", "id"),
+    ):
+        try:
+            await sb_service.delete(
+                table,
+                bearer_token=service_token,
+                params={filter_key: f"eq.{user_id}"},
+            )
+        except Exception:
+            pass  # Cascade from auth-user deletion is the fallback
+
+    # ── Step 2: Delete auth user via GoTrue Admin API ─────────────────────────
     admin_url = (
-        f"{str(settings.supabase_url).rstrip('/')}/auth/v1/admin/users/{auth.user_id}"
+        f"{str(settings.supabase_url).rstrip('/')}/auth/v1/admin/users/{user_id}"
     )
     headers = {
         "apikey": service_token,
