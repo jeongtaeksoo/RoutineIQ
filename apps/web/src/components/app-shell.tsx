@@ -14,6 +14,7 @@ import {
 
 import { AppSettingsPanel } from "@/components/app-settings-panel";
 import { Button } from "@/components/ui/button";
+import { StreakIndicator } from "@/components/streak-indicator";
 import { LocaleProvider } from "@/components/locale-provider";
 import { getStrings, type Locale, normalizeLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
@@ -166,6 +167,7 @@ export function AppShell({
               {resolvedEmail ? <div className="mt-1 text-[11px] text-mutedFg">{maskEmail(resolvedEmail)}</div> : null}
             </div>
             <div className="flex items-center gap-2">
+              <StreakIndicator />
               {resolvedRole === "admin" ? (
                 <span className="inline-flex items-center gap-1 rounded-full border bg-white/70 px-2 py-1 text-[11px] text-mutedFg">
                   <Shield className="h-3.5 w-3.5" />

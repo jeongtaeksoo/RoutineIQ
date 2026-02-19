@@ -11,10 +11,11 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { localYYYYMMDD, addDays, toMinutes } from "@/lib/date-utils";
+import { MoodSelector, type MoodValue } from "./mood-selector";
+import { TimelineView } from "./timeline-view";
 
 type FlowStep = "write" | "confirm" | "done";
-
-type Mood = "very_low" | "low" | "neutral" | "good" | "great";
+type Mood = MoodValue;
 type Confidence = "high" | "medium" | "low";
 type TimeSource = "explicit" | "relative" | "window" | "unknown" | "user_exact";
 type TimeWindow = "dawn" | "morning" | "lunch" | "afternoon" | "evening" | "night";
@@ -523,6 +524,7 @@ export default function DailyFlowPage() {
   const [loadWarning, setLoadWarning] = React.useState<string | null>(null);
   const [showParseRetry, setShowParseRetry] = React.useState(false);
   const [hasLocalDraft, setHasLocalDraft] = React.useState(false);
+  const [selectedMood, setSelectedMood] = React.useState<Mood | null>(null);
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
   const diaryRef = React.useRef<HTMLTextAreaElement | null>(null);
   const entryRefs = React.useRef<Array<HTMLDivElement | null>>([]);
@@ -685,6 +687,7 @@ export default function DailyFlowPage() {
     setEditingIdx(null);
     setConfirmingSave(false);
     setHasLocalDraft(false);
+    setSelectedMood(null);
   }
 
   function navigateDate(delta: number): void {
@@ -878,6 +881,12 @@ export default function DailyFlowPage() {
       const normalizedMeta = normalizeParsedMeta(res.meta);
       const issues = normalizeParseIssues(normalizedMeta.parse_issues ?? []);
       setParsedEntries(normalizedEntries);
+
+      // Override mood if manually selected
+      if (selectedMood) {
+        normalizedMeta.mood = selectedMood;
+      }
+
       setParsedMeta(normalizedMeta);
       setParseIssues(issues);
       setFocusedIssueIdx(0);
@@ -1104,25 +1113,37 @@ export default function DailyFlowPage() {
       ) : null}
 
       {step === "write" ? (
-        <div className="space-y-3 rounded-xl border bg-white/60 p-4 write-area-bg">
-          <Textarea
-            id="diary-input"
-            ref={diaryRef}
-            value={diaryText}
-            onChange={(e) => {
-              setDiaryText(e.target.value);
-              setHasLocalDraft(true);
-            }}
-            aria-label={t.writeTitle}
-            placeholder={t.placeholder}
-            className="min-h-[180px] resize-none bg-white/80"
-          />
-          <p className="text-xs text-mutedFg">{t.writeHint}</p>
-          <div className="flex justify-end">
-            <Button onClick={parseDiary} disabled={!canParse}>
-              <Sparkles className={`mr-1.5 h-4 w-4 ${parsing ? "animate-pulse" : ""}`} />
-              {parsing ? t.parsing : t.parse}
-            </Button>
+        <div className="space-y-4">
+          <div className="rounded-xl border bg-white/60 p-4 write-area-bg space-y-4">
+            <div>
+              <Label className="mb-2 block text-xs font-semibold text-mutedFg">오늘의 기분</Label>
+              <MoodSelector value={selectedMood} onChange={setSelectedMood} disabled={parsing} />
+            </div>
+
+            <div className="h-px bg-border/50" />
+
+            <div>
+              <Label className="mb-2 block text-xs font-semibold text-mutedFg">하루 기록</Label>
+              <Textarea
+                id="diary-input"
+                ref={diaryRef}
+                value={diaryText}
+                onChange={(e) => {
+                  setDiaryText(e.target.value);
+                  setHasLocalDraft(true);
+                }}
+                aria-label={t.writeTitle}
+                placeholder={t.placeholder}
+                className="min-h-[180px] resize-none bg-white/80"
+              />
+              <p className="text-xs text-mutedFg">{t.writeHint}</p>
+              <div className="flex justify-end">
+                <Button onClick={parseDiary} disabled={!canParse}>
+                  <Sparkles className={`mr-1.5 h-4 w-4 ${parsing ? "animate-pulse" : ""}`} />
+                  {parsing ? t.parsing : t.parse}
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       ) : null}
@@ -1143,6 +1164,12 @@ export default function DailyFlowPage() {
             {parsedEntries.length > 0 ? (
               <p className="mt-2 text-[11px] text-mutedFg">{t.aiSourceHint(parsedEntries.length)}</p>
             ) : null}
+
+            {parsedEntries.length > 0 && (
+              <div className="mt-4">
+                <TimelineView entries={parsedEntries} className="h-48" />
+              </div>
+            )}
           </div>
 
           {parsedEntries.length === 0 ? (

@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, FileText, Clock, AlertTriangle, CheckCircle2, ShieldCheck, RotateCcw } from "lucide-react";
+import { Sparkles, FileText, Clock, AlertTriangle, CheckCircle2, ShieldCheck, RotateCcw, Share2 } from "lucide-react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 
@@ -13,8 +13,7 @@ import { DAILY_FLOW_TEMPLATES, DEFAULT_TEMPLATE_NAME } from "@/lib/daily-flow-te
 import { localYYYYMMDD } from "@/lib/date-utils";
 import { type AIReport, normalizeReport } from "@/lib/report-utils";
 import { isE2ETestMode } from "@/lib/supabase/env";
-
-
+import { ShareCard } from "./share-card";
 
 type WeeklyInsightsResponse = {
   from_date: string;
@@ -219,7 +218,7 @@ export default function InsightsPage() {
         consistency: "기록 점수",
         consistencyDesc: "최근 7일간 기록한 날들이에요.",
         daysLogged: "기록한 날",
-        downloadShare: "기록 공유하기",
+        downloadShare: "공유하기",
         tip: "팁: 매일 조금씩 기록하면, 나에게 더 잘 맞는 제안을 받을 수 있어요.",
         weeklyTitle: "이번 주 요약",
         weeklyDesc: "지난 7일간의 나의 모습입니다.",
@@ -430,6 +429,7 @@ export default function InsightsPage() {
   const [recoveryActive, setRecoveryActive] = React.useState<RecoveryActive | null>(null);
   const [recoveryNudge, setRecoveryNudge] = React.useState<RecoveryNudgePayload | null>(null);
   const [nudgeAcking, setNudgeAcking] = React.useState(false);
+  const [shareOpen, setShareOpen] = React.useState(false);
 
   async function loadTodayLog(): Promise<boolean> {
     try {
@@ -772,12 +772,12 @@ export default function InsightsPage() {
         ? `오늘 ${topPeak.start}~${topPeak.end} 구간에서 집중 패턴이 나타났어요.`
         : `You showed strong focus around ${topPeak.start}-${topPeak.end}.`
       : null,
-      report.wellbeing_insight?.energy_curve_forecast || null,
-      topFailure
-        ? isKo
-          ? `${topFailure.trigger} 때문에 흐름이 끊기는 경향이 보여요.`
-          : `Your flow tends to break around: ${topFailure.trigger}.`
-        : null]
+    report.wellbeing_insight?.energy_curve_forecast || null,
+    topFailure
+      ? isKo
+        ? `${topFailure.trigger} 때문에 흐름이 끊기는 경향이 보여요.`
+        : `Your flow tends to break around: ${topFailure.trigger}.`
+      : null]
       .filter((line): line is string => Boolean(line && line.trim()))
       .slice(0, 3);
     return lines;
@@ -1242,9 +1242,15 @@ export default function InsightsPage() {
       </div>
 
       <Card>
-        <CardHeader>
-          <CardTitle>{t.weeklySimpleTitle}</CardTitle>
-          <CardDescription>{t.weeklySimpleDesc}</CardDescription>
+        <CardHeader className="flex flex-row items-center justify-between pb-2">
+          <div className="space-y-1">
+            <CardTitle>{t.weeklySimpleTitle}</CardTitle>
+            <CardDescription>{t.weeklySimpleDesc}</CardDescription>
+          </div>
+          <Button variant="outline" size="sm" className="h-8 gap-1" onClick={() => setShareOpen(true)}>
+            <Share2 className="h-3.5 w-3.5" />
+            <span className="sr-only sm:not-sr-only sm:inline-block">{t.downloadShare}</span>
+          </Button>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-3">
           {metricsLoading ? (
@@ -1271,6 +1277,17 @@ export default function InsightsPage() {
           )}
         </CardContent>
       </Card>
+
+      <ShareCard
+        isOpen={shareOpen}
+        onClose={() => setShareOpen(false)}
+        stats={{
+          streak: streak.current,
+          focusTime: averageFocusMinutes,
+          blocks: todayLogBlocks || weekly.totalBlocks, // Use today blocks or weekly total? "Blocks" usually implies daily average or total. Let's use todayLogBlocks if available, else 0, or maybe weekly total blocks? The card design had "Blocks". Let's use weekly.totalBlocks for now or better yet, make it generic.
+          date: today,
+        }}
+      />
     </div>
   );
 }
