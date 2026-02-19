@@ -151,6 +151,45 @@ def test_post_logs_conflict_409_recovers_from_existing_row(
     assert supabase_mock["upsert_one"].await_count == 3
 
 
+def test_post_logs_conflict_409_falls_back_to_insert_when_select_empty(
+    authenticated_client: TestClient, supabase_mock
+) -> None:
+    conflict = SupabaseRestError(
+        status_code=409,
+        code="23505",
+        message='duplicate key value violates unique constraint "activity_logs_user_id_date_key"',
+    )
+    inserted_row = {
+        "id": "log-inserted-1",
+        "user_id": "00000000-0000-4000-8000-000000000001",
+        "date": "2026-02-15",
+        "entries": _log_payload("2026-02-15")["entries"],
+        "note": "insert fallback",
+        "meta": {"mood": "neutral"},
+    }
+    supabase_mock["upsert_one"].side_effect = [
+        conflict,  # activity_logs first upsert
+        conflict,  # activity_logs second upsert
+        {  # profiles upsert
+            "id": "00000000-0000-4000-8000-000000000001",
+            "current_streak": 1,
+            "longest_streak": 1,
+        },
+    ]
+    supabase_mock["select"].side_effect = [
+        [],  # conflict recovery select: no row found
+        [{"date": "2026-02-15"}],  # streak rows select
+    ]
+    supabase_mock["insert_one"].return_value = inserted_row
+
+    response = authenticated_client.post("/api/logs", json=_log_payload("2026-02-15"))
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == "log-inserted-1"
+    assert supabase_mock["insert_one"].await_count == 1
+
+
 def test_get_logs_returns_saved_log(
     authenticated_client: TestClient, supabase_mock
 ) -> None:

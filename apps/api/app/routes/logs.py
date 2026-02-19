@@ -108,7 +108,32 @@ async def _upsert_log_row_with_conflict_recovery(
     )
     if recovered is not None:
         return recovered
+
     if last_conflict is not None:
+        # Fallback path: in some environments PostgREST upsert can return conflict
+        # transiently/consistently while plain insert succeeds.
+        try:
+            inserted = await sb.insert_one(
+                "activity_logs",
+                bearer_token=bearer_token,
+                row=row,
+            )
+            if isinstance(inserted, dict):
+                if not isinstance(inserted.get("meta"), dict):
+                    inserted["meta"] = {}
+                return inserted
+        except SupabaseRestError as exc:
+            if _is_conflict_error(exc):
+                recovered_after_insert = await _select_existing_log_row(
+                    sb,
+                    bearer_token=bearer_token,
+                    user_id=user_id,
+                    date_iso=date_iso,
+                    include_meta=include_meta,
+                )
+                if recovered_after_insert is not None:
+                    return recovered_after_insert
+            raise
         raise last_conflict
     return {}
 
