@@ -739,8 +739,12 @@ async def get_active_session(
     response: Response,
     auth: AuthDep,
 ) -> RecoveryActiveResponse:
-    _ensure_enabled()
     correlation_id = _correlation_id(request, response)
+    if not settings.recovery_v1_enabled:
+        return RecoveryActiveResponse(
+            has_open_session=False,
+            correlation_id=correlation_id,
+        )
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
 
     try:
@@ -1694,8 +1698,9 @@ async def get_pending_nudge(
     response: Response,
     auth: AuthDep,
 ) -> RecoveryNudgeEnvelope:
-    _ensure_nudge_enabled()
     correlation_id = _correlation_id(request, response)
+    if not (settings.recovery_v1_enabled and settings.recovery_nudge_enabled):
+        return RecoveryNudgeEnvelope(has_nudge=False, correlation_id=correlation_id)
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_anon_key)
 
     try:

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import asyncio
 from fastapi import APIRouter, HTTPException, status
 
 from app.core.config import settings
@@ -36,16 +35,6 @@ _ALLOWED_JOB_FAMILY: set[str] = {
 def _is_rls_write_failure(exc: SupabaseRestError) -> bool:
     msg = str(exc).lower()
     return exc.code == "42501" or "row-level security policy" in msg
-
-
-def _is_ignorable_delete_failure(exc: SupabaseRestError) -> bool:
-    msg = str(exc).lower()
-    return (
-        exc.status_code == 404
-        or exc.code in {"PGRST116", "42P01"}
-        or "relation" in msg
-        and "does not exist" in msg
-    )
 
 
 def _migrate_job_family(value: object) -> str:
@@ -167,70 +156,47 @@ async def delete_my_data(auth: AuthDep) -> dict[str, bool]:
 
 @router.delete("/preferences/account")
 async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
-    if not settings.supabase_service_role_key:
+    service_token = (settings.supabase_service_role_key or "").strip()
+    if not service_token:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account deletion is temporarily unavailable",
-        )
-
-    sb_service = SupabaseRest(
-        str(settings.supabase_url), settings.supabase_service_role_key
-    )
-    service_token = settings.supabase_service_role_key
-
-    async def _delete_table(table: str, params: dict[str, str]) -> None:
-        for attempt in range(2):
-            try:
-                await sb_service.delete(table, bearer_token=service_token, params=params)
-                return
-            except SupabaseRestError as exc:
-                if _is_ignorable_delete_failure(exc):
-                    return
-                if attempt == 0 and exc.status_code >= 500:
-                    await asyncio.sleep(0)
-                    continue
-                raise
-
-    try:
-        await asyncio.gather(
-            _delete_table("ai_reports", {"user_id": f"eq.{auth.user_id}"}),
-            _delete_table("activity_logs", {"user_id": f"eq.{auth.user_id}"}),
-            _delete_table("usage_events", {"user_id": f"eq.{auth.user_id}"}),
-            _delete_table("subscriptions", {"user_id": f"eq.{auth.user_id}"}),
-        )
-        await _delete_table("profiles", {"id": f"eq.{auth.user_id}"})
-    except SupabaseRestError:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete account data",
         )
 
     admin_url = (
         f"{str(settings.supabase_url).rstrip('/')}/auth/v1/admin/users/{auth.user_id}"
     )
+    headers = {
+        "apikey": service_token,
+        "Authorization": f"Bearer {service_token}",
+    }
+
+    async def _auth_delete(*, send_body: bool) -> int:
+        kwargs = {"headers": headers}
+        if send_body:
+            kwargs["json"] = {"should_soft_delete": False}
+        resp = await get_http().delete(admin_url, **kwargs)
+        return resp.status_code
+
     try:
-        resp = await get_http().delete(
-            admin_url,
-            headers={
-                "apikey": service_token,
-                "Authorization": f"Bearer {service_token}",
-            },
-            json={"should_soft_delete": False},
-        )
+        status_code = await _auth_delete(send_body=True)
+        # Some proxies reject DELETE bodies. Retry once without body for compatibility.
+        if status_code == 400:
+            status_code = await _auth_delete(send_body=False)
     except Exception:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete auth user",
-        )
-    if resp.status_code in {401, 403}:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account deletion is temporarily unavailable",
         )
-    if resp.status_code >= 400 and resp.status_code != 404:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to delete auth user",
-        )
 
-    return {"ok": True}
+    if status_code in {200, 204, 404}:
+        return {"ok": True}
+    if status_code in {401, 403}:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account deletion is temporarily unavailable",
+        )
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Failed to delete auth user",
+    )

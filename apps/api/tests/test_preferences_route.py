@@ -103,7 +103,7 @@ def test_delete_data_returns_ok_and_calls_supabase_delete(
     assert second["table"] == "activity_logs"
 
 
-def test_delete_account_returns_ok_and_calls_account_deletes(
+def test_delete_account_returns_ok_and_calls_auth_admin_delete(
     authenticated_client: TestClient, supabase_mock, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     class _Resp:
@@ -119,10 +119,7 @@ def test_delete_account_returns_ok_and_calls_account_deletes(
 
     assert response.status_code == 200
     assert response.json() == {"ok": True}
-    assert supabase_mock["delete"].await_count == 5
-    tables = [call.kwargs["table"] for call in supabase_mock["delete"].await_args_list]
-    assert "profiles" in tables
-    assert set(tables) == {"ai_reports", "activity_logs", "usage_events", "subscriptions", "profiles"}
+    assert supabase_mock["delete"].await_count == 0
     assert fake_http.delete.await_count == 1
     delete_kwargs = fake_http.delete.await_args.kwargs
     assert delete_kwargs["json"] == {"should_soft_delete": False}
@@ -147,10 +144,52 @@ def test_delete_account_treats_missing_auth_user_as_success(
     assert fake_http.delete.await_count == 1
 
 
+def test_delete_account_retries_without_body_when_delete_body_rejected(
+    authenticated_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Resp400:
+        status_code = 400
+
+    class _Resp200:
+        status_code = 200
+
+    class _HttpClient:
+        delete = AsyncMock(side_effect=[_Resp400(), _Resp200()])
+
+    fake_http = _HttpClient()
+    monkeypatch.setattr(preferences_route, "get_http", lambda: fake_http)
+
+    response = authenticated_client.delete("/api/preferences/account")
+
+    assert response.status_code == 200
+    assert fake_http.delete.await_count == 2
+    first_kwargs = fake_http.delete.await_args_list[0].kwargs
+    second_kwargs = fake_http.delete.await_args_list[1].kwargs
+    assert first_kwargs["json"] == {"should_soft_delete": False}
+    assert "json" not in second_kwargs
+
+
 def test_delete_account_returns_503_when_service_role_key_missing(
     authenticated_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(preferences_route.settings, "supabase_service_role_key", "")
+
+    response = authenticated_client.delete("/api/preferences/account")
+
+    assert response.status_code == 503
+
+
+def test_delete_account_returns_503_when_admin_auth_rejected(
+    authenticated_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Resp:
+        status_code = 403
+
+    class _HttpClient:
+        delete = AsyncMock(return_value=_Resp())
+
+    fake_http = _HttpClient()
+    monkeypatch.setattr(preferences_route, "get_http", lambda: fake_http)
 
     response = authenticated_client.delete("/api/preferences/account")
 

@@ -457,14 +457,17 @@ export default function InsightsPage() {
   const [recoveryNudge, setRecoveryNudge] = React.useState<RecoveryNudgePayload | null>(null);
   const [nudgeAcking, setNudgeAcking] = React.useState(false);
 
-  async function loadTodayLog() {
+  async function loadTodayLog(): Promise<boolean> {
     try {
       const res = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`, {
         timeoutMs: 15_000,
       });
-      setTodayLogBlocks(Array.isArray(res.entries) ? res.entries.length : 0);
+      const count = Array.isArray(res.entries) ? res.entries.length : 0;
+      setTodayLogBlocks(count);
+      return count > 0;
     } catch {
       setTodayLogBlocks(0);
+      return false;
     }
   }
 
@@ -739,7 +742,17 @@ export default function InsightsPage() {
       setReport(normalizeReport(cachedReport, isKo));
       setReportLoading(false);
     }
-    void Promise.all([loadReport({ background: Boolean(cachedReport) }), loadTodayLog()]);
+    void (async () => {
+      const hasTodayLog = await loadTodayLog();
+      if (cachedReport || hasTodayLog) {
+        await loadReport({ background: Boolean(cachedReport) });
+        return;
+      }
+      // Avoid unnecessary 404 fetch noise when today's report does not exist yet.
+      setReport(null);
+      clearCachedInsightsReport(today, locale);
+      setReportLoading(false);
+    })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [today, locale, isKo]);
 

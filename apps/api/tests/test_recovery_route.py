@@ -54,6 +54,30 @@ def test_recovery_route_returns_404_when_flag_off(
     assert response.status_code == 404
 
 
+def test_recovery_active_returns_empty_when_flag_off(
+    authenticated_client: TestClient,
+    recovery_flag_off,
+) -> None:
+    response = authenticated_client.get("/api/recovery/active")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_open_session"] is False
+    assert body["session_id"] is None
+
+
+def test_recovery_nudge_returns_empty_when_flags_off(
+    authenticated_client: TestClient,
+    recovery_flag_off,
+) -> None:
+    response = authenticated_client.get("/api/recovery/nudge")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["has_nudge"] is False
+    assert body["nudge"] is None
+
+
 def test_recovery_lapse_returns_existing_open_session(
     authenticated_client: TestClient,
     supabase_mock,
