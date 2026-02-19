@@ -113,6 +113,7 @@ def supabase_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, AsyncMock]:
         "select": AsyncMock(return_value=[]),
         "upsert_one": AsyncMock(return_value={}),
         "insert_one": AsyncMock(return_value={}),
+        "patch": AsyncMock(return_value=[]),
         "delete": AsyncMock(return_value=None),
         "rpc": AsyncMock(return_value=[]),
     }
@@ -155,6 +156,18 @@ def supabase_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, AsyncMock]:
     ) -> None:
         await mocks["delete"](table=table, bearer_token=bearer_token, params=params)
 
+    async def _patch(
+        self: SupabaseRest,
+        table: str,
+        *,
+        bearer_token: str,
+        params: dict[str, Any],
+        payload: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        return await mocks["patch"](
+            table=table, bearer_token=bearer_token, params=params, payload=payload
+        )
+
     async def _rpc(
         self: SupabaseRest,
         fn_name: str,
@@ -169,6 +182,7 @@ def supabase_mock(monkeypatch: pytest.MonkeyPatch) -> dict[str, AsyncMock]:
     monkeypatch.setattr(SupabaseRest, "select", _select)
     monkeypatch.setattr(SupabaseRest, "upsert_one", _upsert_one)
     monkeypatch.setattr(SupabaseRest, "insert_one", _insert_one)
+    monkeypatch.setattr(SupabaseRest, "patch", _patch)
     monkeypatch.setattr(SupabaseRest, "delete", _delete)
     monkeypatch.setattr(SupabaseRest, "rpc", _rpc)
     return mocks

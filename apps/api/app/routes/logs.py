@@ -74,71 +74,7 @@ async def _select_existing_log_row(
     return row
 
 
-async def _upsert_log_row_with_conflict_recovery(
-    sb: SupabaseRest,
-    *,
-    bearer_token: str,
-    on_conflict: str,
-    row: dict,
-    user_id: str,
-    date_iso: str,
-    include_meta: bool,
-) -> dict:
-    last_conflict: SupabaseRestError | None = None
-    for _ in range(2):
-        try:
-            return await sb.upsert_one(
-                "activity_logs",
-                bearer_token=bearer_token,
-                on_conflict=on_conflict,
-                row=row,
-            )
-        except SupabaseRestError as exc:
-            if _is_conflict_error(exc):
-                last_conflict = exc
-                continue
-            raise
-
-    recovered = await _select_existing_log_row(
-        sb,
-        bearer_token=bearer_token,
-        user_id=user_id,
-        date_iso=date_iso,
-        include_meta=include_meta,
-    )
-    if recovered is not None:
-        return recovered
-
-    if last_conflict is not None:
-        # Fallback path: in some environments PostgREST upsert can return conflict
-        # transiently/consistently while plain insert succeeds.
-        try:
-            inserted = await sb.insert_one(
-                "activity_logs",
-                bearer_token=bearer_token,
-                row=row,
-            )
-            if isinstance(inserted, dict):
-                if not isinstance(inserted.get("meta"), dict):
-                    inserted["meta"] = {}
-                return inserted
-        except SupabaseRestError as exc:
-            if _is_conflict_error(exc):
-                recovered_after_insert = await _select_existing_log_row(
-                    sb,
-                    bearer_token=bearer_token,
-                    user_id=user_id,
-                    date_iso=date_iso,
-                    include_meta=include_meta,
-                )
-                if recovered_after_insert is not None:
-                    return recovered_after_insert
-            raise
-        raise last_conflict
-    return {}
-
-
-async def _recover_log_from_route_level_conflict(
+async def _save_log_row(
     sb: SupabaseRest,
     *,
     bearer_token: str,
@@ -146,51 +82,75 @@ async def _recover_log_from_route_level_conflict(
     date_iso: str,
     row_with_meta: dict,
     base_row: dict,
-) -> dict | None:
-    existing = await _select_existing_log_row(
-        sb,
-        bearer_token=bearer_token,
-        user_id=user_id,
-        date_iso=date_iso,
-        include_meta=True,
-    )
-    if existing is None:
-        return None
+) -> dict:
+    """Create or update an activity log using PATCH-first, INSERT-fallback pattern.
 
-    existing_id = existing.get("id")
-    if not isinstance(existing_id, str) or not existing_id:
-        return existing
+    PATCH (HTTP PATCH) updates an existing row and never returns 409.
+    If no row exists (PATCH returns 0 rows), INSERT creates it.
+    A race-condition SELECT guards against concurrent-insert edge cases.
+    """
+    filter_params = {"user_id": f"eq.{user_id}", "date": f"eq.{date_iso}"}
+    include_meta = True
+    active_row: dict = row_with_meta
 
+    # ── Step 1: UPDATE existing row (PATCH never 409s on existing rows) ───────
     try:
-        refreshed = await sb.upsert_one(
+        updated = await sb.patch(
             "activity_logs",
             bearer_token=bearer_token,
-            on_conflict="id",
-            row={**row_with_meta, "id": existing_id},
+            params=filter_params,
+            payload=active_row,
         )
-        if refreshed:
-            return refreshed
+        if updated:
+            result = dict(updated[0])
+            if not isinstance(result.get("meta"), dict):
+                result["meta"] = {}
+            return result
+        # 0 rows updated → no existing row; fall through to INSERT
     except SupabaseRestError as exc:
         if _is_missing_meta_column(exc):
-            refreshed = await sb.upsert_one(
+            include_meta = False
+            active_row = base_row
+            updated = await sb.patch(
                 "activity_logs",
                 bearer_token=bearer_token,
-                on_conflict="id",
-                row={**base_row, "id": existing_id},
+                params=filter_params,
+                payload=active_row,
             )
-            if refreshed:
-                return refreshed
-        elif not _is_conflict_error(exc):
+            if updated:
+                result = dict(updated[0])
+                result.setdefault("meta", {})
+                return result
+            # Still 0 rows → fall through to INSERT
+        else:
             raise
 
-    latest = await _select_existing_log_row(
-        sb,
-        bearer_token=bearer_token,
-        user_id=user_id,
-        date_iso=date_iso,
-        include_meta=True,
-    )
-    return latest or existing
+    # ── Step 2: INSERT (row didn't exist yet) ─────────────────────────────────
+    try:
+        inserted = await sb.insert_one(
+            "activity_logs",
+            bearer_token=bearer_token,
+            row=active_row,
+        )
+        if isinstance(inserted, dict) and inserted:
+            if not isinstance(inserted.get("meta"), dict):
+                inserted["meta"] = {}
+            return inserted
+    except SupabaseRestError as exc:
+        if _is_conflict_error(exc):
+            # Race condition: another request inserted the row between PATCH and INSERT.
+            existing = await _select_existing_log_row(
+                sb,
+                bearer_token=bearer_token,
+                user_id=user_id,
+                date_iso=date_iso,
+                include_meta=include_meta,
+            )
+            if existing is not None:
+                return existing
+        raise
+
+    return {}
 
 
 @router.post("/logs", response_model=ActivityLogRow)
@@ -208,43 +168,15 @@ async def upsert_log(body: UpsertLogRequest, auth: AuthDep) -> ActivityLogRow:
         **base_row,
         "meta": body.meta.model_dump(exclude_none=True) if body.meta else {},
     }
-    try:
-        row = await _upsert_log_row_with_conflict_recovery(
-            sb,
-            bearer_token=auth.access_token,
-            on_conflict="user_id,date",
-            row=row_with_meta,
-            user_id=auth.user_id,
-            date_iso=date_iso,
-            include_meta=True,
-        )
-    except SupabaseRestError as exc:
-        # Backward-compatible fallback for environments where `activity_logs.meta`
-        # has not been migrated yet.
-        if _is_missing_meta_column(exc):
-            row = await _upsert_log_row_with_conflict_recovery(
-                sb,
-                bearer_token=auth.access_token,
-                on_conflict="user_id,date",
-                row=base_row,
-                user_id=auth.user_id,
-                date_iso=date_iso,
-                include_meta=False,
-            )
-        elif _is_conflict_error(exc):
-            recovered = await _recover_log_from_route_level_conflict(
-                sb,
-                bearer_token=auth.access_token,
-                user_id=auth.user_id,
-                date_iso=date_iso,
-                row_with_meta=row_with_meta,
-                base_row=base_row,
-            )
-            if recovered is None:
-                raise
-            row = recovered
-        else:
-            raise
+
+    row = await _save_log_row(
+        sb,
+        bearer_token=auth.access_token,
+        user_id=auth.user_id,
+        date_iso=date_iso,
+        row_with_meta=row_with_meta,
+        base_row=base_row,
+    )
 
     if not row:
         raise HTTPException(

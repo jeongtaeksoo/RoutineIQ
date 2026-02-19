@@ -157,6 +157,23 @@ class SupabaseRest:
             return data[0] if data else {}
         return data
 
+    async def patch(
+        self,
+        table: str,
+        *,
+        bearer_token: str,
+        params: dict[str, Any],
+        payload: dict[str, Any],
+    ) -> list[dict[str, Any]]:
+        url = f"{self._rest_base}/{table}"
+        headers = self._headers(bearer_token, prefer="return=representation")
+        resp = await get_http().patch(url, headers=headers, params=params, json=payload)
+        self._raise_for_error(resp)
+        data = resp.json()
+        if isinstance(data, list):
+            return data
+        return [data] if data else []
+
     async def delete(
         self,
         table: str,

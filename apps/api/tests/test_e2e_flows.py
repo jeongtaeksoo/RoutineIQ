@@ -182,24 +182,47 @@ def _install_inmemory_supabase(
 
         return []
 
-    async def _upsert_one(
-        *, table: str, bearer_token: str, row: dict, on_conflict: str
-    ) -> dict:
+    async def _patch(
+        *, table: str, bearer_token: str, params: dict, payload: dict
+    ) -> list[dict]:
+        if table == "activity_logs":
+            user_id = _eq(params.get("user_id"))
+            date_eq = _eq(params.get("date"))
+            if not user_id or not date_eq:
+                return []
+            key = (user_id, date_eq)
+            prev = logs.get(key)
+            if prev is None:
+                return []
+            merged = {
+                **prev,
+                **deepcopy(payload),
+                "id": prev["id"],
+                "created_at": prev.get("created_at") or _log_ts(date_eq),
+                "updated_at": _log_ts(date_eq),
+            }
+            logs[key] = merged
+            return [deepcopy(merged)]
+        return []
+
+    async def _insert_one(*, table: str, bearer_token: str, row: dict) -> dict:
         if table == "activity_logs":
             user_id = str(row.get("user_id") or "")
             day = str(row.get("date") or "")
             key = (user_id, day)
-            prev = logs.get(key, {})
             merged = {
-                **prev,
                 **deepcopy(row),
-                "id": prev.get("id") or f"log-{len(logs) + 1}",
-                "created_at": prev.get("created_at") or _log_ts(day),
+                "id": f"log-{len(logs) + 1}",
+                "created_at": _log_ts(day),
                 "updated_at": _log_ts(day),
             }
             logs[key] = merged
             return deepcopy(merged)
+        return deepcopy(row)
 
+    async def _upsert_one(
+        *, table: str, bearer_token: str, row: dict, on_conflict: str
+    ) -> dict:
         if table == "profiles":
             user_id = str(row.get("id") or "")
             prev = profiles.get(user_id, {"id": user_id})
@@ -243,6 +266,8 @@ def _install_inmemory_supabase(
         return []
 
     supabase_mock["select"].side_effect = _select
+    supabase_mock["patch"].side_effect = _patch
+    supabase_mock["insert_one"].side_effect = _insert_one
     supabase_mock["upsert_one"].side_effect = _upsert_one
     supabase_mock["rpc"].side_effect = _rpc
 

@@ -70,24 +70,24 @@ def test_logs_get_scopes_queries_to_authenticated_user(
 def test_logs_post_forces_user_id_from_auth_context(
     authenticated_client: TestClient, supabase_mock
 ) -> None:
-    supabase_mock["upsert_one"].return_value = {
+    # New approach: PATCH returns 0 rows (no existing row) → INSERT creates it.
+    # The security check is: user_id in the INSERT payload must come from auth context.
+    supabase_mock["patch"].return_value = []
+    supabase_mock["insert_one"].return_value = {
         "id": "log-1",
         "user_id": TEST_USER_ID,
         "date": "2026-02-15",
         "entries": [],
         "note": None,
     }
+    supabase_mock["select"].return_value = [{"date": "2026-02-15"}]
     response = authenticated_client.post(
         "/api/logs",
         json={"date": "2026-02-15", "entries": [], "note": None},
     )
     assert response.status_code == 200
-    log_call = next(
-        call
-        for call in supabase_mock["upsert_one"].await_args_list
-        if call.kwargs.get("table") == "activity_logs"
-    )
-    row = log_call.kwargs["row"]
+    insert_call = supabase_mock["insert_one"].await_args_list[0]
+    row = insert_call.kwargs["row"]
     assert row["user_id"] == TEST_USER_ID
 
 
