@@ -389,6 +389,36 @@ test.describe("RutineIQ core flows", () => {
     await expect(page.getByText(/저장 완료! AI 분석을 (시작할까요|해볼까요)\?|Saved! Start AI analysis\?/i)).toBeVisible();
   });
 
+  test("F2e: draft text and parsed entries persist after focus revalidation", async ({ page }) => {
+    test.skip(e2eMode === "live", "Mock-only draft preservation scenario");
+    await installRoutineApiMock(page);
+    await enterMockApp(page);
+    await page.goto("/app/daily-flow");
+
+    const diaryText = "09:00~10:00 집중 코딩 후 오후에는 회의와 정리를 진행했다.";
+    const diaryInput = page.locator("textarea");
+    await diaryInput.fill(diaryText);
+    await expect(diaryInput).toHaveValue(diaryText);
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForTimeout(250);
+    await expect(diaryInput).toHaveValue(diaryText);
+
+    await page.getByRole("button", { name: /AI 분석하기|Parse with AI/i }).first().click();
+    await expect(page.getByText(/AI가 (이렇게 파악했어요|정리한 결과예요)|AI parsed your day like this/i)).toBeVisible();
+    await expect(page.locator("p.mt-1.font-medium").filter({ hasText: "Deep work" }).first()).toBeVisible();
+
+    await page.evaluate(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+    await page.waitForTimeout(250);
+
+    await expect(page.getByText(/AI가 (이렇게 파악했어요|정리한 결과예요)|AI parsed your day like this/i)).toBeVisible();
+    await expect(page.locator("p.mt-1.font-medium").filter({ hasText: "Deep work" }).first()).toBeVisible();
+  });
+
   test("F2c: report 404 renders empty-state card, not error banner", async ({ page }) => {
     test.skip(e2eMode === "live", "Mock-only empty-state scenario");
     await installRoutineApiMock(page);

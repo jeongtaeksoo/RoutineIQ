@@ -408,6 +408,7 @@ export default function DailyFlowPage() {
   const [analyzing, setAnalyzing] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [showParseRetry, setShowParseRetry] = React.useState(false);
+  const [hasLocalDraft, setHasLocalDraft] = React.useState(false);
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
   const diaryRef = React.useRef<HTMLTextAreaElement | null>(null);
   const entryRefs = React.useRef<Array<HTMLDivElement | null>>([]);
@@ -417,6 +418,7 @@ export default function DailyFlowPage() {
     revalidateOnFocus: true,
     onSuccess: (data) => {
       if (parsing || saving || analyzing) return;
+      if (hasLocalDraft) return;
       const entries = normalizeParsedEntries(data?.entries);
       const meta = normalizeParsedMeta(data?.meta);
       const issues = normalizeParseIssues(meta.parse_issues ?? []);
@@ -428,6 +430,7 @@ export default function DailyFlowPage() {
       setEditingIdx(null);
       setFocusedIssueIdx(0);
       setStep(entries.length > 0 ? "confirm" : "write");
+      setHasLocalDraft(false);
     },
     onError: (err) => {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
@@ -503,6 +506,7 @@ export default function DailyFlowPage() {
     async (entryIndex: number, resolutionAction: string) => {
       const candidates = parseIssues.filter((issue) => !issue.resolved && issue.entryIndex === entryIndex);
       if (candidates.length === 0) return;
+      setHasLocalDraft(true);
       setParseIssues((prev) =>
         prev.map((issue) =>
           issue.entryIndex === entryIndex && !issue.resolved
@@ -549,6 +553,7 @@ export default function DailyFlowPage() {
     setError(null);
     setShowParseRetry(false);
     setEditingIdx(null);
+    setHasLocalDraft(false);
   }
 
   function navigateDate(delta: number): void {
@@ -609,6 +614,7 @@ export default function DailyFlowPage() {
   }
 
   function updateParsedEntry(idx: number, patch: Partial<ParsedEntry>) {
+    setHasLocalDraft(true);
     setParsedEntries((prev) => prev.map((e, i) => (i === idx ? { ...e, ...patch } : e)));
   }
 
@@ -722,6 +728,7 @@ export default function DailyFlowPage() {
       setFocusedIssueIdx(0);
       setAiNote(typeof res.ai_note === "string" ? res.ai_note : "");
       setStep("confirm");
+      setHasLocalDraft(true);
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       const parseCode = isApiFetchError(err) ? err.code : undefined;
@@ -768,6 +775,7 @@ export default function DailyFlowPage() {
         ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
         resolved_issue_count: resolvedCount,
       });
+      setHasLocalDraft(false);
       setStep("done");
     } catch (err) {
       const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
@@ -805,6 +813,7 @@ export default function DailyFlowPage() {
           ambiguous_count: parsedEntries.filter((entry) => entryTimeState(entry) !== "explicit").length,
           resolved_issue_count: resolvedCount,
         });
+        setHasLocalDraft(false);
       } catch (err) {
         const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
         setError(err instanceof Error ? `${err.message}${hint}` : t.saveFailed);
@@ -917,7 +926,10 @@ export default function DailyFlowPage() {
             id="diary-input"
             ref={diaryRef}
             value={diaryText}
-            onChange={(e) => setDiaryText(e.target.value)}
+            onChange={(e) => {
+              setDiaryText(e.target.value);
+              setHasLocalDraft(true);
+            }}
             aria-label={t.writeTitle}
             placeholder={t.placeholder}
             className="min-h-[180px] resize-none bg-white/80"
