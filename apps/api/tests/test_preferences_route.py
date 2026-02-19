@@ -164,7 +164,7 @@ def test_delete_account_retries_without_body_when_delete_body_rejected(
         status_code = 200
 
     class _HttpClient:
-        delete = AsyncMock(side_effect=[_Resp400(), _Resp200()])
+        delete = AsyncMock(side_effect=[_Resp400(), _Resp400(), _Resp200()])
 
     fake_http = _HttpClient()
     monkeypatch.setattr(preferences_route, "get_http", lambda: fake_http)
@@ -173,11 +173,13 @@ def test_delete_account_retries_without_body_when_delete_body_rejected(
 
     assert response.status_code == 200
     assert supabase_mock["delete"].await_count == 5
-    assert fake_http.delete.await_count == 2
+    assert fake_http.delete.await_count == 3
     first_kwargs = fake_http.delete.await_args_list[0].kwargs
     second_kwargs = fake_http.delete.await_args_list[1].kwargs
+    third_kwargs = fake_http.delete.await_args_list[2].kwargs
     assert first_kwargs["json"] == {"should_soft_delete": False}
-    assert "json" not in second_kwargs
+    assert second_kwargs["json"] == {"should_soft_delete": True}
+    assert "json" not in third_kwargs
 
 
 def test_delete_account_wipes_data_in_correct_order(
@@ -243,6 +245,51 @@ def test_delete_account_returns_503_when_admin_auth_rejected(
 ) -> None:
     class _Resp:
         status_code = 403
+
+    class _HttpClient:
+        delete = AsyncMock(return_value=_Resp())
+
+    fake_http = _HttpClient()
+    monkeypatch.setattr(preferences_route, "get_http", lambda: fake_http)
+
+    response = authenticated_client.delete("/api/preferences/account")
+
+    assert response.status_code == 503
+
+
+def test_delete_account_treats_already_deleted_message_as_success(
+    authenticated_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Resp:
+        status_code = 422
+
+        def json(self):
+            return {"message": "User not found"}
+
+        text = "User not found"
+
+    class _HttpClient:
+        delete = AsyncMock(return_value=_Resp())
+
+    fake_http = _HttpClient()
+    monkeypatch.setattr(preferences_route, "get_http", lambda: fake_http)
+
+    response = authenticated_client.delete("/api/preferences/account")
+
+    assert response.status_code == 200
+    assert response.json() == {"ok": True}
+
+
+def test_delete_account_returns_503_when_admin_temporarily_fails(
+    authenticated_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class _Resp:
+        status_code = 500
+
+        def json(self):
+            return {"message": "internal error"}
+
+        text = "internal error"
 
     class _HttpClient:
         delete = AsyncMock(return_value=_Resp())

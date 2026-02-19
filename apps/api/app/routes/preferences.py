@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, status
@@ -196,32 +197,73 @@ async def delete_my_account(auth: AuthDep) -> dict[str, bool]:
         "Authorization": f"Bearer {service_token}",
     }
 
-    async def _auth_delete(*, send_body: bool) -> int:
+    async def _auth_delete(*, mode: str) -> tuple[int, str]:
         kwargs: dict[str, Any] = {"headers": headers}
-        if send_body:
+        if mode == "hard":
             kwargs["json"] = {"should_soft_delete": False}
+        elif mode == "soft":
+            kwargs["json"] = {"should_soft_delete": True}
         resp = await get_http().delete(admin_url, **kwargs)
-        return resp.status_code
+        text = ""
+        try:
+            payload = resp.json()
+            if isinstance(payload, dict):
+                message = (
+                    payload.get("msg")
+                    or payload.get("message")
+                    or payload.get("error_description")
+                )
+                text = str(message) if message is not None else json.dumps(payload)
+            elif isinstance(payload, str):
+                text = payload
+        except Exception:
+            try:
+                text = resp.text
+            except Exception:
+                text = ""
+        return resp.status_code, text
 
     try:
-        status_code = await _auth_delete(send_body=True)
-        # Some proxies reject DELETE bodies. Retry once without body for compatibility.
-        if status_code == 400:
-            status_code = await _auth_delete(send_body=False)
+        # 1) Hard delete first
+        status_code, status_text = await _auth_delete(mode="hard")
+        # 2) Some environments reject hard-delete body or require soft delete first.
+        if status_code in {400, 422}:
+            status_code, status_text = await _auth_delete(mode="soft")
+        # 3) Some proxies reject DELETE bodies entirely. Retry once without body.
+        if status_code in {400, 422}:
+            status_code, status_text = await _auth_delete(mode="compat")
     except Exception:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account deletion is temporarily unavailable",
         )
 
-    if status_code in {200, 204, 404}:
+    if status_code in {200, 202, 204, 404}:
         return {"ok": True}
     if status_code in {401, 403}:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Account deletion is temporarily unavailable",
         )
+    # Treat common "already deleted / not found" messages as idempotent success.
+    lowered = (status_text or "").lower()
+    if status_code in {400, 409, 422} and (
+        "user not found" in lowered
+        or "not found" in lowered
+        or "already" in lowered
+        or "soft deleted" in lowered
+    ):
+        return {"ok": True}
+    if status_code == 429 or status_code >= 500:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Account deletion is temporarily unavailable",
+        )
     raise HTTPException(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        detail="Failed to delete auth user",
+        detail=(
+            "Failed to delete auth user"
+            if not status_text
+            else f"Failed to delete auth user: {status_text[:180]}"
+        ),
     )

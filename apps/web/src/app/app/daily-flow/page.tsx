@@ -123,6 +123,52 @@ function formatDateLabel(dateStr: string, isKo: boolean): string {
   return `${months[m - 1]} ${d} (${dayName})`;
 }
 
+function pad2(value: number): string {
+  return String(value).padStart(2, "0");
+}
+
+function format24h(hour: number, minute: number): string | null {
+  if (!Number.isInteger(hour) || !Number.isInteger(minute)) return null;
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return `${pad2(hour)}:${pad2(minute)}`;
+}
+
+function extractAnchorTimeFromText(text: string | null | undefined): string | null {
+  if (!text) return null;
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+
+  const hhmm = /(?:^|[^0-9])(\d{1,2}):(\d{2})(?!\d)/.exec(trimmed);
+  if (hhmm) {
+    const normalized = format24h(Number(hhmm[1]), Number(hhmm[2]));
+    if (normalized) return normalized;
+  }
+
+  const koAmPm = /(오전|오후)\s*(\d{1,2})\s*시(?:\s*(\d{1,2})\s*분?)?/.exec(trimmed);
+  if (koAmPm) {
+    const ap = koAmPm[1];
+    let hour = Number(koAmPm[2]);
+    const minute = koAmPm[3] ? Number(koAmPm[3]) : 0;
+    if (ap === "오전") {
+      if (hour === 12) hour = 0;
+    } else if (ap === "오후") {
+      if (hour >= 1 && hour <= 11) hour += 12;
+    }
+    const normalized = format24h(hour, minute);
+    if (normalized) return normalized;
+  }
+
+  return null;
+}
+
+function entryAnchorTime(entry: ParsedEntry): string | null {
+  return (
+    extractAnchorTimeFromText(entry.source_text) ||
+    extractAnchorTimeFromText(entry.note) ||
+    extractAnchorTimeFromText(entry.activity)
+  );
+}
+
 
 
 const TIME_WINDOWS: TimeWindow[] = ["dawn", "morning", "lunch", "afternoon", "evening", "night"];
@@ -687,9 +733,12 @@ export default function DailyFlowPage() {
     if (state === "explicit" && entry.start && entry.end) {
       return `${entry.start} - ${entry.end}`;
     }
+    const anchor = entryAnchorTime(entry);
     if (state === "window") {
+      if (anchor) return `${anchor} · ${t.timeWindowPrefix}: ${timeWindowLabel(entry.time_window)}`;
       return `${t.timeWindowPrefix}: ${timeWindowLabel(entry.time_window)}`;
     }
+    if (anchor) return `${anchor} · ${t.noTimeInfo}`;
     return t.noTimeInfo;
   }
 
