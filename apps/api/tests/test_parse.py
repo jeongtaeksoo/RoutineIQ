@@ -215,3 +215,49 @@ def test_parse_diary_fallback_handles_timeline_text_without_year_misread(
     )
     assert breakfast is not None
     assert all(entry["start"] != "20:00" for entry in entries)
+
+
+def test_parse_diary_fallback_groups_structured_blocks_and_avoids_partial_time(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    request = httpx.Request("POST", "https://api.openai.com/v1/responses")
+    monkeypatch.setattr(
+        parse_route,
+        "call_openai_structured",
+        AsyncMock(side_effect=httpx.ConnectError("network issue", request=request)),
+    )
+    monkeypatch.setattr(parse_route, "log_system_error", AsyncMock(return_value=None))
+
+    diary_text = (
+        "09:10 — 루틴 점검 및 UI/UX 개선 계획 검토\n"
+        "활동: 구조 문서 읽고 변경 옵션 비교\n"
+        "기분: 차분하지만 집중도 높음. 방향이 정리되는 느낌.\n"
+        "• 13:30 — 점심 후 가벼운 산책\n"
+        "활동: 머리 식히기, 생각 정리\n"
+        "기분: 약간 피곤했지만 걷고 나니 안정됨.\n"
+        "• 16:00 — 카피 단순화 아이디어 메모\n"
+        "활동: 어려운 용어를 쉬운 표현으로 바꾸기\n"
+        "기분: 사용자를 더 이해하려는 감각이 생겨서 만족감.\n"
+        "• 20:40 — 하루 정리\n"
+        "활동: 내일 우선순위 3가지 적기\n"
+        "기분: 완벽하진 않았지만, 구조 안에서 움직였다는 안정감."
+    )
+
+    res = authenticated_client.post(
+        "/api/parse-diary",
+        json={"date": "2026-02-19", "diary_text": diary_text},
+    )
+
+    assert res.status_code == 200
+    body = res.json()
+    entries = body["entries"]
+    assert len(entries) <= 6
+    assert any("구조 문서 읽고 변경 옵션 비교" in str(entry.get("activity")) for entry in entries)
+    assert all(
+        not str(entry.get("activity", "")).startswith(("활동:", "기분:"))
+        for entry in entries
+    )
+    assert all((entry.get("start") is None) == (entry.get("end") is None) for entry in entries)
+    assert all("partial time detected" not in issue for issue in body["meta"]["parse_issues"])
+    assert body["meta"].get("mood") in {"neutral", "good", None}
+    assert body["meta"].get("sleep_hours") is None

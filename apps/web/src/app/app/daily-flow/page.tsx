@@ -237,7 +237,6 @@ function buildMetaPayload(meta: ParsedMeta): Record<string, unknown> {
   const payload: Record<string, unknown> = {};
   if (meta.mood) payload.mood = meta.mood;
   if (meta.sleep_quality != null) payload.sleep_quality = meta.sleep_quality;
-  if (meta.sleep_hours != null) payload.sleep_hours = meta.sleep_hours;
   if (meta.stress_level != null) payload.stress_level = meta.stress_level;
   if (meta.parse_issues && meta.parse_issues.length > 0) payload.parse_issues = meta.parse_issues;
   return payload;
@@ -842,7 +841,6 @@ export default function DailyFlowPage() {
     const rows: Array<{ label: string; value: string }> = [];
     if (parsedMeta.mood) rows.push({ label: t.mood, value: t.moods[parsedMeta.mood] });
     if (parsedMeta.sleep_quality != null) rows.push({ label: t.sleepQuality, value: String(parsedMeta.sleep_quality) });
-    if (parsedMeta.sleep_hours != null) rows.push({ label: t.sleepHours, value: String(parsedMeta.sleep_hours) });
     if (parsedMeta.stress_level != null) rows.push({ label: t.stress, value: String(parsedMeta.stress_level) });
     return rows;
   }, [parsedMeta, t]);

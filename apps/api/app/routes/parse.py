@@ -247,6 +247,15 @@ _NEGATIVE_HINTS = (
     "distracted",
 )
 
+_ACTIVITY_LABEL_RE = re.compile(
+    r"^\s*(?:활동|activity)\s*[:：]\s*(?P<value>.+)\s*$",
+    flags=re.IGNORECASE,
+)
+_MOOD_LABEL_RE = re.compile(
+    r"^\s*(?:기분|mood)\s*[:：]\s*(?P<value>.+)\s*$",
+    flags=re.IGNORECASE,
+)
+
 
 def _locale_or_default(locale: str) -> str:
     return locale if locale in _FALLBACK_AI_NOTE else "ko"
@@ -432,26 +441,53 @@ def _infer_meta(text: str) -> ParsedMeta:
     lowered = text.lower()
 
     mood: str | None = None
-    if any(token in lowered for token in ("매우 좋", "great", "excellent", "최고")):
-        mood = "great"
-    elif any(token in lowered for token in ("좋", "good", "괜찮")):
-        mood = "good"
-    elif any(token in lowered for token in ("피곤", "힘들", "tired", "low energy")):
-        mood = "low"
-    elif any(token in lowered for token in ("최악", "very bad", "burnout", "번아웃")):
+    severe_negative = any(
+        token in lowered for token in ("최악", "very bad", "burnout", "번아웃", "panic")
+    )
+    strong_positive = any(
+        token in lowered
+        for token in ("매우 좋", "great", "excellent", "최고", "very good")
+    )
+    positive_hints = (
+        "좋",
+        "괜찮",
+        "만족",
+        "안정",
+        "차분",
+        "성취",
+        "calm",
+        "stable",
+        "satisfied",
+    )
+    negative_hints = (
+        "피곤",
+        "힘들",
+        "지침",
+        "불안",
+        "스트레스",
+        "압박",
+        "tired",
+        "exhausted",
+        "stressed",
+        "anxious",
+    )
+    pos_score = sum(1 for token in positive_hints if token in lowered)
+    neg_score = sum(1 for token in negative_hints if token in lowered)
+
+    if severe_negative:
         mood = "very_low"
-    elif any(token in lowered for token in ("보통", "neutral", "무난")):
+    elif strong_positive and neg_score == 0:
+        mood = "great"
+    elif pos_score >= neg_score + 2:
+        mood = "good"
+    elif neg_score >= pos_score + 2:
+        mood = "low"
+    elif (pos_score > 0 and neg_score > 0) or any(
+        token in lowered for token in ("보통", "neutral", "무난")
+    ):
         mood = "neutral"
 
     sleep_hours: float | None = None
-    sleep_match = _SLEEP_HOURS_RE.search(text)
-    if sleep_match:
-        try:
-            parsed = float(sleep_match.group(1))
-            if 0 <= parsed <= 14:
-                sleep_hours = parsed
-        except ValueError:
-            sleep_hours = None
 
     sleep_quality: int | None = None
     if any(token in lowered for token in ("숙면", "well slept", "slept well")):
@@ -543,6 +579,35 @@ def _downgrade_entry_time(
     if entry.time_window not in _TIME_WINDOW_VALUES:
         entry.time_window = _infer_time_window(source_for_window)
     _append_issue(issues, f"entry[{idx}] {reason}")
+
+
+def _window_from_minutes(total_minutes: int) -> str:
+    if total_minutes < 6 * 60:
+        return "dawn"
+    if total_minutes < 11 * 60:
+        return "morning"
+    if total_minutes < 14 * 60:
+        return "lunch"
+    if total_minutes < 18 * 60:
+        return "afternoon"
+    if total_minutes < 22 * 60:
+        return "evening"
+    return "night"
+
+
+def _strip_bullet_prefix(value: str) -> str:
+    return re.sub(r"^\s*[•·▪︎◦\-*]+\s*", "", value).strip()
+
+
+def _fallback_source_text(
+    lines: list[str], anchor_raw: str | None, diary_text: str
+) -> str | None:
+    for line in lines:
+        if line in diary_text:
+            return line
+    if anchor_raw and anchor_raw in diary_text:
+        return anchor_raw
+    return None
 
 
 def _post_validate_response(
@@ -699,78 +764,181 @@ def _build_fallback_entries(
     locale: str,
     time_candidates: list[dict[str, Any]],
 ) -> list[ParsedEntry]:
-    segments = [line.strip() for line in diary_text.splitlines() if line.strip()]
-    if len(segments) <= 1:
+    line_infos: list[dict[str, Any]] = []
+    for match in re.finditer(r"[^\n]+", diary_text):
+        raw_line = match.group(0)
+        text = raw_line.strip()
+        if not text:
+            continue
+        start_idx, end_idx = match.span()
+        related = [
+            c for c in time_candidates if start_idx <= int(c["start_idx"]) < end_idx
+        ]
+        line_infos.append(
+            {
+                "text": text,
+                "start_idx": start_idx,
+                "end_idx": end_idx,
+                "time_candidates": related,
+            }
+        )
+
+    if not line_infos:
         segments = [
             seg.strip()
             for seg in _SENTENCE_SPLIT_RE.split(diary_text)
             if seg and seg.strip()
         ]
+        line_infos = [
+            {
+                "text": seg,
+                "start_idx": 0,
+                "end_idx": 0,
+                "time_candidates": [],
+            }
+            for seg in segments
+        ]
 
-    if not segments:
-        segments = [_FALLBACK_ACTIVITY[_locale_or_default(locale)]]
+    blocks: list[dict[str, Any]] = []
+    current: dict[str, Any] | None = None
+    for info in line_infos:
+        if info["time_candidates"]:
+            if current is not None:
+                blocks.append(current)
+            current = {"lines": [info], "anchor": info["time_candidates"][0]}
+            continue
+        if current is None:
+            blocks.append({"lines": [info], "anchor": None})
+        else:
+            current["lines"].append(info)
+    if current is not None:
+        blocks.append(current)
 
     entries: list[ParsedEntry] = []
-    cursor = 0
 
-    for segment in segments:
+    def _next_anchor_start_minutes(from_index: int) -> int | None:
+        for block in blocks[from_index + 1 :]:
+            anchor = block.get("anchor")
+            if not isinstance(anchor, dict):
+                continue
+            start_min = anchor.get("start_min")
+            if isinstance(start_min, int):
+                return start_min
+        return None
+
+    for block_index, block in enumerate(blocks):
         if len(entries) >= 12:
             break
-        seg_start = diary_text.find(segment, cursor)
-        if seg_start < 0:
-            seg_start = cursor
-        seg_end = seg_start + len(segment)
-        cursor = seg_end
 
-        related = [
-            c for c in time_candidates if seg_start <= int(c["start_idx"]) < seg_end
-        ]
-        energy, focus = _infer_energy_focus(segment)
+        lines = [str(item["text"]) for item in block["lines"]]
+        if not lines:
+            continue
 
-        if related:
-            for cand in related:
-                raw = str(cand["raw_text"])
-                activity = _clean_activity(segment.replace(raw, " "), locale)
-                entries.append(
-                    ParsedEntry(
-                        start=cand.get("start_time"),
-                        end=cand.get("end_time"),
-                        activity=activity,
-                        energy=energy,
-                        focus=focus,
-                        note=None,
-                        tags=[],
-                        confidence="medium" if cand.get("kind") == "point" else "high",
-                        source_text=raw if raw in diary_text else segment,
-                        time_source="explicit",
-                        time_confidence="high",
-                        time_window=None,
-                        crosses_midnight=bool(cand.get("crosses_midnight")),
-                    )
-                )
-                if len(entries) >= 12:
-                    break
-        else:
-            source_for_window = segment
-            entries.append(
-                ParsedEntry(
-                    start=None,
-                    end=None,
-                    activity=_clean_activity(segment, locale),
-                    energy=energy,
-                    focus=focus,
-                    note=None,
-                    tags=[],
-                    confidence="low",
-                    source_text=segment if segment in diary_text else None,
-                    time_source=(
-                        "window" if _infer_time_window(source_for_window) else "unknown"
-                    ),
-                    time_confidence="low",
-                    time_window=_infer_time_window(source_for_window),
-                    crosses_midnight=False,
-                )
+        anchor = block.get("anchor")
+        anchor_raw = str(anchor.get("raw_text")) if isinstance(anchor, dict) else None
+
+        activity_text: str | None = None
+        mood_lines: list[str] = []
+        extra_lines: list[str] = []
+        for line in lines:
+            activity_match = _ACTIVITY_LABEL_RE.match(line)
+            if activity_match:
+                activity_text = activity_match.group("value").strip()
+                continue
+            mood_match = _MOOD_LABEL_RE.match(line)
+            if mood_match:
+                mood_lines.append(mood_match.group("value").strip())
+                continue
+            extra_lines.append(line)
+
+        if not activity_text:
+            headline = _strip_bullet_prefix(lines[0])
+            if anchor_raw and anchor_raw in headline:
+                headline = headline.replace(anchor_raw, " ", 1)
+            headline = re.sub(r"^[\s—–\-:：]+", "", headline).strip()
+            activity_text = headline
+
+        if (not activity_text or activity_text in {"—", "-"}) and len(lines) > 1:
+            fallback = _strip_bullet_prefix(lines[1])
+            fallback = re.sub(
+                r"^(?:활동|activity|기분|mood)\s*[:：]\s*",
+                "",
+                fallback,
+                flags=re.IGNORECASE,
+            ).strip()
+            activity_text = fallback
+
+        activity = _clean_activity(
+            activity_text or _FALLBACK_ACTIVITY[_locale_or_default(locale)], locale
+        )
+        combined_text = " ".join(lines)
+        energy, focus = _infer_energy_focus(combined_text)
+        note_parts = [part for part in mood_lines + extra_lines[1:] if part]
+        note = " ".join(note_parts).strip() if note_parts else None
+        if note:
+            note = note[:280]
+
+        start: str | None = None
+        end: str | None = None
+        crosses_midnight = False
+        time_source = "unknown"
+        time_confidence = "low"
+        time_window = _infer_time_window(combined_text)
+
+        if isinstance(anchor, dict):
+            kind = str(anchor.get("kind") or "")
+            start_min = anchor.get("start_min")
+            end_min = anchor.get("end_min")
+
+            if (
+                kind == "range"
+                and isinstance(start_min, int)
+                and isinstance(end_min, int)
+            ):
+                start = _hhmm(start_min)
+                end = _hhmm(end_min)
+                crosses_midnight = bool(anchor.get("crosses_midnight"))
+                time_source = "explicit"
+                time_confidence = "high"
+                time_window = None
+            elif kind == "point" and isinstance(start_min, int):
+                next_start_min = _next_anchor_start_minutes(block_index)
+                if (
+                    isinstance(next_start_min, int)
+                    and next_start_min > start_min
+                    and next_start_min - start_min <= 8 * 60
+                ):
+                    start = _hhmm(start_min)
+                    end = _hhmm(next_start_min)
+                    time_source = "relative"
+                    time_confidence = "medium"
+                    time_window = None
+                else:
+                    time_source = "window"
+                    time_confidence = "low"
+                    time_window = _window_from_minutes(start_min)
+
+        entries.append(
+            ParsedEntry(
+                start=start,
+                end=end,
+                activity=activity,
+                energy=energy,
+                focus=focus,
+                note=note,
+                tags=[],
+                confidence=(
+                    "high"
+                    if time_source == "explicit"
+                    else ("medium" if time_source == "relative" else "low")
+                ),
+                source_text=_fallback_source_text(lines, anchor_raw, diary_text),
+                time_source=time_source,
+                time_confidence=time_confidence,
+                time_window=time_window,
+                crosses_midnight=crosses_midnight,
             )
+        )
 
     if entries:
         return entries
