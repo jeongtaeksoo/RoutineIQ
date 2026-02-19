@@ -218,6 +218,7 @@ export default function ReportPage() {
         exporting: "내보내는 중...",
         noOptimizedPlan: "아직 추천 일정이 없어요.",
         goal: "실행 포인트",
+        exportGuide: "내보내기 전에 아래 추천 흐름을 확인해 주세요.",
         recoveryRules: "나를 위한 팁",
         recoveryRulesDesc: "힘들 때 꺼내 보는 짧은 조언이에요.",
         noRecovery: "아직 팁이 없어요.",
@@ -297,6 +298,7 @@ export default function ReportPage() {
       exporting: "Exporting...",
       noOptimizedPlan: "No optimized plan generated yet.",
       goal: "Action guide",
+      exportGuide: "Review the schedule below before exporting.",
       recoveryRules: "Smart Recovery Rules",
       recoveryRulesDesc: "If-Then rules to recover fast.",
       noRecovery: "No recovery rules generated yet.",
@@ -598,16 +600,18 @@ export default function ReportPage() {
                 <p className="text-xs text-mutedFg mb-2">{t.heroKeyMetrics}</p>
                 <div className="grid grid-cols-3 gap-3">
                   <div className="rounded-xl bg-white/50 p-3 text-center">
-                    <span className={`inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${burnoutBadgeClass}`}>{burnoutRiskLabel}</span>
-                    <p className="mt-1 text-[11px] text-mutedFg">{t.burnoutRisk}</p>
+                    <p className="text-[11px] text-mutedFg">{t.burnoutRisk}</p>
+                    <span className={`mt-1 inline-block rounded-full border px-2 py-0.5 text-xs font-semibold ${burnoutBadgeClass}`}>
+                      {burnoutRiskLabel}
+                    </span>
                   </div>
                   <div className="rounded-xl bg-white/50 p-3 text-center">
-                    <p className="title-serif text-xl">{inputQualityScore}</p>
-                    <p className="mt-1 text-[11px] text-mutedFg">{t.qualityScore}</p>
+                    <p className="text-[11px] text-mutedFg">{t.qualityScore}</p>
+                    <p className="mt-1 text-xl font-semibold">{inputQualityScore}</p>
                   </div>
                   <div className="rounded-xl bg-white/50 p-3 text-center">
-                    <p className="title-serif text-xl">{personalizationTierLabel}</p>
-                    <p className="mt-1 text-[11px] text-mutedFg">{t.qualityTier}</p>
+                    <p className="text-[11px] text-mutedFg">{t.qualityTier}</p>
+                    <p className="mt-1 text-xl font-semibold">{personalizationTierLabel}</p>
                   </div>
                 </div>
               </div>
@@ -818,6 +822,7 @@ export default function ReportPage() {
               <div>
                 <CardTitle>{t.optimizedPlan}</CardTitle>
                 <CardDescription>{t.optimizedPlanDesc}</CardDescription>
+                <p className="mt-1 text-xs text-mutedFg">{t.exportGuide}</p>
               </div>
               <Button
                 variant="outline"

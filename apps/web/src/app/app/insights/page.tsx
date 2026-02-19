@@ -858,8 +858,8 @@ export default function InsightsPage() {
     });
   }, [cohortTrend, trackCohortEvent]);
 
-  const hasLog = todayLogBlocks > 0;
   const hasReport = Boolean(report);
+  const hasLog = todayLogBlocks > 0 || hasReport;
   const topPeak = report?.productivity_peaks?.[0] ?? null;
   const topFailure = report?.failure_patterns?.[0] ?? null;
   const inputQualityScore = Math.round(report?.analysis_meta?.input_quality_score || 0);

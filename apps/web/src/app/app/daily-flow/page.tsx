@@ -323,7 +323,7 @@ export default function DailyFlowPage() {
   const t = React.useMemo(() => {
     if (isKo) {
       return {
-        title: "Daily Flow",
+        title: "기록하기",
         subtitle: "하루를 자유롭게 적으면 AI가 정리해요",
         today: "오늘",
         writeTitle: "오늘 하루를 돌아보며 자유롭게 적어주세요...",
@@ -340,6 +340,12 @@ export default function DailyFlowPage() {
         evidence: "원본",
         issueBannerTitle: "한번 확인하면 정확도가 올라가요",
         issueProgress: (current: number, total: number) => `확인 항목 ${current}/${total}`,
+        issueNoTime: "시간 정보가 명확하지 않아요. 시간대를 선택하거나 시간을 입력해 주세요.",
+        issueNoSource: "근거 문장이 부족해요. 활동 내용을 한 번만 확인해 주세요.",
+        issueOverlap: "시간이 겹치는 항목이 있어요. 시간을 조정해 주세요.",
+        issueInvalidOrder: "종료 시간이 시작보다 빠른 항목이 있어요.",
+        issuePartialTime: "시작/종료 시간 중 하나가 비어 있어요.",
+        issueOther: "확인이 필요한 항목이 있어요.",
         reviewNow: "지금 확인",
         saveLater: "나중에 저장",
         unresolvedHint: (count: number) => `시간 미확정 항목 ${count}개가 남아 있어요`,
@@ -372,6 +378,8 @@ export default function DailyFlowPage() {
         sleepQuality: "수면 질",
         sleepHours: "수면 시간",
         stress: "스트레스",
+        energyLabel: "에너지",
+        focusLabel: "집중",
         retryParse: "다시 분석하기",
         retryParseHint: "결과가 어색하면 다시 분석해 보세요",
         aiSourceHint: (n: number) => `AI가 ${n}개 활동 블록을 파악했어요`,
@@ -412,6 +420,12 @@ export default function DailyFlowPage() {
       evidence: "Evidence",
       issueBannerTitle: "A quick check makes this more accurate.",
       issueProgress: (current: number, total: number) => `Review item ${current}/${total}`,
+      issueNoTime: "Time is unclear. Pick a time window or set exact time.",
+      issueNoSource: "Evidence text is weak. Please verify this activity.",
+      issueOverlap: "Some entries overlap in time. Please adjust them.",
+      issueInvalidOrder: "An entry ends before it starts.",
+      issuePartialTime: "Start/end time is partially missing.",
+      issueOther: "This item needs a quick review.",
       reviewNow: "Review now",
       saveLater: "Save later",
       unresolvedHint: (count: number) => `${count} entries are still time-unconfirmed.`,
@@ -444,6 +458,8 @@ export default function DailyFlowPage() {
       sleepQuality: "Sleep quality",
       sleepHours: "Sleep hours",
       stress: "Stress",
+      energyLabel: "Energy",
+      focusLabel: "Focus",
       retryParse: "Re-parse",
       retryParseHint: "Not quite right? Try parsing again",
       aiSourceHint: (n: number) => `AI parsed ${n} activity block${n !== 1 ? "s" : ""}`,
@@ -723,9 +739,29 @@ export default function DailyFlowPage() {
   }
 
   function displayEvidence(entry: ParsedEntry): string {
-    const text = (entry.source_text || entry.activity || "").trim();
+    const raw = (entry.source_text || entry.activity || "").trim();
+    const compact = raw.replace(/\s+/g, " ").trim();
+    const text = compact
+      .replace(/^[-•·]+\s*/, "")
+      .replace(/^(원본|활동|기분|목표|source|activity|mood|goal)\s*[:：]\s*/i, "")
+      .trim();
     if (!text) return t.noEvidence;
     return text.length > 42 ? `${text.slice(0, 42)}...` : text;
+  }
+
+  function formatIssueText(issue: ParseIssue): string {
+    const prefix =
+      issue.entryIndex == null
+        ? ""
+        : isKo
+          ? `항목 ${issue.entryIndex + 1}: `
+          : `Entry ${issue.entryIndex + 1}: `;
+    if (issue.type === "no_time_evidence") return `${prefix}${t.issueNoTime}`;
+    if (issue.type === "source_not_found") return `${prefix}${t.issueNoSource}`;
+    if (issue.type === "overlap") return `${prefix}${t.issueOverlap}`;
+    if (issue.type === "invalid_order") return `${prefix}${t.issueInvalidOrder}`;
+    if (issue.type === "partial_time") return `${prefix}${t.issuePartialTime}`;
+    return `${prefix}${t.issueOther}`;
   }
 
   function entryTimeHeadline(entry: ParsedEntry): string {
@@ -1097,7 +1133,7 @@ export default function DailyFlowPage() {
                     {t.issueProgress(focusedIssueProgress ?? 1, unresolvedIssues.length)}
                   </p>
                   {focusedIssue ? (
-                    <p className="mt-1 text-xs text-amber-900/75">{focusedIssue.raw}</p>
+                    <p className="mt-1 text-xs text-amber-900/75">{formatIssueText(focusedIssue)}</p>
                   ) : null}
                   <div className="mt-2 flex items-center justify-end gap-2">
                     <Button
@@ -1196,7 +1232,7 @@ export default function DailyFlowPage() {
                           <p className="mt-1 text-[11px] text-mutedFg">#{entry.tags.join(" #")}</p>
                         ) : null}
                         <p className="mt-2 text-xs text-mutedFg">
-                          {t.evidence}: <span className="font-medium">{displayEvidence(entry)}</span>
+                          {t.evidence}: <span className="font-medium">&ldquo;{displayEvidence(entry)}&rdquo;</span>
                         </p>
                         {timeState !== "explicit" ? (
                           <div className="mt-2 flex flex-wrap gap-1.5">
@@ -1229,12 +1265,14 @@ export default function DailyFlowPage() {
                         {entry.energy != null ? (
                           <p>
                             <Zap className="mr-1 inline h-3.5 w-3.5" />
+                            <span className="mr-1">{t.energyLabel}</span>
                             {entry.energy}
                           </p>
                         ) : null}
                         {entry.focus != null ? (
                           <p className="mt-1">
                             <Target className="mr-1 inline h-3.5 w-3.5" />
+                            <span className="mr-1">{t.focusLabel}</span>
                             {entry.focus}
                           </p>
                         ) : null}

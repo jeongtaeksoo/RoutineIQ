@@ -32,6 +32,12 @@ const ReminderScheduler = dynamic(
   { ssr: false }
 );
 
+function sanitizeEmailDisplay(value: string | null | undefined): string | null {
+  if (!value) return null;
+  const clean = value.replace(/\s+/g, "").trim();
+  return clean || null;
+}
+
 export function AppShell({
   children,
   email,
@@ -48,7 +54,7 @@ export function AppShell({
 
   const [locale, setLocale] = React.useState<Locale>(initialLocale);
   const [resolvedRole, setResolvedRole] = React.useState<"user" | "admin">(role);
-  const [resolvedEmail, setResolvedEmail] = React.useState<string | null>(email);
+  const [resolvedEmail, setResolvedEmail] = React.useState<string | null>(sanitizeEmailDisplay(email));
   const [userMetaVersion, setUserMetaVersion] = React.useState(0);
   const [signingOut, setSigningOut] = React.useState(false);
 
@@ -89,7 +95,7 @@ export function AppShell({
         } = await supabaseRef.current.auth.getUser();
         if (!user) return;
         if (!cancelled) {
-          setResolvedEmail(user.email ?? null);
+          setResolvedEmail(sanitizeEmailDisplay(user.email ?? null));
         }
         const meta = (user.user_metadata as any) || {};
         const loc = meta["routineiq_locale"];
@@ -102,7 +108,7 @@ export function AppShell({
           .maybeSingle();
         if (!cancelled) {
           setResolvedRole(profile?.role === "admin" ? "admin" : "user");
-          if (profile?.email) setResolvedEmail(profile.email);
+          if (profile?.email) setResolvedEmail(sanitizeEmailDisplay(profile.email));
         }
       } catch {
         // ignore
