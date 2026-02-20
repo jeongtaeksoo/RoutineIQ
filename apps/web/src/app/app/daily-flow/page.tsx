@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { trackProductEvent } from "@/lib/analytics";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
 import { extractErrorReferenceId, formatApiErrorMessage } from "@/lib/api-error";
+import { isAnalyzeInProgressError } from "@/lib/analyze-error";
 import { localYYYYMMDD, addDays, toMinutes } from "@/lib/date-utils";
 import { useEntitlements } from "@/lib/use-entitlements";
 import { MoodSelector, type MoodValue } from "./mood-selector";
@@ -1146,6 +1147,12 @@ export default function DailyFlowPage() {
       });
       if (isApiFetchError(err) && err.code === "timeout") {
         setError(t.analyzeTimeoutHint);
+        startedRecoveryPolling = true;
+        void pollUntilReportReady(date);
+        return;
+      }
+      if (isAnalyzeInProgressError(err)) {
+        setError(null);
         startedRecoveryPolling = true;
         void pollUntilReportReady(date);
         return;

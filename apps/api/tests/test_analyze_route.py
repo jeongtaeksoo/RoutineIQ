@@ -150,6 +150,47 @@ def test_analyze_success_returns_report(
     assert openai_mock.await_count == 1
 
 
+def test_analyze_done_idempotency_returns_cached_report_even_with_legacy_model_locale(
+    authenticated_client: TestClient, supabase_mock, monkeypatch
+) -> None:
+    monkeypatch.setattr(
+        analyze_route,
+        "get_subscription_info",
+        AsyncMock(return_value=type("Sub", (), {"plan": "free"})()),
+    )
+    monkeypatch.setattr(
+        analyze_route, "count_daily_analyze_calls", AsyncMock(return_value=0)
+    )
+    monkeypatch.setattr(
+        analyze_route, "claim_idempotency_key", AsyncMock(return_value="done")
+    )
+
+    legacy_report_row = {
+        "date": "2026-02-15",
+        "report": {"summary": "legacy report"},
+        "model": "gpt-4o-mini",
+        "updated_at": "2026-02-15T00:00:00Z",
+    }
+    supabase_mock["select"].side_effect = [
+        [{"date": "2026-02-14"}],  # previous_report
+        [_profile_row()],  # profile context
+        [legacy_report_row],  # existing report for target date
+        [_activity_log()],  # activity log
+        [_activity_log()],  # recent activity logs
+        [],  # yesterday report
+        [legacy_report_row],  # idempotency retry lookup
+    ]
+
+    response = authenticated_client.post(
+        "/api/analyze", json={"date": "2026-02-15", "force": True}
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["cached"] is True
+    assert body["report"]["summary"] == "legacy report"
+
+
 def test_analyze_returns_429_on_rate_limit(
     authenticated_client: TestClient, monkeypatch
 ) -> None:

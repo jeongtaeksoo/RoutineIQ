@@ -16,6 +16,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { isApiFetchError } from "@/lib/api-client";
 import { extractErrorReferenceId, formatApiErrorMessage } from "@/lib/api-error";
+import { isAnalyzeInProgressError } from "@/lib/analyze-error";
 import { buildTomorrowRoutineIcs } from "@/lib/ics";
 import { addDays, localYYYYMMDD } from "@/lib/date-utils";
 import { type AIReport, normalizeReport } from "@/lib/report-utils";
@@ -498,6 +499,12 @@ export default function ReportPage() {
       });
       if (isApiFetchError(err) && err.code === "timeout") {
         setError(t.analyzeTimeoutHint);
+        startedRecoveryPolling = true;
+        void pollUntilReportReady();
+        return;
+      }
+      if (isAnalyzeInProgressError(err)) {
+        setError(null);
         startedRecoveryPolling = true;
         void pollUntilReportReady();
         return;

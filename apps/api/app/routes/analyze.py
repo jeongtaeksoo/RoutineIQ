@@ -1779,21 +1779,28 @@ async def analyze_day(body: AnalyzeRequest, request: Request, auth: AuthDep) -> 
         if retry_rows:
             row = retry_rows[0]
             row_locale = _extract_locale_from_model(row.get("model")) or "en"
-            if row_locale == target_locale:
+            if row_locale == target_locale or idem_state == "done":
                 return {
                     "date": row.get("date"),
                     "report": row.get("report"),
                     "model": _public_model_name(row.get("model")),
                     "cached": True,
                 }
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "message": "Analyze request is already processing.",
-                "hint": "Retry in a few seconds.",
-                "code": "ANALYZE_IN_PROGRESS",
-            },
-        )
+        if idem_state == "done":
+            # Defensive recovery for stale in-memory done markers.
+            await clear_idempotency_key(key=idempotency_key)
+            idem_state = await claim_idempotency_key(
+                key=idempotency_key, processing_ttl_seconds=150
+            )
+        if idem_state != "acquired":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "message": "Analyze request is already processing.",
+                    "hint": "Retry in a few seconds.",
+                    "code": "ANALYZE_IN_PROGRESS",
+                },
+            )
 
     completed = False
 
