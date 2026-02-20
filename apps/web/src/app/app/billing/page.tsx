@@ -323,7 +323,7 @@ export default function BillingPage() {
               </li>
               <li className="flex items-start gap-2">
                 <CheckCircle2 className="mt-0.5 h-4 w-4 text-brand" />
-                <span>{isKo ? "결제 실패 시 재시도/지원 링크로 전환 이탈 감소" : "Retry + support recovery path to reduce checkout drop-off"}</span>
+                <span>{isKo ? "분석 한도 도달로 루프가 끊기는 빈도를 줄여 계획 정확도 유지" : "Fewer loop breaks from analyze-cap hits, so plan accuracy stays stable"}</span>
               </li>
             </ul>
           </div>
