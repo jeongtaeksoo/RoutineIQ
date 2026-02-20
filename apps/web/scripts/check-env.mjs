@@ -61,7 +61,10 @@ const nodeEnv = (process.env.NODE_ENV || "").toLowerCase();
 const vercelEnv = (process.env.VERCEL_ENV || "").toLowerCase();
 const isDeploy = vercelEnv === "production" || vercelEnv === "preview";
 const isProd = nodeEnv === "production" || isDeploy;
-const enforceStrictApiBase = isProd || runningInCiLike;
+const isE2ETestMode =
+  String(process.env.NEXT_PUBLIC_E2E_TEST_MODE || "").trim() === "1" ||
+  String(process.env.E2E_TEST_MODE || "").trim() === "1";
+const enforceStrictApiBase = (isProd || runningInCiLike) && !isE2ETestMode;
 
 const apiBase = (process.env.NEXT_PUBLIC_API_BASE_URL || "").trim();
 if (enforceStrictApiBase) {
