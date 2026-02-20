@@ -29,11 +29,62 @@ export type AIReport = {
     };
 };
 
+const KO_SOFTEN_RULES: Array<[RegExp, string]> = [
+    [/가설 기반 제안입니다\.?/g, "초기 제안 단계예요."],
+    [/더 많은 데이터가 필요합니다\.?/g, "패턴을 더 정확히 보려면 2~3일 정도 기록을 더 쌓아보세요."],
+    [/어제의 추천 계획이 없었습니다\.?/g, "어제 추천 계획 데이터가 없어 직접 비교는 어려워요."],
+    [/구체적인 계획이 필요합니다\.?/g, "오늘은 작게 시작할 수 있는 계획 하나만 정해보세요."],
+    [/계획된 블록이 없음\.?/g, "아직 계획된 블록이 없어요."],
+    [/데이터 신호가 제한적이어서 가설 기반 제안입니다\.?/g, "기록 신호가 아직 적어 이번 제안은 초안이에요."],
+    [/내일은 집중과 실행을 중점적으로 계획하세요\.?/g, "내일은 집중 블록 1개와 실행 블록 1개부터 가볍게 시작해보세요."],
+    [/최소\s*(\d+)\s*개 블록에 남겨주세요\.?/g, "가능하면 $1개 이상 블록에 남겨주시면 정확도가 더 좋아져요."],
+];
+
+const EN_SOFTEN_RULES: Array<[RegExp, string]> = [
+    [/This is a hypothesis-based suggestion\.?/gi, "This is an early suggestion based on limited signals."],
+    [/More data is needed\.?/gi, "Add a bit more data to sharpen this pattern."],
+    [/No planned blocks\.?/gi, "No planned blocks yet."],
+    [/A concrete plan is needed\.?/gi, "Try setting one small concrete plan first."],
+];
+
+function normalizeWhitespace(text: string): string {
+    return text.replace(/\s+/g, " ").trim();
+}
+
+function softenNarrative(text: string, isKo: boolean): string {
+    let output = normalizeWhitespace(text);
+    if (!output) return output;
+    const rules = isKo ? KO_SOFTEN_RULES : EN_SOFTEN_RULES;
+    rules.forEach(([pattern, replacement]) => {
+        output = output.replace(pattern, replacement);
+    });
+    return output;
+}
+
+function normalizeNarrative(input: unknown, fallback: string, isKo: boolean): string {
+    if (typeof input !== "string") return fallback;
+    const normalized = softenNarrative(input, isKo);
+    return normalized || fallback;
+}
+
 export function normalizeReport(raw: AIReport | null, isKo: boolean): AIReport | null {
     if (!raw) return null;
     const riskRaw = String(raw?.wellbeing_insight?.burnout_risk || "medium").toLowerCase();
     const burnout_risk = riskRaw === "low" || riskRaw === "high" ? riskRaw : "medium";
+    const summaryFallback = isKo
+        ? "오늘 기록을 바탕으로 내일 실행 흐름을 정리했어요."
+        : "Based on your log, we drafted a practical flow for tomorrow.";
+    const comparisonFallback = isKo
+        ? "직전 계획과 비교할 데이터가 아직 충분하지 않아요."
+        : "Not enough baseline data yet for a reliable plan comparison.";
+    const deviationFallback = isKo
+        ? "패턴을 확인할 데이터가 더 쌓이면 원인이 더 구체적으로 보입니다."
+        : "As more data accumulates, the main deviation becomes clearer.";
     const microRaw = Array.isArray(raw?.micro_advice) ? raw.micro_advice : [];
+    const peakRaw = Array.isArray(raw?.productivity_peaks) ? raw.productivity_peaks : [];
+    const failureRaw = Array.isArray(raw?.failure_patterns) ? raw.failure_patterns : [];
+    const routineRaw = Array.isArray(raw?.tomorrow_routine) ? raw.tomorrow_routine : [];
+    const ifThenRaw = Array.isArray(raw?.if_then_rules) ? raw.if_then_rules : [];
     const metaRaw = raw?.analysis_meta && typeof raw.analysis_meta === "object" ? raw.analysis_meta : {};
     const tierRaw = String(metaRaw?.personalization_tier || "low").toLowerCase();
     const personalization_tier =
@@ -41,29 +92,78 @@ export function normalizeReport(raw: AIReport | null, isKo: boolean): AIReport |
     return {
         ...raw,
         schema_version: Number.isFinite(Number(raw?.schema_version)) ? Number(raw?.schema_version) : 1,
+        summary: normalizeNarrative(raw.summary, summaryFallback, isKo),
+        coach_one_liner: normalizeNarrative(
+            raw.coach_one_liner,
+            isKo ? "내일 가장 중요한 한 가지를 먼저 정해보세요." : "Pick one most important action for tomorrow first.",
+            isKo
+        ),
+        productivity_peaks: peakRaw
+            .filter((item) => item && typeof item.start === "string" && typeof item.end === "string")
+            .map((item) => ({
+                start: item.start,
+                end: item.end,
+                reason: normalizeNarrative(
+                    item.reason,
+                    isKo ? "기록이 쌓이면 집중 시간대 이유를 더 정확히 보여드릴게요." : "As logs grow, we can explain your focus window more precisely.",
+                    isKo
+                ),
+            })),
+        failure_patterns: failureRaw
+            .filter((item) => item && typeof item.pattern === "string" && typeof item.trigger === "string" && typeof item.fix === "string")
+            .map((item) => ({
+                pattern: normalizeNarrative(item.pattern, isKo ? "흐름 저하 패턴" : "Flow-break pattern", isKo),
+                trigger: normalizeNarrative(item.trigger, isKo ? "원인 데이터가 아직 제한적이에요." : "Trigger signal is still limited.", isKo),
+                fix: normalizeNarrative(item.fix, isKo ? "다음 블록 전에 5분 리셋을 넣어보세요." : "Try a 5-minute reset before the next block.", isKo),
+            })),
+        tomorrow_routine: routineRaw
+            .filter((item) => item && typeof item.start === "string" && typeof item.end === "string")
+            .map((item) => ({
+                start: item.start,
+                end: item.end,
+                activity: normalizeNarrative(item.activity, isKo ? "집중 블록" : "Focus block", isKo),
+                goal: normalizeNarrative(
+                    item.goal,
+                    isKo ? "바로 시작할 수 있는 가장 작은 행동을 정해보세요." : "Set the smallest action you can start immediately.",
+                    isKo
+                ),
+            })),
+        if_then_rules: ifThenRaw
+            .filter((item) => item && typeof item.if === "string" && typeof item.then === "string")
+            .map((item) => ({
+                if: normalizeNarrative(item.if, isKo ? "집중이 흐트러질 때" : "When focus drops", isKo),
+                then: normalizeNarrative(item.then, isKo ? "3분만 리셋한 뒤 20분 집중을 다시 시작해보세요." : "Take a 3-minute reset, then restart with a 20-minute focus sprint.", isKo),
+            })),
+        yesterday_plan_vs_actual: {
+            comparison_note: normalizeNarrative(raw?.yesterday_plan_vs_actual?.comparison_note, comparisonFallback, isKo),
+            top_deviation: normalizeNarrative(raw?.yesterday_plan_vs_actual?.top_deviation, deviationFallback, isKo),
+        },
         wellbeing_insight: {
             burnout_risk,
-            energy_curve_forecast:
-                typeof raw?.wellbeing_insight?.energy_curve_forecast === "string" && raw.wellbeing_insight.energy_curve_forecast.trim()
-                    ? raw.wellbeing_insight.energy_curve_forecast
-                    : (isKo ? "\uae30\ub85d\uc774 \ub354 \uc313\uc774\uba74 \uc5d0\ub108\uc9c0 \uc608\uce21\uc774 \uc815\ud655\ud574\uc838\uc694." : "Energy forecast improves as more days are logged."),
-            note:
-                typeof raw?.wellbeing_insight?.note === "string" && raw.wellbeing_insight.note.trim()
-                    ? raw.wellbeing_insight.note
-                    : (isKo ? "\ub0b4\uc77c \ud68c\ubcf5 \uc2dc\uac04 1\uac1c\ub97c \uba3c\uc800 \ucc59\uaca8\uc8fc\uc138\uc694." : "Lock one recovery buffer first tomorrow."),
+            energy_curve_forecast: normalizeNarrative(
+                raw?.wellbeing_insight?.energy_curve_forecast,
+                isKo ? "기록이 더 쌓이면 에너지 흐름 예측이 더 선명해져요." : "Energy forecast becomes clearer as more days are logged.",
+                isKo
+            ),
+            note: normalizeNarrative(
+                raw?.wellbeing_insight?.note,
+                isKo ? "내일은 회복 시간을 1개만 먼저 고정해보세요." : "Lock one recovery buffer first tomorrow.",
+                isKo
+            ),
         },
         micro_advice: microRaw
             .filter((it) => it && typeof it.action === "string" && typeof it.when === "string" && typeof it.reason === "string")
             .map((it) => ({
-                action: it.action,
-                when: it.when,
-                reason: it.reason,
+                action: normalizeNarrative(it.action, isKo ? "가볍게 시작할 한 가지 행동" : "One easy action to start", isKo),
+                when: normalizeNarrative(it.when, isKo ? "다음 블록 시작 직전" : "Right before your next block", isKo),
+                reason: normalizeNarrative(it.reason, isKo ? "작은 시작이 실행 유지에 가장 효과적이에요." : "Small starts are most effective for consistency.", isKo),
                 duration_min: Number.isFinite(Number(it.duration_min)) ? Math.min(20, Math.max(1, Number(it.duration_min))) : 5,
             })),
-        weekly_pattern_insight:
-            typeof raw?.weekly_pattern_insight === "string" && raw.weekly_pattern_insight.trim()
-                ? raw.weekly_pattern_insight
-                : (isKo ? "\uc8fc\uac04 \ud328\ud134\uc740 3\uc77c \uae30\ub85d \ud6c4 \ub354 \uc120\uba85\ud574\uc838\uc694." : "Weekly pattern insight becomes clearer after at least 3 logged days."),
+        weekly_pattern_insight: normalizeNarrative(
+            raw?.weekly_pattern_insight,
+            isKo ? "주간 패턴은 3일 이상 기록하면 더 선명해져요." : "Weekly pattern insight becomes clearer after at least 3 logged days.",
+            isKo
+        ),
         analysis_meta: {
             input_quality_score: Number.isFinite(Number(metaRaw?.input_quality_score))
                 ? Math.max(0, Math.min(100, Number(metaRaw.input_quality_score)))

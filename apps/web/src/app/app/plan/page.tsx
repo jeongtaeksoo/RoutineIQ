@@ -156,9 +156,9 @@ export default function PlanPage() {
 
       <Card className="border-brand/20 shadow-elevated">
         <CardHeader>
-          <CardTitle>{isKo ? "핵심 실행 1개" : "One Key Action"}</CardTitle>
+          <CardTitle>{isKo ? "내일 시작할 1가지" : "One First Action for Tomorrow"}</CardTitle>
           <CardDescription>
-            {isKo ? "내일 바로 실행할 가장 중요한 행동" : "The most important action to execute tomorrow"}
+            {isKo ? "부담 없이 시작할 첫 행동을 먼저 정리해요." : "Define the first action you can start without friction."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -171,7 +171,7 @@ export default function PlanPage() {
               </div>
               {preview.first_block ? (
                 <div className="rounded-xl border bg-white/60 p-4">
-                  <p className="text-xs text-mutedFg">{isKo ? "첫 실행 블록" : "First block"}</p>
+                  <p className="text-xs text-mutedFg">{isKo ? "첫 시작 블록" : "First block"}</p>
                   <p className="mt-1 text-sm font-semibold">
                     {preview.first_block.start}–{preview.first_block.end} · {preview.first_block.activity}
                   </p>

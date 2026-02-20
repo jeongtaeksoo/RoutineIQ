@@ -198,22 +198,22 @@ export default function ReportPage() {
         coachOneLiner: "오늘의 한 마디",
         coachOneLinerDesc: "지금 바로 해볼 행동 한 가지예요.",
         dayReview: "오늘의 요약",
-        dayReviewDesc: "하루 요약과 코치 조언이에요.",
-        wellbeingTitle: "웰빙 인사이트",
-        wellbeingDesc: "번아웃 위험과 에너지 흐름 예측이에요.",
-        burnoutRisk: "번아웃 위험도",
+        dayReviewDesc: "오늘의 흐름과 내일 시작점을 정리했어요.",
+        wellbeingTitle: "컨디션 인사이트",
+        wellbeingDesc: "에너지 흐름과 회복 신호를 정리했어요.",
+        burnoutRisk: "에너지 부담 신호",
         energyForecast: "에너지 곡선 예측",
-        wellbeingNote: "웰빙 메모",
+        wellbeingNote: "컨디션 메모",
         weeklyPattern: "주간 패턴",
         microAdviceTitle: "5분 실행 가이드",
-        microAdviceDesc: "지금 바로 실행할 우선순위예요.",
+        microAdviceDesc: "지금 실행하기 쉬운 우선순위예요.",
         primaryAction: "Primary",
         secondaryActions: "Secondary",
         showMoreAdvice: "더 보기",
         showLessAdvice: "접기",
         durationMin: "소요",
-        comparisonNote: "비교 메모",
-        topDeviation: "주요 원인",
+        comparisonNote: "계획 비교 메모",
+        topDeviation: "우선 확인할 지점",
         powerHours: "집중이 잘 된 시간",
         powerHoursDesc: "자연스럽게 집중했던 시간들.",
         focusPatternTitle: "집중 패턴",
@@ -221,21 +221,21 @@ export default function ReportPage() {
         focusPatternRepresentative: "대표 집중 시간",
         focusPatternDrop: "저하 구간",
         focusPatternCause: "원인",
-        noPowerHours: "아직 데이터가 충분하지 않아요.",
+        noPowerHours: "기록이 더 쌓이면 집중 시간대가 더 선명해져요.",
         brokeFocus: "방해가 되었던 것들",
         brokeFocusDesc: "원인과 해결 제안.",
         trigger: "원인",
         fix: "제안",
         noFailure: "특별한 방해 요소가 없었어요.",
         optimizedPlan: "내일을 위한 추천 흐름",
-        optimizedPlanDesc: "무리 없이 조정한 내일 일정이에요.",
+        optimizedPlanDesc: "내 페이스를 해치지 않도록 조정한 내일 흐름이에요.",
         exportIcs: "캘린더로 내보내기 (.ics)",
         exporting: "내보내는 중...",
-        noOptimizedPlan: "아직 추천 일정이 없어요.",
+        noOptimizedPlan: "아직 추천 흐름이 없어요. 기록/분석 후 자동으로 표시돼요.",
         goal: "실행 포인트",
         exportGuide: "내보내기 전에 아래 추천 흐름을 확인해 주세요.",
-        recoveryRules: "나를 위한 팁",
-        recoveryRulesDesc: "힘들 때 꺼내 보는 짧은 조언이에요.",
+        recoveryRules: "다시 집중하는 팁",
+        recoveryRulesDesc: "흐름이 끊길 때 바로 꺼내 쓰는 짧은 가이드예요.",
         noRecovery: "아직 팁이 없어요.",
         ifLabel: "이럴 땐",
         thenLabel: "이렇게 해보세요",
@@ -247,12 +247,13 @@ export default function ReportPage() {
         heroNextAction: "지금 할 한 가지",
         heroKeyMetrics: "핵심 지표",
         trustBadge: "AI 참고 안내",
-        trustBadgeBody: "기록 기반 추정이에요. 의학적 진단은 아니며, 기록이 쌓일수록 정확해져요.",
+        trustBadgeBody: "기록을 바탕으로 정리한 참고 정보예요. 기록이 쌓일수록 개인화 정확도가 높아져요.",
         burnoutHigh: "높음",
         burnoutLow: "낮음",
         burnoutMedium: "중간",
         labelNoAdvice: "아직 실행 가이드가 없어요.",
         labelExport: "Google/Apple 캘린더로 가져올 수 있는 .ics 파일로 내보냅니다",
+        toggleActionPoint: "실행 포인트 열기/닫기",
       };
     }
     return {
@@ -279,12 +280,12 @@ export default function ReportPage() {
       coachOneLiner: "Coach Tip of the Day",
       coachOneLinerDesc: "One action you can do right now.",
       dayReview: "Your Day in Review",
-      dayReviewDesc: "Summary + plan vs actual (when available).",
-      wellbeingTitle: "Wellbeing Insight",
-      wellbeingDesc: "Burnout risk + energy-curve outlook.",
-      burnoutRisk: "Burnout risk",
+      dayReviewDesc: "Today’s flow and a practical starting point for tomorrow.",
+      wellbeingTitle: "Energy & Recovery Insight",
+      wellbeingDesc: "Energy trend and recovery signals from your logs.",
+      burnoutRisk: "Energy load signal",
       energyForecast: "Energy forecast",
-      wellbeingNote: "Wellbeing note",
+      wellbeingNote: "Recovery note",
       weeklyPattern: "Weekly pattern signal",
       microAdviceTitle: "5-Minute Micro Advice",
       microAdviceDesc: "Execution priorities you can act on now.",
@@ -294,7 +295,7 @@ export default function ReportPage() {
       showLessAdvice: "Show less",
       durationMin: "Duration",
       comparisonNote: "Comparison Note",
-      topDeviation: "Top Deviation",
+      topDeviation: "Priority check",
       powerHours: "Your Power Hours",
       powerHoursDesc: "When you naturally perform best.",
       focusPatternTitle: "Focus pattern",
@@ -309,14 +310,14 @@ export default function ReportPage() {
       fix: "Fix",
       noFailure: "No failure patterns detected yet.",
       optimizedPlan: "Your Optimized Day Plan",
-      optimizedPlanDesc: "Tomorrow routine blocks.",
+      optimizedPlanDesc: "A realistic routine flow adjusted for your pace.",
       exportIcs: "Export to Calendar (.ics)",
       exporting: "Exporting...",
       noOptimizedPlan: "No optimized plan generated yet.",
       goal: "Action guide",
       exportGuide: "Review the schedule below before exporting.",
       recoveryRules: "Smart Recovery Rules",
-      recoveryRulesDesc: "If-Then rules to recover fast.",
+      recoveryRulesDesc: "Short prompts to regain momentum quickly.",
       noRecovery: "No recovery rules generated yet.",
       ifLabel: "IF",
       thenLabel: "THEN",
@@ -328,12 +329,13 @@ export default function ReportPage() {
       heroNextAction: "One thing to do now",
       heroKeyMetrics: "Key Metrics",
       trustBadge: "AI Notice",
-      trustBadgeBody: "This analysis is an estimate based on your logged data, not a medical diagnosis. Accuracy improves as you log more days.",
+      trustBadgeBody: "This is reference guidance based on your logs. Accuracy improves as you log more days.",
       burnoutHigh: "High",
       burnoutLow: "Low",
       burnoutMedium: "Medium",
       labelNoAdvice: "No micro advice generated yet.",
       labelExport: "Export as .ics for Google Calendar / Apple Calendar",
+      toggleActionPoint: "Toggle action point",
     };
   }, [isKo]);
 
@@ -578,7 +580,7 @@ export default function ReportPage() {
     const inputQuality = report?.analysis_meta?.input_quality_score;
     if (typeof inputQuality === "number") {
       metrics.push({
-        label: isKo ? "입력 품질" : "Input quality",
+        label: isKo ? "기록 완성도" : "Input quality",
         value: `${Math.round(inputQuality)}/100`,
         tone: inputQuality >= 70 ? "good" : inputQuality >= 40 ? "neutral" : "warn",
       });
@@ -586,7 +588,7 @@ export default function ReportPage() {
     const profileCoverage = report?.analysis_meta?.profile_coverage_pct;
     if (typeof profileCoverage === "number") {
       metrics.push({
-        label: isKo ? "프로필 커버리지" : "Profile coverage",
+        label: isKo ? "프로필 완성도" : "Profile coverage",
         value: `${Math.round(profileCoverage)}%`,
         tone: profileCoverage >= 75 ? "good" : profileCoverage >= 40 ? "neutral" : "warn",
       });
@@ -594,16 +596,28 @@ export default function ReportPage() {
     const loggedEntries = report?.analysis_meta?.logged_entry_count;
     if (typeof loggedEntries === "number") {
       metrics.push({
-        label: isKo ? "분석 입력 수" : "Entries analyzed",
-        value: `${Math.round(loggedEntries)}`,
+        label: isKo ? "분석 반영 기록" : "Entries analyzed",
+        value: isKo ? `${Math.round(loggedEntries)}개` : `${Math.round(loggedEntries)}`,
         tone: loggedEntries >= 6 ? "good" : loggedEntries >= 3 ? "neutral" : "warn",
       });
     }
     const retryCount = report?.analysis_meta?.schema_retry_count;
     if (typeof retryCount === "number") {
+      const roundedRetry = Math.round(retryCount);
       metrics.push({
-        label: isKo ? "모델 재시도" : "Model retries",
-        value: `${Math.round(retryCount)}`,
+        label: isKo ? "분석 안정성" : "Analysis stability",
+        value:
+          roundedRetry === 0
+            ? isKo
+              ? "안정"
+              : "Stable"
+            : roundedRetry <= 1
+              ? isKo
+                ? "보통"
+                : "Moderate"
+              : isKo
+                ? `재시도 ${roundedRetry}회`
+                : "Needs check",
         tone: retryCount === 0 ? "good" : retryCount <= 1 ? "neutral" : "warn",
       });
     }
@@ -618,19 +632,19 @@ export default function ReportPage() {
   const trustHint = React.useMemo(() => {
     if (!report) {
       return isKo
-        ? "아직 실제 리포트가 없어 예시 기반 안내만 표시됩니다."
+        ? "아직 리포트가 없어 예시 기반 안내만 표시돼요."
         : "No report yet, so only preview guidance is shown.";
     }
     const coverage = Number(report.analysis_meta?.profile_coverage_pct ?? 0);
     if (coverage > 0 && coverage < 75) {
       return isKo
-        ? "프로필을 보완하면 내일 계획의 개인화 강도가 올라갑니다."
+        ? "프로필을 조금 더 채우면 내일 계획이 더 내 상황에 맞아집니다."
         : "Completing profile details improves tomorrow-plan personalization strength.";
     }
     const entries = Number(report.analysis_meta?.logged_entry_count ?? 0);
     if (entries > 0 && entries < 3) {
       return isKo
-        ? "입력 기록이 적어 결과가 보수적으로 제시될 수 있습니다."
+        ? "기록이 아직 적어 제안 폭이 좁게 보일 수 있어요."
         : "With few input entries, guidance may stay conservative.";
     }
     return isKo
@@ -1027,7 +1041,7 @@ export default function ReportPage() {
                     </p>
                     <details className="mt-2">
                       <summary className="cursor-pointer text-xs text-mutedFg">
-                        {isKo ? "(접기) 실행 포인트 보기" : "(Toggle) View action point"}
+                        {t.toggleActionPoint}
                       </summary>
                       <p className="mt-2 rounded-lg border bg-white/70 px-2 py-1 text-sm">
                         {t.goal}: {it.goal}

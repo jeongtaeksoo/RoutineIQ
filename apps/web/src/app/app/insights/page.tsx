@@ -169,7 +169,7 @@ export default function InsightsPage() {
         analyzing: "정리하는 중...",
         loading: "불러오는 중...",
         tomorrowSchedule: "내일의 추천 흐름",
-        tomorrowScheduleDesc: "핵심 블록만 먼저 확인하고, 자세한 내용은 리포트에서 보세요.",
+        tomorrowScheduleDesc: "핵심 흐름만 가볍게 확인해요. 필요하면 리포트에서 자세히 볼 수 있어요.",
         scheduleEmptyTitle: "분석을 실행하면 내일 계획이 생성돼요",
         scheduleEmptyBody: "시간표와 복구 규칙이 여기에 표시돼요.",
         moreBlocks: (n: number) => `+ ${n}개 더 보기`,
@@ -194,7 +194,7 @@ export default function InsightsPage() {
         weeklyTitle: "이번 주 요약",
         weeklyDesc: "지난 7일간의 나의 모습입니다.",
         weeklySimpleTitle: "주간 요약",
-        weeklySimpleDesc: "핵심 3가지만 간단히 확인하세요.",
+        weeklySimpleDesc: "이번 주 흐름을 부담 없이 확인해요.",
         avgFocusTime: "평균 집중 시간",
         commonFailurePattern: "가장 흔한 방해 패턴",
         noPattern: "아직 충분한 패턴이 없어요",
@@ -222,7 +222,7 @@ export default function InsightsPage() {
         average: "유사 사용자 평균",
         rank: "나의 위치",
         actionableTip: "실행 팁",
-        confidence: "데이터 정확도",
+        confidence: "데이터 신뢰도",
         confidenceLow: "낮음",
         confidenceMedium: "보통",
         confidenceHigh: "충분",
@@ -235,7 +235,7 @@ export default function InsightsPage() {
         dim_job_family: "직군",
         dim_work_mode: "근무 형태",
         trustBadge: "AI 참고 안내",
-        trustBadgeBody: "기록 기반 추정이에요. 전문 진단은 아니며, 기록이 쌓일수록 정확해져요.",
+        trustBadgeBody: "기록을 바탕으로 정리한 참고 정보예요. 기록이 쌓일수록 개인화 정확도가 높아져요.",
         recoveryTitle: "다시 시작해볼까요?",
         recoveryBody: "기록이 며칠 비었어요. 한 줄만 적어도 다시 시작할 수 있어요.",
         recoveryCta: "오늘 기록 다시 시작",
@@ -358,7 +358,7 @@ export default function InsightsPage() {
       dim_job_family: "Job family",
       dim_work_mode: "Work mode",
       trustBadge: "AI Notice",
-      trustBadgeBody: "These insights are estimates based on your logged data, not professional advice. Accuracy improves as you log more days.",
+      trustBadgeBody: "These insights are reference guidance based on your logs. Accuracy improves as you log more days.",
       recoveryTitle: "Ready to pick back up?",
       recoveryBody: "Your log streak has a gap. Even one line is enough to restart your flow.",
       recoveryCta: "Restart today\'s log",
@@ -856,22 +856,22 @@ export default function InsightsPage() {
     const inputQuality = report?.analysis_meta?.input_quality_score;
     if (typeof inputQuality === "number") {
       metrics.push({
-        label: isKo ? "입력 품질" : "Input quality",
+        label: isKo ? "기록 완성도" : "Input quality",
         value: `${Math.round(inputQuality)}/100`,
         tone: inputQuality >= 70 ? "good" : inputQuality >= 40 ? "neutral" : "warn",
       });
     }
 
     metrics.push({
-      label: isKo ? "최근 7일 기록" : "Logged days (7d)",
-      value: `${weekly.daysLogged}/7`,
+      label: isKo ? "최근 7일 기록일" : "Logged days (7d)",
+      value: isKo ? `${weekly.daysLogged}일 / 7일` : `${weekly.daysLogged}/7`,
       tone: weekly.daysLogged >= 4 ? "good" : weekly.daysLogged >= 2 ? "neutral" : "warn",
     });
 
     if (cohortTrend?.enabled) {
       const cohortSize = Number(cohortTrend.cohort_size || 0);
       metrics.push({
-        label: isKo ? "비교 표본" : "Cohort sample",
+        label: isKo ? "유사 사용자 수" : "Cohort sample",
         value: `${cohortSize}`,
         tone:
           cohortSize >= Number(cohortTrend.high_confidence_sample_size || 100)
@@ -881,8 +881,8 @@ export default function InsightsPage() {
               : "warn",
       });
       metrics.push({
-        label: isKo ? "비교 윈도우" : "Comparison window",
-        value: isKo ? `${cohortTrend.window_days}일` : `${cohortTrend.window_days} days`,
+        label: isKo ? "비교 기간" : "Comparison window",
+        value: isKo ? `최근 ${cohortTrend.window_days}일` : `${cohortTrend.window_days} days`,
         tone: "neutral",
       });
     }
@@ -901,17 +901,17 @@ export default function InsightsPage() {
   const trustHint = React.useMemo(() => {
     if (profileMissingRequired) {
       return isKo
-        ? "프로필 필수값이 비어 있어 추천 정밀도가 낮아질 수 있습니다."
+        ? "프로필을 채우면 추천이 내 상황에 더 잘 맞아집니다."
         : "Profile essentials are missing, so recommendation precision may be lower.";
     }
     if (!hasLog) {
       return isKo
-        ? "오늘 기록이 없으면 개인화 문구가 보수적으로 표시됩니다."
+        ? "오늘 기록이 없어 추천 범위가 보수적으로 표시되고 있어요."
         : "Without a log for today, personalization copy stays conservative.";
     }
     if (cohortTrend?.preview_mode || cohortTrend?.insufficient_sample) {
       return isKo
-        ? "표본이 충분해지면 랭크/실행 팁이 자동으로 확장됩니다."
+        ? "표본이 더 쌓이면 비교 결과와 실행 팁이 자동으로 확장돼요."
         : "Rank and actionable tips expand automatically when sample size is sufficient.";
     }
     return isKo
