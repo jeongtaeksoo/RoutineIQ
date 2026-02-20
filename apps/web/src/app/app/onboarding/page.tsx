@@ -246,8 +246,7 @@ export default function OnboardingPage() {
           >
             <div className="flex transition-transform duration-300 ease-out" style={{ transform: `translateX(-${slideIndex * 100}%)` }}>
               {slides.map((slide) => {
-                const targetHref =
-                  slide.id === "plan" && !activation.activation_complete ? stepHref : slide.href;
+                const targetHref = slide.href;
                 return (
                   <article key={slide.id} className="w-full shrink-0">
                     <div className="rounded-xl border bg-white/80 p-4">

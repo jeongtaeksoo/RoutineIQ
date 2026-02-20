@@ -55,3 +55,32 @@ test("incomplete activation remaps locked nav links to onboarding", async ({ pag
   await lockedNavLinks.first().click();
   await expect(page).toHaveURL(/\/app\/onboarding/);
 });
+
+test("incomplete activation can still open tomorrow plan without redirecting to today", async ({
+  page,
+}) => {
+  await installRoutineApiMock(page);
+
+  await page.route("**/api/me/activation", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
+        profile_complete: true,
+        has_any_log: false,
+        has_any_report: false,
+        activation_complete: false,
+        next_step: "log",
+      }),
+    });
+  });
+
+  await page.goto("/app/onboarding");
+  await expect(page).toHaveURL(/\/app\/onboarding/);
+
+  const planLink = page.getByRole("link", { name: /내일 계획|Tomorrow Plan/i }).first();
+  await expect(planLink).toHaveAttribute("href", "/app/plan");
+  await planLink.click();
+  await expect(page).toHaveURL(/\/app\/plan/);
+  await expect(page.getByRole("heading", { name: /내일 계획|Tomorrow Plan/i })).toBeVisible();
+});

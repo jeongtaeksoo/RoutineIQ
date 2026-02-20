@@ -10,10 +10,11 @@ const INCOMPLETE_ALLOW_PREFIXES = [
   "/app/onboarding",
   "/app/log",
   "/app/reports",
+  "/app/plan",
   "/app/settings",
 ] as const;
 
-function isAllowedForIncomplete(pathname: string): boolean {
+export function isAllowedForIncompletePath(pathname: string): boolean {
   return INCOMPLETE_ALLOW_PREFIXES.some(
     (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
   );
@@ -31,7 +32,7 @@ export function OnboardingGate() {
     let cancelled = false;
 
     const guard = async () => {
-      if (!activation.activation_complete && !isAllowedForIncomplete(pathname)) {
+      if (!activation.activation_complete && !isAllowedForIncompletePath(pathname)) {
         // Avoid stale gating after the user completes onboarding steps in the same session.
         const latest = await refresh({ force: true });
         if (cancelled) return;

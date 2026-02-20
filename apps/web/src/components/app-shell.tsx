@@ -44,6 +44,7 @@ const INCOMPLETE_ALLOWED_NAV_PREFIXES = [
   "/app/onboarding",
   "/app/log",
   "/app/reports",
+  "/app/plan",
   "/app/settings",
 ] as const;
 
