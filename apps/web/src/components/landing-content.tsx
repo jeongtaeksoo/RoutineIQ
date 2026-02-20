@@ -77,13 +77,15 @@ const COPY: Record<LangKey, {
     sponsored: string;
     adSlot: string;
     privacy: string;
-    socialProofTitle: string;
-    review1: string;
-    review1Author: string;
-    review2: string;
-    review2Author: string;
-    review3: string;
-    review3Author: string;
+    empathyTitle: string;
+    empathySub: string;
+    storyLabel: string;
+    story1Title: string;
+    story1Body: string;
+    story2Title: string;
+    story2Body: string;
+    story3Title: string;
+    story3Body: string;
 }> = {
     // ... [Content omitted for brevity as it is unchanged from original] ...
     ko: {
@@ -111,13 +113,15 @@ const COPY: Record<LangKey, {
         sponsored: "스폰서",
         adSlot: "기업 광고 배너 영역",
         privacy: "개인정보는 루틴 분석에만 사용됩니다. 광고·판매 목적 사용 없음.",
-        socialProofTitle: "2030 여성들이 선택한\n나를 챙기는 방법",
-        review1: "강박 없이 기록할 수 있어서 좋아요. 기분 체크가 정말 도움돼요.",
-        review1Author: "지수님 (28세, 디자이너)",
-        review2: "감성적인 디자인이 너무 예뻐요. 매일 들어오고 싶어집니다.",
-        review2Author: "민지님 (32세, 마케터)",
-        review3: "완벽하지 않아도 된다는 말이 위로가 됐어요.",
-        review3Author: "영은님 (29세, 개발자)",
+        empathyTitle: "지금 우리에게 필요한 건\n더 센 의지가 아니라 회복 가능한 하루",
+        empathySub: "2026년의 일상을 버티는 사람들이 자주 겪는 흐름",
+        storyLabel: "현실",
+        story1Title: "할 일은 많은데, 집중이 오래 가지 않아요",
+        story1Body: "알림과 맥락 전환이 반복되면 하루가 금방 흐트러집니다. RutineIQ는 완벽한 계획보다 다시 돌아오는 타이밍을 먼저 설계합니다.",
+        story2Title: "열심히 해도 번아웃이 먼저 와요",
+        story2Body: "기록이 비는 날이 생겨도 괜찮습니다. 기분과 에너지 신호를 짧게 남기면, 무너지기 전에 회복 루틴을 제안합니다.",
+        story3Title: "완벽주의 때문에 시작 자체가 어려워요",
+        story3Body: "처음부터 잘하려고 할수록 시작이 늦어집니다. 30초 기록으로 문턱을 낮춰 오늘 할 수 있는 만큼만 이어가게 돕습니다.",
     },
     en: {
         tagline: "A small routine, just for you",
@@ -144,13 +148,15 @@ const COPY: Record<LangKey, {
         sponsored: "Sponsored",
         adSlot: "Corporate Ad Banner Slot",
         privacy: "Your data is used only for routine analysis. No ads, no selling.",
-        socialProofTitle: "Loved by 2030s who prioritize self-care",
-        review1: "I love that I can log without pressure. The mood check is really helpful.",
-        review1Author: "Jisoo (28, Designer)",
-        review2: "The emotional design is so pretty. I want to visit every day.",
-        review2Author: "Minji (32, Marketer)",
-        review3: "It comforted me to know I don't have to be perfect.",
-        review3Author: "Youngeun (29, Developer)",
+        empathyTitle: "What we need now is not more willpower,\nbut a day we can recover in",
+        empathySub: "Common pressure patterns people face in 2026",
+        storyLabel: "Reality",
+        story1Title: "There is too much to do, and focus keeps breaking",
+        story1Body: "Constant notifications and context switching scatter the day. RutineIQ designs the return point first, not a perfect schedule.",
+        story2Title: "Burnout arrives before results do",
+        story2Body: "Missing a day is normal. Log short mood and energy signals, and recover before the crash.",
+        story3Title: "Perfectionism makes starting harder",
+        story3Body: "The higher the bar, the later we start. A 30-second log lowers friction and keeps progress realistic.",
     },
     ja: {
         tagline: "自分のための小さなルーティン",
@@ -177,13 +183,15 @@ const COPY: Record<LangKey, {
         sponsored: "スポンサー",
         adSlot: "企業広告バナー枠",
         privacy: "個人情報はルーティン分析のみに使用します。広告・販売目的での使用はありません。",
-        socialProofTitle: "2030世代の女性が選ぶ\n自分を大切にする方法",
-        review1: "プレッシャーなく記録できるのがいいです。気分チェックが本当に役立ちます。",
-        review1Author: "ジスさん (28歳, デザイナー)",
-        review2: "感性的なデザインがとても綺麗です。毎日アクセスしたくなります。",
-        review2Author: "ミンジさん (32歳, マーケター)",
-        review3: "完璧でなくてもいいという言葉に慰められました。",
-        review3Author: "ヨンウンさん (29歳, 開発者)",
+        empathyTitle: "今必要なのは、\n強い意志より回復できる一日",
+        empathySub: "2026年の暮らしで多くの人が直面する現実",
+        storyLabel: "現実",
+        story1Title: "やることは多いのに、集中が続かない",
+        story1Body: "通知と切り替えが続くと一日が崩れます。RutineIQは完璧な計画より、戻るタイミングを先に設計します。",
+        story2Title: "成果より先に疲れ切ってしまう",
+        story2Body: "記録が空く日があっても問題ありません。気分とエネルギーを短く残すだけで、崩れる前の回復ルーティンを提案します。",
+        story3Title: "完璧主義で、始めること自体が重い",
+        story3Body: "最初から完璧を目指すほど開始は遅れます。30秒記録でハードルを下げ、今日できる分だけ続けられます。",
     },
     zh: {
         tagline: "属于你的小习惯",
@@ -210,13 +218,15 @@ const COPY: Record<LangKey, {
         sponsored: "赞助",
         adSlot: "企业广告位",
         privacy: "个人信息仅用于习惯分析。无广告，不出售数据。",
-        socialProofTitle: "2030女性选择的\n关爱自己的方式",
-        review1: "喜欢这种没有压力的记录方式。心情检查真的很有帮助。",
-        review1Author: "智秀 (28岁, 设计师)",
-        review2: "感性的设计太美了。让我每天都想打开。",
-        review2Author: "敏智 (32岁, 市场营销)",
-        review3: "得知不必完美，让我感到很安慰。",
-        review3Author: "英恩 (29岁, 开发者)",
+        empathyTitle: "当下更需要的，\n不是更强意志，而是可恢复的一天",
+        empathySub: "2026年人们常见的日常压力",
+        storyLabel: "现实",
+        story1Title: "事情很多，但专注总被打断",
+        story1Body: "通知和频繁切换会打乱一天。RutineIQ先设计如何回到节奏，而不是要求完美计划。",
+        story2Title: "成果还没出现，先被消耗了",
+        story2Body: "偶尔断更很正常。记录简短的情绪与能量信号，就能在崩溃前收到恢复建议。",
+        story3Title: "完美主义让开始变得更难",
+        story3Body: "越想一次做好，越难开始。30秒记录降低门槛，只做今天做得到的部分。",
     },
     es: {
         tagline: "Una pequeña rutina, solo para ti",
@@ -243,13 +253,15 @@ const COPY: Record<LangKey, {
         sponsored: "Patrocinado",
         adSlot: "Patrocinado",
         privacy: "Tus datos se usan solo para analizar rutinas. Sin publicidad ni ventas.",
-        socialProofTitle: "La forma de cuidarse\nelegida por mujeres de 20 y 30 años",
-        review1: "Me encanta poder registrar sin presión. El control de estado de ánimo ayuda mucho.",
-        review1Author: "Jisoo (28, Diseñadora)",
-        review2: "El diseño emocional es muy bonito. Quiero entrar todos los días.",
-        review2Author: "Minji (32, Marketing)",
-        review3: "Me consoló saber que no tengo que ser perfecta.",
-        review3Author: "Youngeun (29, Desarrolladora)",
+        empathyTitle: "Hoy no necesitamos más fuerza de voluntad,\nsino un día del que podamos recuperarnos",
+        empathySub: "Patrones comunes en la vida diaria de 2026",
+        storyLabel: "Realidad",
+        story1Title: "Hay demasiado por hacer y la concentración se rompe",
+        story1Body: "Las interrupciones constantes desordenan el día. RutineIQ diseña primero el punto de regreso, no un plan perfecto.",
+        story2Title: "El agotamiento llega antes que los resultados",
+        story2Body: "Perder un día es normal. Registra ánimo y energía en breve, y recupera el ritmo antes del colapso.",
+        story3Title: "El perfeccionismo hace más difícil empezar",
+        story3Body: "Cuanto más alto el estándar, más tarde empiezas. Un registro de 30 segundos baja la fricción y mantiene avances reales.",
     },
 };
 
@@ -422,32 +434,27 @@ export function LandingContent() {
                 </div>
             </section>
 
-            {/* ─── Social Proof Section ─── */}
+            {/* ─── Empathy Story Section ─── */}
             <section className="mx-auto max-w-5xl px-6 py-24">
                 <FadeUp>
-                    <h2 className="mb-16 text-center font-serif text-3xl font-medium tracking-tight text-foreground md:text-[2.5rem] whitespace-pre-line">
-                        {t.socialProofTitle}
+                    <h2 className="text-center font-serif text-3xl font-medium tracking-tight text-foreground md:text-[2.5rem] whitespace-pre-line">
+                        {t.empathyTitle}
                     </h2>
+                    <p className="mx-auto mt-5 max-w-2xl text-center text-base text-muted-foreground">{t.empathySub}</p>
                 </FadeUp>
-                <div className="grid gap-6 md:grid-cols-3">
+                <div className="mt-12 grid gap-6 md:grid-cols-3">
                     {[
-                        { text: t.review1, author: t.review1Author, bg: "bg-orange-50/30" },
-                        { text: t.review2, author: t.review2Author, bg: "bg-rose-50/30" },
-                        { text: t.review3, author: t.review3Author, bg: "bg-indigo-50/30" },
-                    ].map((review, i) => (
+                        { title: t.story1Title, body: t.story1Body, bg: "bg-orange-50/30", border: "border-orange-100" },
+                        { title: t.story2Title, body: t.story2Body, bg: "bg-rose-50/30", border: "border-rose-100" },
+                        { title: t.story3Title, body: t.story3Body, bg: "bg-indigo-50/30", border: "border-indigo-100" },
+                    ].map((story, i) => (
                         <FadeUp key={i} delay={i * 0.1}>
-                            <div className={cn("flex h-full flex-col justify-between rounded-3xl p-8 backdrop-blur-sm", review.bg)}>
-                                <div className="space-y-4">
-                                    <div className="flex gap-1">
-                                        {[1, 2, 3, 4, 5].map((_, starI) => (
-                                            <svg key={starI} className="h-4 w-4 text-orange-400 fill-orange-400" viewBox="0 0 20 20">
-                                                <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                                            </svg>
-                                        ))}
-                                    </div>
-                                    <p className="text-base leading-relaxed text-foreground/80 font-medium">&quot;{review.text}&quot;</p>
+                            <div className={cn("flex h-full flex-col rounded-3xl border p-8 backdrop-blur-sm", story.bg, story.border)}>
+                                <div className="mb-4 text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
+                                    {t.storyLabel} 0{i + 1}
                                 </div>
-                                <p className="mt-6 text-sm text-muted-foreground">{review.author}</p>
+                                <h3 className="text-base font-semibold text-foreground">{story.title}</h3>
+                                <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{story.body}</p>
                             </div>
                         </FadeUp>
                     ))}
