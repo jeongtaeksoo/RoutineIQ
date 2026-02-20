@@ -245,38 +245,42 @@ export default function OnboardingPage() {
             }}
           >
             <div className="flex transition-transform duration-300 ease-out" style={{ transform: `translateX(-${slideIndex * 100}%)` }}>
-              {slides.map((slide) => (
-                <article key={slide.id} className="w-full shrink-0">
-                  <div className="rounded-xl border bg-white/80 p-4">
-                    <p className={cn("text-sm font-semibold", slide.accentClass)}>{slide.title}</p>
-                    <p className="mt-2 text-sm text-mutedFg">{slide.description}</p>
-                    <ul className="mt-3 space-y-1.5 text-xs text-mutedFg">
-                      {slide.bullets.map((bullet) => (
-                        <li key={bullet} className="flex items-start gap-2">
-                          <span className="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
-                          <span>{bullet}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <div className="mt-4">
-                      <Button asChild size="sm">
-                        <Link
-                          href={slide.href}
-                          onClick={() =>
-                            trackProductEvent("onboarding_step_clicked", {
-                              source: "onboarding",
-                              meta: { step: `cta:${slide.id}` },
-                            })
-                          }
-                        >
-                          {slide.ctaLabel}
-                          <ArrowRight className="h-4 w-4" />
-                        </Link>
-                      </Button>
+              {slides.map((slide) => {
+                const targetHref =
+                  slide.id === "plan" && !activation.activation_complete ? stepHref : slide.href;
+                return (
+                  <article key={slide.id} className="w-full shrink-0">
+                    <div className="rounded-xl border bg-white/80 p-4">
+                      <p className={cn("text-sm font-semibold", slide.accentClass)}>{slide.title}</p>
+                      <p className="mt-2 text-sm text-mutedFg">{slide.description}</p>
+                      <ul className="mt-3 space-y-1.5 text-xs text-mutedFg">
+                        {slide.bullets.map((bullet) => (
+                          <li key={bullet} className="flex items-start gap-2">
+                            <span className="mt-1 h-1.5 w-1.5 rounded-full bg-muted-foreground/50" />
+                            <span>{bullet}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      <div className="mt-4">
+                        <Button asChild size="sm">
+                          <Link
+                            href={targetHref}
+                            onClick={() =>
+                              trackProductEvent("onboarding_step_clicked", {
+                                source: "onboarding",
+                                meta: { step: `cta:${slide.id}` },
+                              })
+                            }
+                          >
+                            {slide.ctaLabel}
+                            <ArrowRight className="h-4 w-4" />
+                          </Link>
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                </article>
-              ))}
+                  </article>
+                );
+              })}
             </div>
           </div>
 

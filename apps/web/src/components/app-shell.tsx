@@ -15,11 +15,12 @@ import {
 } from "lucide-react";
 
 import { AppSettingsPanel } from "@/components/app-settings-panel";
-import { OnboardingGate } from "@/components/onboarding-gate";
+import { OnboardingGate, isAllowedForIncompletePath } from "@/components/onboarding-gate";
 import { Button } from "@/components/ui/button";
 import { StreakIndicator } from "@/components/streak-indicator";
 import { LocaleProvider } from "@/components/locale-provider";
 import { getStrings, type Locale, normalizeLocale } from "@/lib/i18n";
+import { useActivation } from "@/lib/use-activation";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
@@ -77,6 +78,7 @@ export function AppShell({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { loading: activationLoading, activation } = useActivation();
 
   const [locale, setLocale] = React.useState<Locale>(initialLocale);
   const [resolvedRole, setResolvedRole] = React.useState<"user" | "admin">(role);
@@ -119,6 +121,15 @@ export function AppShell({
   const mobileNavItems = React.useMemo(
     () => navItems.filter((item) => item.mobile),
     []
+  );
+  const activationIncomplete = !activationLoading && !activation.activation_complete;
+  const resolveNavHref = React.useCallback(
+    (href: string): string => {
+      if (!activationIncomplete) return href;
+      if (isAllowedForIncompletePath(href)) return href;
+      return "/app/onboarding";
+    },
+    [activationIncomplete]
   );
 
   async function signOut() {
@@ -222,16 +233,20 @@ export function AppShell({
               const active = isNavActive(pathname, it);
               const Icon = it.icon;
               const label = navLabels[it.key];
+              const targetHref = resolveNavHref(it.href);
+              const isLocked = activationIncomplete && targetHref === "/app/onboarding" && !isAllowedForIncompletePath(it.href);
               return (
                 <Link
                   key={it.href}
-                  href={it.href}
+                  href={targetHref}
                   className={cn(
                     "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors duration-200",
                     active
                       ? "bg-[hsl(var(--muted)/0.85)] text-fg shadow-sm font-medium"
-                      : "text-mutedFg hover:bg-[hsl(var(--muted)/0.55)] hover:text-fg"
+                      : "text-mutedFg hover:bg-[hsl(var(--muted)/0.55)] hover:text-fg",
+                    isLocked ? "opacity-80" : undefined
                   )}
+                  data-onboarding-locked={isLocked ? "true" : undefined}
                 >
                   <Icon className="h-4 w-4" />
                   {label}
@@ -278,16 +293,20 @@ export function AppShell({
             const active = isNavActive(pathname, it);
             const Icon = it.icon;
             const short = navShortLabels[it.key];
+            const targetHref = resolveNavHref(it.href);
+            const isLocked = activationIncomplete && targetHref === "/app/onboarding" && !isAllowedForIncompletePath(it.href);
             return (
               <Link
                 key={it.href}
-                href={it.href}
+                href={targetHref}
                 aria-current={active ? "page" : undefined}
                 className={cn(
                   "flex min-h-[68px] flex-col items-center justify-center gap-1 px-2 pt-2 text-[11px] transition-colors duration-200",
-                  active ? "text-fg" : "text-mutedFg"
+                  active ? "text-fg" : "text-mutedFg",
+                  isLocked ? "opacity-80" : undefined
                 )}
                 style={{ paddingBottom: "calc(0.55rem + env(safe-area-inset-bottom))" }}
+                data-onboarding-locked={isLocked ? "true" : undefined}
               >
                 <span className={cn(
                   "flex items-center justify-center rounded-full p-1.5 transition-colors duration-200",
