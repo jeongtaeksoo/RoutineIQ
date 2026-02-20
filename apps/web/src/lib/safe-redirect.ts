@@ -2,7 +2,7 @@ const INTERNAL_REDIRECT_ORIGIN = "https://rutineiq.internal";
 
 export function sanitizeInternalRedirectPath(
   path: string | null | undefined,
-  fallback = "/app/today"
+  fallback = "/app"
 ): string {
   const raw = (path || "").trim();
   if (!raw.startsWith("/") || raw.startsWith("//")) return fallback;
