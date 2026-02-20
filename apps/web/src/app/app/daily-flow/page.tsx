@@ -1341,7 +1341,7 @@ export default function DailyFlowPage() {
 
             {parsedEntries.length > 0 && (
               <div className="mt-4">
-                <TimelineView entries={parsedEntries} className="h-48" />
+                <TimelineView entries={parsedEntries} />
               </div>
             )}
           </div>
