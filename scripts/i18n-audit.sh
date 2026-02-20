@@ -89,7 +89,14 @@ extract_object_keys() {
 }
 
 extract_used_keys() {
-  rg -o --no-filename "strings\\.([a-zA-Z0-9_]+)" "$SRC_DIR" \
+  if command -v rg >/dev/null 2>&1; then
+    rg -o --no-filename "strings\\.([a-zA-Z0-9_]+)" "$SRC_DIR" \
+      | sed -E 's/^strings\.//' \
+      | sort -u
+    return
+  fi
+
+  grep -RhoE "strings\\.([a-zA-Z0-9_]+)" "$SRC_DIR" \
     | sed -E 's/^strings\.//' \
     | sort -u
 }
