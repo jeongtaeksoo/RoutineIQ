@@ -17,14 +17,19 @@ const ACTIVATION_CACHE_TTL_MS = 30_000;
 let activationCache: { ts: number; value: ActivationShape } | null = null;
 let pendingActivationPromise: Promise<ActivationShape> | null = null;
 
-async function loadActivation(): Promise<ActivationShape> {
+type LoadActivationOptions = {
+  force?: boolean;
+};
+
+async function loadActivation(options?: LoadActivationOptions): Promise<ActivationShape> {
+  const force = Boolean(options?.force);
   const now = Date.now();
-  if (activationCache && now - activationCache.ts < ACTIVATION_CACHE_TTL_MS) {
+  if (!force && activationCache && now - activationCache.ts < ACTIVATION_CACHE_TTL_MS) {
     return activationCache.value;
   }
-  if (pendingActivationPromise) return pendingActivationPromise;
+  if (!force && pendingActivationPromise) return pendingActivationPromise;
 
-  pendingActivationPromise = (async () => {
+  const requestPromise = (async () => {
     try {
       const data = await apiFetchWithSchema(
         "/me/activation",
@@ -37,32 +42,54 @@ async function loadActivation(): Promise<ActivationShape> {
     } catch {
       return DEFAULT_ACTIVATION;
     } finally {
-      pendingActivationPromise = null;
+      if (!force) pendingActivationPromise = null;
     }
   })();
 
-  return pendingActivationPromise;
+  if (!force) pendingActivationPromise = requestPromise;
+  return requestPromise;
 }
 
 export function useActivation() {
   const [loading, setLoading] = React.useState(true);
   const [activation, setActivation] =
     React.useState<ActivationShape>(DEFAULT_ACTIVATION);
+  const mountedRef = React.useRef(true);
 
-  React.useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoading(true);
-      const data = await loadActivation();
-      if (!cancelled) {
+  const refresh = React.useCallback(
+    async (options?: LoadActivationOptions): Promise<ActivationShape> => {
+      const data = await loadActivation(options);
+      if (mountedRef.current) {
         setActivation(data);
         setLoading(false);
       }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+      return data;
+    },
+    []
+  );
 
-  return { loading, activation };
+  React.useEffect(() => {
+    mountedRef.current = true;
+    setLoading(true);
+    void refresh();
+
+    const onFocus = () => {
+      void refresh();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === "visible") {
+        void refresh();
+      }
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibility);
+
+    return () => {
+      mountedRef.current = false;
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibility);
+    };
+  }, [refresh]);
+
+  return { loading, activation, refresh };
 }
