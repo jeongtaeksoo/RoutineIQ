@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -11,9 +12,11 @@ from sentry_sdk.integrations.fastapi import FastApiIntegration
 
 from app.core.config import settings
 from app.routes.admin import router as admin_router
+from app.routes.analytics import router as analytics_router
 from app.routes.analyze import router as analyze_router
 from app.routes.logs import router as logs_router
 from app.routes.insights import router as insights_router
+from app.routes.me import router as me_router
 from app.routes.preferences import router as preferences_router
 from app.routes.parse import router as parse_router
 from app.routes.recovery import router as recovery_router
@@ -103,9 +106,20 @@ app.add_middleware(
 
 
 @app.middleware("http")
+async def attach_correlation_id(request: Request, call_next):
+    incoming = (request.headers.get("x-correlation-id") or "").strip()
+    correlation_id = incoming[:128] if incoming else uuid4().hex
+    request.state.correlation_id = correlation_id
+    response = await call_next(request)
+    response.headers["x-correlation-id"] = correlation_id
+    return response
+
+
+@app.middleware("http")
 async def log_server_error_responses(request: Request, call_next):
     response = await call_next(request)
     if response.status_code >= 500:
+        correlation_id = getattr(request.state, "correlation_id", None)
         await log_system_error(
             route=str(request.url.path),
             message=f"Server response status {response.status_code}",
@@ -114,6 +128,7 @@ async def log_server_error_responses(request: Request, call_next):
                 "status_code": response.status_code,
                 "method": request.method,
                 "path": str(request.url.path),
+                "correlation_id": correlation_id,
             },
         )
     return response
@@ -184,9 +199,14 @@ async def supabase_rest_error_handler(request: Request, exc: SupabaseRestError):
             "status_code": exc.status_code,
             "code": exc.code,
             "path": str(request.url.path),
+            "correlation_id": getattr(request.state, "correlation_id", None),
         },
     )
-    return JSONResponse(status_code=status_code, content={"detail": detail})
+    return JSONResponse(
+        status_code=status_code,
+        content={"detail": detail},
+        headers={"x-correlation-id": getattr(request.state, "correlation_id", "")},
+    )
 
 
 @app.exception_handler(Exception)
@@ -197,12 +217,20 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
         message="Unhandled server error",
         user_id=await _try_get_user_id_from_request(request),
         err=exc,
-        meta={"method": request.method},
+        meta={
+            "method": request.method,
+            "correlation_id": getattr(request.state, "correlation_id", None),
+        },
     )
-    return JSONResponse(status_code=500, content={"detail": "Internal server error"})
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+        headers={"x-correlation-id": getattr(request.state, "correlation_id", "")},
+    )
 
 
 app.include_router(logs_router, prefix="/api")
+app.include_router(analytics_router, prefix="/api")
 app.include_router(parse_router, prefix="/api")
 app.include_router(analyze_router, prefix="/api")
 app.include_router(reports_router, prefix="/api")
@@ -214,3 +242,4 @@ app.include_router(preferences_router, prefix="/api")
 app.include_router(trends_router, prefix="/api")
 app.include_router(insights_router, prefix="/api")
 app.include_router(recovery_router, prefix="/api")
+app.include_router(me_router, prefix="/api")

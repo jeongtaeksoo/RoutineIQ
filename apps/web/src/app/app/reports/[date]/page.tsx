@@ -1,18 +1,26 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { useParams, useRouter } from "next/navigation";
-import { Sparkles, ShieldCheck } from "lucide-react";
+import { Sparkles, XCircle } from "lucide-react";
 
+import { BillingValueCta } from "@/components/billing-value-cta";
 import { useLocale } from "@/components/locale-provider";
+import { TrustBadge } from "@/components/trust-badge";
+import { trackProductEvent } from "@/lib/analytics";
+import { ReportEnvelopeSchema } from "@/lib/api/schemas";
+import { apiFetchWithSchema } from "@/lib/api/validated-fetch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { apiFetch, isApiFetchError } from "@/lib/api-client";
+import { isApiFetchError } from "@/lib/api-client";
+import { extractErrorReferenceId, formatApiErrorMessage } from "@/lib/api-error";
 import { buildTomorrowRoutineIcs } from "@/lib/ics";
 import { addDays, localYYYYMMDD } from "@/lib/date-utils";
 import { type AIReport, normalizeReport } from "@/lib/report-utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useEntitlements } from "@/lib/use-entitlements";
 
 
 
@@ -145,6 +153,12 @@ function clearCachedReport(date: string, locale: string): void {
   }
 }
 
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 
 
 
@@ -167,6 +181,13 @@ export default function ReportPage() {
         today: "오늘",
         analyze: "이 날의 기록 정리하기",
         analyzing: "정리하는 중...",
+        cancelAnalyze: "정리 취소",
+        analyzeLimitReached: "오늘 분석 횟수를 모두 사용했습니다. 내일 다시 시도하거나 PRO로 업그레이드해 주세요.",
+        upgradeNow: "PRO 보기",
+        analyzeCanceled: "리포트 생성을 취소했습니다.",
+        analyzeTimeoutHint: "분석이 길어지고 있어요. 잠시 후 다시 시도하거나 새로고침으로 결과를 확인해 주세요.",
+        analyzeRecoveryHint: "결과를 확인 중입니다. 준비되는 즉시 이 화면을 자동으로 갱신합니다.",
+        analyzeProgressHint: "리포트를 생성 중입니다. 페이지를 이동해도 현재 결과는 보존됩니다.",
         refresh: "다시 불러오기",
         loading: "잠시만요...",
         noReportTitle: "리포트를 만들어 볼까요?",
@@ -220,6 +241,7 @@ export default function ReportPage() {
         thenLabel: "이렇게 해보세요",
         failedLoad: "리포트를 불러오지 못했어요",
         analyzeFailed: "분석에 실패했어요",
+        errorReference: "오류 참조 ID",
         exportNoBlocks: "내보낼 일정이 없어요",
         exportFailed: "캘린더 내보내기에 실패했어요",
         heroNextAction: "지금 할 한 가지",
@@ -240,6 +262,13 @@ export default function ReportPage() {
       today: "Today",
       analyze: "Analyze this day",
       analyzing: "Analyzing...",
+      cancelAnalyze: "Cancel analyze",
+      analyzeLimitReached: "You reached today's analyze limit. Retry tomorrow or upgrade to Pro.",
+      upgradeNow: "View Pro",
+      analyzeCanceled: "Report generation was canceled.",
+      analyzeTimeoutHint: "Analysis is taking longer than expected. Retry shortly or refresh to check if the report is ready.",
+      analyzeRecoveryHint: "Checking for the report in the background. This page will refresh automatically once ready.",
+      analyzeProgressHint: "Generating your report. You can navigate away and come back later.",
       refresh: "Reload report",
       loading: "Loading...",
       noReportTitle: "No report yet",
@@ -293,6 +322,7 @@ export default function ReportPage() {
       thenLabel: "THEN",
       failedLoad: "Failed to load report",
       analyzeFailed: "Analyze failed",
+      errorReference: "Error reference",
       exportNoBlocks: "No routine blocks to export",
       exportFailed: "Failed to export calendar",
       heroNextAction: "One thing to do now",
@@ -309,11 +339,13 @@ export default function ReportPage() {
 
   const [loading, setLoading] = React.useState(true);
   const [analyzing, setAnalyzing] = React.useState(false);
+  const [analyzeHint, setAnalyzeHint] = React.useState<string | null>(null);
   const [exporting, setExporting] = React.useState(false);
   const [refreshing, setRefreshing] = React.useState(false);
   const [showAllMicroAdvice, setShowAllMicroAdvice] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [report, setReport] = React.useState<AIReport | null>(null);
+  const { entitlements } = useEntitlements();
   const topPeak = report?.productivity_peaks?.[0] ?? null;
   const topFailure = report?.failure_patterns?.[0] ?? null;
   const burnoutRisk =
@@ -334,6 +366,49 @@ export default function ReportPage() {
         : "border-amber-300 bg-amber-50 text-amber-700";
   const microAdviceList = report?.micro_advice ?? [];
   const visibleMicroAdvice = showAllMicroAdvice ? microAdviceList : microAdviceList.slice(0, 1);
+  const analyzeLimitReached =
+    !entitlements.is_pro && entitlements.analyze_remaining_today <= 0;
+  const analyzeAbortRef = React.useRef<AbortController | null>(null);
+  const reportRecoveryPollingRef = React.useRef(false);
+  const reportRecoveryCancelledRef = React.useRef(false);
+
+  const pollUntilReportReady = React.useCallback(async () => {
+    if (reportRecoveryPollingRef.current) return;
+    reportRecoveryPollingRef.current = true;
+    setAnalyzeHint(t.analyzeRecoveryHint);
+    try {
+      for (let attempt = 0; attempt < 6; attempt += 1) {
+        if (reportRecoveryCancelledRef.current) return;
+        await waitMs(5_000);
+        if (reportRecoveryCancelledRef.current) return;
+
+        try {
+          const res = await apiFetchWithSchema(
+            `/reports?date=${date}`,
+            ReportEnvelopeSchema,
+            { timeoutMs: 12_000, retryOnTimeout: false },
+            "reports timeout recovery"
+          );
+          if (reportRecoveryCancelledRef.current) return;
+          const normalized = normalizeReport(res.report, isKo);
+          setReport(normalized);
+          if (normalized) writeCachedReport(date, locale, normalized);
+          setError(null);
+          setAnalyzeHint(null);
+          return;
+        } catch (err) {
+          if (isApiFetchError(err) && err.status === 404) {
+            continue;
+          }
+        }
+      }
+    } finally {
+      reportRecoveryPollingRef.current = false;
+      if (!reportRecoveryCancelledRef.current) {
+        setAnalyzeHint(null);
+      }
+    }
+  }, [date, isKo, locale, t.analyzeRecoveryHint]);
 
   async function load(opts?: { background?: boolean }) {
     setError(null);
@@ -343,9 +418,12 @@ export default function ReportPage() {
       setLoading(true);
     }
     try {
-      const res = await apiFetch<{ date: string; report: AIReport }>(`/reports?date=${date}`, {
-        timeoutMs: 15_000,
-      });
+      const res = await apiFetchWithSchema(
+        `/reports?date=${date}`,
+        ReportEnvelopeSchema,
+        { timeoutMs: 15_000 },
+        "reports response"
+      );
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
       if (normalized) writeCachedReport(date, locale, normalized);
@@ -355,10 +433,14 @@ export default function ReportPage() {
         setReport(null);
         clearCachedReport(date, locale);
       } else {
-        const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
         // Keep stale report visible when background refresh fails.
         if (!opts?.background || !report) {
-          setError(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
+          setError(
+            formatApiErrorMessage(err, {
+              fallbackMessage: t.failedLoad,
+              referenceLabel: t.errorReference,
+            })
+          );
         }
       }
     } finally {
@@ -371,23 +453,70 @@ export default function ReportPage() {
   }
 
   async function analyze() {
+    if (analyzeLimitReached) {
+      setError(t.analyzeLimitReached);
+      return;
+    }
     setError(null);
+    setAnalyzeHint(t.analyzeProgressHint);
     setAnalyzing(true);
+    trackProductEvent("analyze_started", { source: "report", date });
+    let startedRecoveryPolling = false;
+    const controller = new AbortController();
+    analyzeAbortRef.current = controller;
     try {
-      const res = await apiFetch<{ date: string; report: AIReport }>(`/analyze`, {
-        method: "POST",
-        timeoutMs: 45_000,
-        body: JSON.stringify({ date, force: true })
-      });
+      const res = await apiFetchWithSchema(
+        `/analyze`,
+        ReportEnvelopeSchema,
+        {
+          method: "POST",
+          timeoutMs: 45_000,
+          body: JSON.stringify({ date, force: true }),
+          signal: controller.signal,
+        },
+        "analyze response"
+      );
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
       if (normalized) writeCachedReport(date, locale, normalized);
+      trackProductEvent("analyze_succeeded", { source: "report", date });
     } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setError(err instanceof Error ? `${err.message}${hint}` : t.analyzeFailed);
+      if (controller.signal.aborted) {
+        trackProductEvent("analyze_canceled", { source: "report", date });
+        setError(t.analyzeCanceled);
+        return;
+      }
+      trackProductEvent("analyze_failed", {
+        source: "report",
+        date,
+        meta: {
+          code: isApiFetchError(err) ? err.code ?? null : null,
+          status: isApiFetchError(err) ? err.status ?? null : null,
+        },
+      });
+      if (isApiFetchError(err) && err.code === "timeout") {
+        setError(t.analyzeTimeoutHint);
+        startedRecoveryPolling = true;
+        void pollUntilReportReady();
+        return;
+      }
+      setError(
+        formatApiErrorMessage(err, {
+          fallbackMessage: t.analyzeFailed,
+          referenceLabel: t.errorReference,
+        })
+      );
     } finally {
+      analyzeAbortRef.current = null;
       setAnalyzing(false);
+      if (!startedRecoveryPolling) {
+        setAnalyzeHint(null);
+      }
     }
+  }
+
+  function cancelAnalyze() {
+    analyzeAbortRef.current?.abort();
   }
 
   async function exportCalendar() {
@@ -425,6 +554,111 @@ export default function ReportPage() {
     setShowAllMicroAdvice(false);
   }, [date, report?.schema_version]);
 
+  React.useEffect(
+    () => () => {
+      reportRecoveryCancelledRef.current = true;
+      analyzeAbortRef.current?.abort();
+    },
+    []
+  );
+
+  React.useEffect(() => {
+    if (!error) return;
+    trackProductEvent("ui_error_banner_shown", {
+      source: "report",
+      date,
+      meta: {
+        reference_id: extractErrorReferenceId(error),
+      },
+    });
+  }, [date, error]);
+
+  const trustMetrics = React.useMemo(() => {
+    const metrics: Array<{ label: string; value: string; tone?: "neutral" | "good" | "warn" }> = [];
+    const inputQuality = report?.analysis_meta?.input_quality_score;
+    if (typeof inputQuality === "number") {
+      metrics.push({
+        label: isKo ? "입력 품질" : "Input quality",
+        value: `${Math.round(inputQuality)}/100`,
+        tone: inputQuality >= 70 ? "good" : inputQuality >= 40 ? "neutral" : "warn",
+      });
+    }
+    const profileCoverage = report?.analysis_meta?.profile_coverage_pct;
+    if (typeof profileCoverage === "number") {
+      metrics.push({
+        label: isKo ? "프로필 커버리지" : "Profile coverage",
+        value: `${Math.round(profileCoverage)}%`,
+        tone: profileCoverage >= 75 ? "good" : profileCoverage >= 40 ? "neutral" : "warn",
+      });
+    }
+    const loggedEntries = report?.analysis_meta?.logged_entry_count;
+    if (typeof loggedEntries === "number") {
+      metrics.push({
+        label: isKo ? "분석 입력 수" : "Entries analyzed",
+        value: `${Math.round(loggedEntries)}`,
+        tone: loggedEntries >= 6 ? "good" : loggedEntries >= 3 ? "neutral" : "warn",
+      });
+    }
+    const retryCount = report?.analysis_meta?.schema_retry_count;
+    if (typeof retryCount === "number") {
+      metrics.push({
+        label: isKo ? "모델 재시도" : "Model retries",
+        value: `${Math.round(retryCount)}`,
+        tone: retryCount === 0 ? "good" : retryCount <= 1 ? "neutral" : "warn",
+      });
+    }
+    return metrics.slice(0, 4);
+  }, [
+    isKo,
+    report?.analysis_meta?.input_quality_score,
+    report?.analysis_meta?.logged_entry_count,
+    report?.analysis_meta?.profile_coverage_pct,
+    report?.analysis_meta?.schema_retry_count,
+  ]);
+  const trustHint = React.useMemo(() => {
+    if (!report) {
+      return isKo
+        ? "아직 실제 리포트가 없어 예시 기반 안내만 표시됩니다."
+        : "No report yet, so only preview guidance is shown.";
+    }
+    const coverage = Number(report.analysis_meta?.profile_coverage_pct ?? 0);
+    if (coverage > 0 && coverage < 75) {
+      return isKo
+        ? "프로필을 보완하면 내일 계획의 개인화 강도가 올라갑니다."
+        : "Completing profile details improves tomorrow-plan personalization strength.";
+    }
+    const entries = Number(report.analysis_meta?.logged_entry_count ?? 0);
+    if (entries > 0 && entries < 3) {
+      return isKo
+        ? "입력 기록이 적어 결과가 보수적으로 제시될 수 있습니다."
+        : "With few input entries, guidance may stay conservative.";
+    }
+    return isKo
+      ? "기록량이 유지되면 리포트 정밀도와 실행 추천의 일관성이 높아집니다."
+      : "Consistent logging improves report precision and action consistency.";
+  }, [isKo, report]);
+  const trustActions = React.useMemo(() => {
+    const actions: Array<{ label: string; href: string }> = [];
+    if ((report?.analysis_meta?.profile_coverage_pct ?? 100) < 75) {
+      actions.push({
+        label: isKo ? "프로필 보완" : "Complete profile",
+        href: "/app/settings/profile",
+      });
+    }
+    if (analyzeLimitReached) {
+      actions.push({
+        label: isKo ? "PRO 보기" : "View Pro",
+        href: "/app/billing",
+      });
+    } else if (!report) {
+      actions.push({
+        label: isKo ? "기록 입력" : "Add log",
+        href: "/app/log",
+      });
+    }
+    return actions.slice(0, 2);
+  }, [analyzeLimitReached, isKo, report]);
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
       <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -445,10 +679,30 @@ export default function ReportPage() {
               {t.today}
             </Button>
           </div>
-          <Button onClick={analyze} disabled={analyzing}>
+          <Button onClick={analyze} disabled={analyzing || analyzeLimitReached}>
             <Sparkles className="h-4 w-4" />
             {analyzing ? t.analyzing : t.analyze}
           </Button>
+          {analyzeLimitReached ? (
+            <Button asChild variant="outline">
+              <Link
+                href="/app/billing?from=report_limit"
+                onClick={() =>
+                  trackProductEvent("billing_cta_clicked", {
+                    source: "report_limit",
+                  })
+                }
+              >
+                {t.upgradeNow}
+              </Link>
+            </Button>
+          ) : null}
+          {analyzing ? (
+            <Button variant="outline" onClick={cancelAnalyze}>
+              <XCircle className="h-4 w-4" />
+              {t.cancelAnalyze}
+            </Button>
+          ) : null}
           <Button variant="outline" onClick={() => void load({ background: Boolean(report) })} disabled={loading || refreshing}>
             {refreshing ? t.loading : t.refresh}
           </Button>
@@ -458,6 +712,14 @@ export default function ReportPage() {
       {error ? (
         <div className="whitespace-pre-line rounded-xl border border-red-300 bg-red-50 p-4 text-sm text-red-900">
           {error}
+        </div>
+      ) : null}
+      {analyzeHint ? (
+        <div className="rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm text-mutedFg">{analyzeHint}</div>
+      ) : null}
+      {analyzeLimitReached ? (
+        <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+          {t.analyzeLimitReached}
         </div>
       ) : null}
 
@@ -503,10 +765,30 @@ export default function ReportPage() {
             <CardDescription>{t.noReportDesc}</CardDescription>
           </CardHeader>
           <CardContent>
-            <Button onClick={analyze} disabled={analyzing}>
+            <Button onClick={analyze} disabled={analyzing || analyzeLimitReached}>
               <Sparkles className="h-4 w-4" />
               {analyzing ? t.analyzing : t.analyzeNow}
             </Button>
+            {analyzeLimitReached ? (
+              <Button asChild variant="outline" className="ml-2">
+                <Link
+                  href="/app/billing?from=reports"
+                  onClick={() =>
+                    trackProductEvent("billing_cta_clicked", {
+                      source: "report_empty_limit",
+                    })
+                  }
+                >
+                  {t.upgradeNow}
+                </Link>
+              </Button>
+            ) : null}
+            {analyzing ? (
+              <Button variant="ghost" className="ml-2" onClick={cancelAnalyze}>
+                <XCircle className="h-4 w-4" />
+                {t.cancelAnalyze}
+              </Button>
+            ) : null}
 
             <div className="mt-5 space-y-3">
               <div className="rounded-xl border bg-white/50 p-4">
@@ -566,17 +848,20 @@ export default function ReportPage() {
                   {burnoutRiskLabel}
                 </span>
               </div>
+
+              <BillingValueCta source="reports" />
             </CardContent>
           </Card>
 
           {/* ─── AI Trust Badge (UX-C06) ─── */}
-          <div className="lg:col-span-12 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
-            <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-            <div>
-              <p className="text-xs font-semibold text-blue-900">{t.trustBadge}</p>
-              <p className="mt-0.5 text-xs text-blue-800">{t.trustBadgeBody}</p>
-            </div>
-          </div>
+          <TrustBadge
+            className="lg:col-span-12"
+            title={t.trustBadge}
+            body={t.trustBadgeBody}
+            metrics={trustMetrics}
+            hint={trustHint}
+            actions={trustActions}
+          />
 
           <Card className="lg:col-span-12">
             <CardHeader>

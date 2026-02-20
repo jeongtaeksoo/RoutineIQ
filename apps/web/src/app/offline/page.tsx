@@ -8,7 +8,7 @@ export default function OfflinePage() {
         </p>
         <div className="mt-5 flex flex-wrap gap-2">
           <a
-            href="/app/insights"
+            href="/app/today"
             className="inline-flex h-10 items-center justify-center rounded-md bg-brand px-4 text-sm font-medium text-brandFg shadow-sm"
           >
             다시 시도

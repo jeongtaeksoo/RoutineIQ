@@ -23,11 +23,11 @@ export default async function AppLayout({ children }: { children: ReactNode }) {
   const supabase = createClient();
 
   const {
-    data: { session }
-  } = await supabase.auth.getSession();
-  const user = session?.user ?? null;
+    data: { user },
+    error: userError,
+  } = await supabase.auth.getUser();
 
-  if (!user) {
+  if (userError || !user) {
     redirect("/login");
   }
 

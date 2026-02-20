@@ -43,7 +43,9 @@
   --input: 30 20% 90%;
   --ring: 14 75% 68%;
 
-  --radius: 1.5rem;
+  --radius: 1.25rem;
+  --radius-card: 1.25rem;
+  --radius-panel: 1.5rem;
 
   /* Legacy mappings for compatibility */
   --brand: 14 75% 68%;
@@ -58,6 +60,9 @@
   --space-xl: 32px;
   --space-2xl: 48px;
   --space-3xl: 64px;
+  --space-card-x: 20px;
+  --space-card-y: 20px;
+  --space-card-gap: 12px;
   --space-bottom-nav: 68px;
   --space-bottom-safe: 96px;
 
@@ -206,7 +211,7 @@ body {
 /* Inset block – replaces nested border-on-border cards */
 .inset-block {
   background: hsl(var(--bg-soft));
-  border-radius: 0.75rem;
+  border-radius: calc(var(--radius-card) - 8px);
   padding: 0.75rem;
   border: none;
 }

@@ -243,6 +243,38 @@ async function handleApiRoute(
     });
   }
 
+  if (path === "/me/entitlements" && method === "GET") {
+    return json(route, 200, {
+      plan: "free",
+      is_pro: false,
+      status: null,
+      current_period_end: null,
+      cancel_at_period_end: null,
+      needs_email_setup: false,
+      can_use_checkout: true,
+      analyze_used_today: 0,
+      analyze_remaining_today: 1,
+      limits: {
+        daily_analyze_limit: 1,
+        report_retention_days: 3,
+      },
+    });
+  }
+
+  if (path === "/me/activation" && method === "GET") {
+    return json(route, 200, {
+      profile_complete: true,
+      has_any_log: true,
+      has_any_report: true,
+      activation_complete: true,
+      next_step: "complete",
+    });
+  }
+
+  if (path === "/analytics/events" && method === "POST") {
+    return json(route, 200, { ok: true });
+  }
+
   if (path === "/preferences/data" && method === "DELETE") {
     return json(route, 200, { ok: true });
   }
@@ -287,7 +319,7 @@ async function handleApiRoute(
   if (path === "/stripe/create-checkout-session" && method === "POST") {
     state.checkoutCalls += 1;
     const origin = `${url.protocol}//${url.host}`;
-    return json(route, 200, { url: `${origin}/app/insights?checkout=ok` });
+    return json(route, 200, { url: `${origin}/app/today?checkout=ok` });
   }
 
   return json(route, 404, { detail: { message: `Unhandled mock route: ${method} ${path}` } });

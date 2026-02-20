@@ -55,7 +55,7 @@ export default function ResetPasswordClient() {
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
       setMessage("비밀번호가 변경되었습니다. 이동 중…");
-      router.replace("/app/insights");
+      router.replace("/app/today");
     } catch (err) {
       setError(err instanceof Error ? err.message : "비밀번호 변경에 실패했습니다");
     } finally {

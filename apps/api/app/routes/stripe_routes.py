@@ -38,7 +38,7 @@ async def stripe_status(_: AuthDep) -> dict:
 
 
 @router.post("/stripe/create-checkout-session")
-async def create_checkout_session(auth: AuthDep) -> dict:
+async def create_checkout_session(auth: AuthDep, request: Request) -> dict:
     if not stripe_is_ready(force=True):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -61,8 +61,15 @@ async def create_checkout_session(auth: AuthDep) -> dict:
             },
         )
 
+    source_header = (
+        (request.headers.get("x-routineiq-billing-source") or "").strip().lower()
+    )
+    source = source_header[:32] if source_header else "app_checkout"
+
     try:
-        url = await create_pro_checkout_session(user_id=auth.user_id, email=str(email))
+        url = await create_pro_checkout_session(
+            user_id=auth.user_id, email=str(email), source=source
+        )
         return {"url": url}
     except stripe.AuthenticationError as e:
         await log_system_error(
@@ -111,6 +118,15 @@ def _get_user_id_from_metadata(obj: dict[str, Any]) -> str | None:
     ):
         return obj["client_reference_id"].strip()
     return None
+
+
+def _get_source_from_metadata(obj: dict[str, Any]) -> str:
+    md = obj.get("metadata")
+    if isinstance(md, dict) and isinstance(md.get("source"), str):
+        source = md["source"].strip().lower()[:32]
+        if source:
+            return source
+    return "stripe_webhook"
 
 
 def _subscription_price_ids(sub: dict[str, Any]) -> set[str]:
@@ -209,7 +225,13 @@ async def stripe_webhook(request: Request) -> dict:
 
             sub = stripe.Subscription.retrieve(sub_id)
             plan = _derive_plan_from_subscription(sub)
-            await upsert_subscription_row(user_id=user_id, sub=sub, plan=plan)
+            source = _get_source_from_metadata(sub)
+            await upsert_subscription_row(
+                user_id=user_id,
+                sub=sub,
+                plan=plan,
+                source=source,
+            )
             if idem_key:
                 await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
             return {"ok": True}
@@ -231,7 +253,13 @@ async def stripe_webhook(request: Request) -> dict:
                 return {"ok": True}
 
             plan = _derive_plan_from_subscription(sub)
-            await upsert_subscription_row(user_id=user_id, sub=sub, plan=plan)
+            source = _get_source_from_metadata(sub)
+            await upsert_subscription_row(
+                user_id=user_id,
+                sub=sub,
+                plan=plan,
+                source=source,
+            )
             if idem_key:
                 await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)
             return {"ok": True}
@@ -254,6 +282,7 @@ async def stripe_webhook(request: Request) -> dict:
                 customer_id=sub.get("customer"),
                 subscription_id=sub.get("id"),
                 status=sub.get("status"),
+                source=_get_source_from_metadata(sub),
             )
             if idem_key:
                 await mark_idempotency_done(key=idem_key, done_ttl_seconds=86400)

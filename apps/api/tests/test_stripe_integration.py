@@ -39,6 +39,25 @@ def test_create_checkout_session_happy_path(
     assert response.status_code == 200
     assert response.json()["url"].startswith("https://checkout.stripe.test")
     assert checkout_mock.await_count == 1
+    kwargs = checkout_mock.await_args.kwargs
+    assert kwargs["source"] == "app_checkout"
+
+
+def test_create_checkout_session_passes_source_header(
+    authenticated_client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(stripe_routes, "stripe_is_ready", lambda force=False: True)
+    checkout_mock = AsyncMock(return_value="https://checkout.stripe.test/session/123")
+    monkeypatch.setattr(stripe_routes, "create_pro_checkout_session", checkout_mock)
+
+    response = authenticated_client.post(
+        "/api/stripe/create-checkout-session",
+        headers={"x-routineiq-billing-source": "plan"},
+    )
+
+    assert response.status_code == 200
+    kwargs = checkout_mock.await_args.kwargs
+    assert kwargs["source"] == "plan"
 
 
 def test_create_checkout_session_requires_auth(client: TestClient) -> None:
@@ -128,6 +147,56 @@ def test_webhook_checkout_completed_updates_subscription(
     kwargs = upsert_mock.await_args.kwargs
     assert kwargs["user_id"] == "00000000-0000-4000-8000-000000000001"
     assert kwargs["plan"] == "pro"
+    assert kwargs["source"] == "stripe_webhook"
+
+
+def test_webhook_subscription_updated_uses_metadata_source(
+    client: TestClient, monkeypatch
+) -> None:
+    monkeypatch.setattr(stripe_routes, "stripe_is_configured", lambda: True)
+    monkeypatch.setattr(stripe_routes, "init_stripe", lambda: None)
+    monkeypatch.setattr(stripe_routes, "log_system_error", AsyncMock(return_value=None))
+
+    monkeypatch.setattr(
+        stripe_routes.stripe.Webhook,
+        "construct_event",
+        lambda payload, sig_header, secret: {
+            "id": "evt_sub_updated_1",
+            "type": "customer.subscription.updated",
+            "data": {
+                "object": {
+                    "id": "sub_789",
+                    "customer": "cus_789",
+                    "status": "active",
+                    "metadata": {
+                        "user_id": "00000000-0000-4000-8000-000000000001",
+                        "source": "live_smoke",
+                    },
+                    "items": {
+                        "data": [
+                            {
+                                "price": {
+                                    "id": "price_test_pro",
+                                }
+                            }
+                        ]
+                    },
+                }
+            },
+        },
+    )
+    upsert_mock = AsyncMock(return_value=None)
+    monkeypatch.setattr(stripe_routes, "upsert_subscription_row", upsert_mock)
+
+    response = client.post(
+        "/api/stripe/webhook",
+        data=b'{"id":"evt_sub_updated_1"}',
+        headers={"Stripe-Signature": "t=1,v1=sig"},
+    )
+
+    assert response.status_code == 200
+    kwargs = upsert_mock.await_args.kwargs
+    assert kwargs["source"] == "live_smoke"
 
 
 def test_webhook_subscription_deleted_triggers_downgrade(
@@ -170,3 +239,4 @@ def test_webhook_subscription_deleted_triggers_downgrade(
     kwargs = downgrade_mock.await_args.kwargs
     assert kwargs["user_id"] == "00000000-0000-4000-8000-000000000001"
     assert kwargs["subscription_id"] == "sub_456"
+    assert kwargs["source"] == "stripe_webhook"

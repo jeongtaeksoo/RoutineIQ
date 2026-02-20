@@ -24,7 +24,7 @@ export default async function AdminLayout({ children }: { children: ReactNode })
     .maybeSingle();
 
   if (profile?.role !== "admin") {
-    redirect("/app/insights");
+    redirect("/app/today");
   }
 
   const email = profile?.email || user.email || null;

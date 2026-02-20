@@ -25,7 +25,7 @@ export function ShareCard({ isOpen, onClose, stats }: ShareCardProps) {
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="relative w-full max-w-sm overflow-hidden rounded-[2rem] bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-5 duration-300">
+            <div className="relative w-full max-w-sm overflow-hidden rounded-[var(--radius-panel)] bg-white shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-5 duration-300">
 
                 {/* Close Button */}
                 <button

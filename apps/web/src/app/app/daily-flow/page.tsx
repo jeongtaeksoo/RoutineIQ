@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import * as React from "react";
 import { ChevronLeft, ChevronRight, Clock, Pencil, Sparkles } from "lucide-react";
 import { useRouter } from "next/navigation";
@@ -9,8 +10,11 @@ import { useLocale } from "@/components/locale-provider";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { trackProductEvent } from "@/lib/analytics";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
+import { extractErrorReferenceId, formatApiErrorMessage } from "@/lib/api-error";
 import { localYYYYMMDD, addDays, toMinutes } from "@/lib/date-utils";
+import { useEntitlements } from "@/lib/use-entitlements";
 import { MoodSelector, type MoodValue } from "./mood-selector";
 import { TimelineView } from "./timeline-view";
 
@@ -327,6 +331,12 @@ function buildMetaPayload(meta: ParsedMeta): Record<string, unknown> {
   return payload;
 }
 
+function waitMs(ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, ms);
+  });
+}
+
 export default function DailyFlowPage() {
   const locale = useLocale();
   const isKo = locale === "ko";
@@ -377,12 +387,20 @@ export default function DailyFlowPage() {
         doneHint: "오늘 기록으로 내일 계획을 만들어요.",
         analyze: "AI 분석",
         analyzing: "분석 중...",
+        cancelAnalyze: "분석 취소",
+        analyzeLimitReached: "오늘 분석 횟수를 모두 사용했습니다. 내일 다시 시도하거나 PRO로 업그레이드해 주세요.",
+        upgradeNow: "PRO 보기",
+        analyzeCanceled: "분석을 취소했습니다.",
+        analyzeTimeoutHint: "분석이 길어지고 있어요. 잠시 후 리포트 화면에서 다시 시도해 주세요.",
+        analyzeRecoveryHint: "결과를 확인 중입니다. 준비되면 자동으로 리포트 화면으로 이동합니다.",
+        analyzeProgressHint: "AI가 리포트를 생성 중입니다. 취소하지 않으면 완료 후 리포트 화면으로 이동합니다.",
         failedLoad: "불러오기 실패",
         loadWarning: "이전 기록을 잠시 불러오지 못했어요. 새 기록 작성은 정상적으로 가능합니다.",
         parseFailed: "일기 정리 실패",
         parseTimeout: "AI가 느려요. 잠시 후 다시 시도해 주세요.",
         parseSchemaInvalid: "AI가 불안정했어요. 다시 시도하면 보통 해결돼요.",
         parseUnavailable: "AI가 잠시 멈겼어요. 잠시 후 다시 시도해 주세요.",
+        errorReference: "오류 참조 ID",
         parseRetry: "다시 시도",
         saveFailed: "저장 실패",
         analyzeFailed: "분석 실패",
@@ -462,12 +480,20 @@ export default function DailyFlowPage() {
       doneHint: "Generate tomorrow's optimized routine from today's log.",
       analyze: "AI Analyze",
       analyzing: "Analyzing...",
+      cancelAnalyze: "Cancel analyze",
+      analyzeLimitReached: "You reached today's analyze limit. Retry tomorrow or upgrade to Pro.",
+      upgradeNow: "View Pro",
+      analyzeCanceled: "Analysis was canceled.",
+      analyzeTimeoutHint: "Analysis is taking longer than expected. Please retry from the report screen shortly.",
+      analyzeRecoveryHint: "Checking for the result in the background. We will move to the report once ready.",
+      analyzeProgressHint: "AI is generating your report. Keep waiting or cancel if needed.",
       failedLoad: "Failed to load",
       loadWarning: "We couldn't load previous logs right now. You can still continue writing a new entry.",
       parseFailed: "Diary parsing failed",
       parseTimeout: "AI response timed out. Please retry in a moment.",
       parseSchemaInvalid: "AI returned an invalid format. Retrying usually fixes this.",
       parseUnavailable: "AI parsing service is temporarily unavailable. Please retry shortly.",
+      errorReference: "Error reference",
       parseRetry: "Retry parse",
       saveFailed: "Save failed",
       analyzeFailed: "Analyze failed",
@@ -520,11 +546,16 @@ export default function DailyFlowPage() {
   const [parsing, setParsing] = React.useState(false);
   const [saving, setSaving] = React.useState(false);
   const [analyzing, setAnalyzing] = React.useState(false);
+  const [analyzeHint, setAnalyzeHint] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loadWarning, setLoadWarning] = React.useState<string | null>(null);
   const [showParseRetry, setShowParseRetry] = React.useState(false);
   const [hasLocalDraft, setHasLocalDraft] = React.useState(false);
   const [selectedMood, setSelectedMood] = React.useState<Mood | null>(null);
+  const { entitlements } = useEntitlements();
+  const analyzeAbortRef = React.useRef<AbortController | null>(null);
+  const reportRecoveryPollingRef = React.useRef(false);
+  const reportRecoveryCancelledRef = React.useRef(false);
   const swipeStart = React.useRef<{ x: number; y: number } | null>(null);
   const diaryRef = React.useRef<HTMLTextAreaElement | null>(null);
   const entryRefs = React.useRef<Array<HTMLDivElement | null>>([]);
@@ -564,8 +595,12 @@ export default function DailyFlowPage() {
         setLoadWarning(t.loadWarning);
         return;
       }
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setLoadWarning(err instanceof Error ? `${err.message}${hint}` : t.failedLoad);
+      setLoadWarning(
+        formatApiErrorMessage(err, {
+          fallbackMessage: t.failedLoad,
+          referenceLabel: t.errorReference,
+        })
+      );
     },
   });
 
@@ -579,6 +614,17 @@ export default function DailyFlowPage() {
   React.useEffect(() => {
     autoResizeDiary();
   }, [diaryText, autoResizeDiary]);
+
+  React.useEffect(() => {
+    if (!error) return;
+    trackProductEvent("ui_error_banner_shown", {
+      source: "daily_flow",
+      date,
+      meta: {
+        reference_id: extractErrorReferenceId(error),
+      },
+    });
+  }, [date, error]);
 
   const trackDailyFlowEvent = React.useCallback(
     async (
@@ -749,6 +795,44 @@ export default function DailyFlowPage() {
     return payload;
   }
 
+  const pollUntilReportReady = React.useCallback(
+    async (targetDate: string) => {
+      if (reportRecoveryPollingRef.current) return;
+      reportRecoveryPollingRef.current = true;
+      setAnalyzeHint(t.analyzeRecoveryHint);
+
+      try {
+        for (let attempt = 0; attempt < 6; attempt += 1) {
+          if (reportRecoveryCancelledRef.current) return;
+          await waitMs(5_000);
+          if (reportRecoveryCancelledRef.current) return;
+
+          try {
+            await apiFetch(`/reports?date=${targetDate}`, {
+              timeoutMs: 12_000,
+              retryOnTimeout: false,
+            });
+            if (reportRecoveryCancelledRef.current) return;
+            setError(null);
+            setAnalyzeHint(null);
+            router.push(`/app/reports/${targetDate}`);
+            return;
+          } catch (err) {
+            if (isApiFetchError(err) && err.status === 404) {
+              continue;
+            }
+          }
+        }
+      } finally {
+        reportRecoveryPollingRef.current = false;
+        if (!reportRecoveryCancelledRef.current) {
+          setAnalyzeHint(null);
+        }
+      }
+    },
+    [router, t.analyzeRecoveryHint]
+  );
+
   function updateParsedEntry(idx: number, patch: Partial<ParsedEntry>) {
     setHasLocalDraft(true);
     setConfirmingSave(false);
@@ -898,18 +982,41 @@ export default function DailyFlowPage() {
       setStep("confirm");
       setHasLocalDraft(true);
     } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
       const parseCode = isApiFetchError(err) ? err.code : undefined;
       const retryable = isApiFetchError(err) && (err.code === "PARSE_UPSTREAM_TIMEOUT" || err.code === "PARSE_UPSTREAM_HTTP_ERROR" || err.code === "PARSE_SCHEMA_INVALID");
       setShowParseRetry(Boolean(retryable));
       if (parseCode === "PARSE_UPSTREAM_TIMEOUT") {
-        setError(`${t.parseTimeout}${hint}`);
+        setError(
+          formatApiErrorMessage(err, {
+            fallbackMessage: t.parseTimeout,
+            messageOverride: t.parseTimeout,
+            referenceLabel: t.errorReference,
+          })
+        );
       } else if (parseCode === "PARSE_SCHEMA_INVALID") {
-        setError(`${t.parseSchemaInvalid}${hint}`);
+        setError(
+          formatApiErrorMessage(err, {
+            fallbackMessage: t.parseSchemaInvalid,
+            messageOverride: t.parseSchemaInvalid,
+            referenceLabel: t.errorReference,
+          })
+        );
       } else if (parseCode === "PARSE_UPSTREAM_HTTP_ERROR") {
-        setError(`${t.parseUnavailable}${hint}`);
+        setError(
+          formatApiErrorMessage(err, {
+            fallbackMessage: t.parseUnavailable,
+            messageOverride: t.parseUnavailable,
+            referenceLabel: t.errorReference,
+          })
+        );
       } else {
-        setError(err instanceof Error ? `${t.parseFailed}: ${err.message}${hint}` : t.parseFailed);
+        setError(
+          formatApiErrorMessage(err, {
+            fallbackMessage: t.parseFailed,
+            messagePrefix: t.parseFailed,
+            referenceLabel: t.errorReference,
+          })
+        );
       }
     } finally {
       setParsing(false);
@@ -949,8 +1056,12 @@ export default function DailyFlowPage() {
       setHasLocalDraft(false);
       setStep("done");
     } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setError(err instanceof Error ? `${err.message}${hint}` : t.saveFailed);
+      setError(
+        formatApiErrorMessage(err, {
+          fallbackMessage: t.saveFailed,
+          referenceLabel: t.errorReference,
+        })
+      );
     } finally {
       setSaving(false);
     }
@@ -958,6 +1069,10 @@ export default function DailyFlowPage() {
 
   async function saveAndAnalyze(options?: { skipSave?: boolean }): Promise<void> {
     if (!date) return;
+    if (analyzeLimitReached) {
+      setError(t.analyzeLimitReached);
+      return;
+    }
     setError(null);
     setLoadWarning(null);
     setShowParseRetry(false);
@@ -988,28 +1103,76 @@ export default function DailyFlowPage() {
         });
         setHasLocalDraft(false);
       } catch (err) {
-        const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-        setError(err instanceof Error ? `${err.message}${hint}` : t.saveFailed);
+        setError(
+          formatApiErrorMessage(err, {
+            fallbackMessage: t.saveFailed,
+            referenceLabel: t.errorReference,
+          })
+        );
         setSaving(false);
         return;
       }
       setSaving(false);
     }
 
+    setAnalyzeHint(t.analyzeProgressHint);
     setAnalyzing(true);
+    trackProductEvent("analyze_started", { source: "daily_flow", date });
+    let startedRecoveryPolling = false;
+    const controller = new AbortController();
+    analyzeAbortRef.current = controller;
     try {
-      await apiFetch("/analyze", { method: "POST", timeoutMs: 45_000, body: JSON.stringify({ date, force: true }) });
+      await apiFetch("/analyze", {
+        method: "POST",
+        timeoutMs: 45_000,
+        body: JSON.stringify({ date, force: true }),
+        signal: controller.signal,
+      });
+      trackProductEvent("analyze_succeeded", { source: "daily_flow", date });
       router.push(`/app/reports/${date}`);
     } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setError(err instanceof Error ? `${err.message}${hint}` : t.analyzeFailed);
+      if (controller.signal.aborted) {
+        trackProductEvent("analyze_canceled", { source: "daily_flow", date });
+        setError(t.analyzeCanceled);
+        return;
+      }
+      trackProductEvent("analyze_failed", {
+        source: "daily_flow",
+        date,
+        meta: {
+          code: isApiFetchError(err) ? err.code ?? null : null,
+          status: isApiFetchError(err) ? err.status ?? null : null,
+        },
+      });
+      if (isApiFetchError(err) && err.code === "timeout") {
+        setError(t.analyzeTimeoutHint);
+        startedRecoveryPolling = true;
+        void pollUntilReportReady(date);
+        return;
+      }
+      setError(
+        formatApiErrorMessage(err, {
+          fallbackMessage: t.analyzeFailed,
+          referenceLabel: t.errorReference,
+        })
+      );
     } finally {
+      analyzeAbortRef.current = null;
       setAnalyzing(false);
+      if (!startedRecoveryPolling) {
+        setAnalyzeHint(null);
+      }
     }
+  }
+
+  function cancelAnalyze() {
+    analyzeAbortRef.current?.abort();
   }
 
   const isBusy = parsing || saving || analyzing;
   const canParse = diaryText.trim().length >= 10 && !isBusy;
+  const analyzeLimitReached =
+    !entitlements.is_pro && entitlements.analyze_remaining_today <= 0;
 
   const parsedMetaRows = React.useMemo(() => {
     const rows: Array<{ label: string; value: string }> = [];
@@ -1036,6 +1199,14 @@ export default function DailyFlowPage() {
       });
     });
   }, [date, parsedEntries, step, trackDailyFlowEvent]);
+
+  React.useEffect(
+    () => () => {
+      reportRecoveryCancelledRef.current = true;
+      analyzeAbortRef.current?.abort();
+    },
+    []
+  );
 
   if (!mounted || !date) {
     return (
@@ -1110,6 +1281,9 @@ export default function DailyFlowPage() {
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
           {loadWarning}
         </div>
+      ) : null}
+      {analyzeHint ? (
+        <div className="rounded-xl border border-brand/30 bg-brand/5 p-3 text-sm text-mutedFg">{analyzeHint}</div>
       ) : null}
 
       {step === "write" ? (
@@ -1377,12 +1551,37 @@ export default function DailyFlowPage() {
         <div className="rounded-xl border border-emerald-200 bg-emerald-50/80 p-4">
           <p className="font-medium text-emerald-900">{t.doneTitle}</p>
           <p className="mt-1 text-xs text-emerald-800/80">{t.doneHint}</p>
-          <div className="mt-3 flex justify-end">
-            <Button onClick={() => void saveAndAnalyze({ skipSave: true })} disabled={isBusy}>
+          <div className="mt-3 flex justify-end gap-2">
+            {analyzing ? (
+              <Button variant="outline" onClick={cancelAnalyze}>
+                {t.cancelAnalyze}
+              </Button>
+            ) : null}
+            <Button
+              onClick={() => void saveAndAnalyze({ skipSave: true })}
+              disabled={isBusy || analyzeLimitReached}
+            >
               <Sparkles className={`mr-1.5 h-4 w-4 ${analyzing ? "animate-pulse" : ""}`} />
               {analyzing ? t.analyzing : t.analyze}
             </Button>
+            {analyzeLimitReached ? (
+              <Button asChild variant="outline">
+                <Link
+                  href="/app/billing?from=log"
+                  onClick={() =>
+                    trackProductEvent("billing_cta_clicked", {
+                      source: "daily_flow_limit",
+                    })
+                  }
+                >
+                  {t.upgradeNow}
+                </Link>
+              </Button>
+            ) : null}
           </div>
+          {analyzeLimitReached ? (
+            <p className="mt-2 text-xs text-amber-800">{t.analyzeLimitReached}</p>
+          ) : null}
         </div>
       ) : null}
     </div>

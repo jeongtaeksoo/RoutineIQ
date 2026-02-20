@@ -90,14 +90,14 @@ export function ReminderScheduler({
           hhmm: logTime || "21:30",
           title: reminderLogTitle,
           body: reminderLogBody,
-          href: "/app/daily-flow"
+          href: "/app/log"
         });
         scheduleDaily({
           kind: "plan",
           hhmm: planTime || "08:30",
           title: reminderPlanTitle,
           body: reminderPlanBody,
-          href: "/app/insights"
+          href: "/app/today"
         });
       } catch {
         // ignore

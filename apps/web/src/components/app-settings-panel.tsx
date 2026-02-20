@@ -1,15 +1,16 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Bell, Database, Mail, Settings, ShieldCheck, User, X } from "lucide-react";
+import { Bell, Database, Settings, ShieldCheck, User, X } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
-import { BillingActions } from "@/components/billing-actions";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { apiFetch, isApiFetchError } from "@/lib/api-client";
+import { EntitlementsSchema, ProfilePreferencesSchema } from "@/lib/api/schemas";
+import { apiFetchWithSchema } from "@/lib/api/validated-fetch";
 import type { Locale } from "@/lib/i18n";
 import { createClient } from "@/lib/supabase/client";
 
@@ -121,6 +122,11 @@ type Copy = {
   account_name: string;
   account_email: string;
   account_plan: string;
+  account_guest_name: string;
+  account_email_unset: string;
+  account_email_setup_hint: string;
+  account_email_setup_cta: string;
+  account_manage_billing: string;
   account_delete: string;
   account_delete_confirm: string;
   free: string;
@@ -178,6 +184,11 @@ const EN_COPY: Copy = {
   account_name: "Name",
   account_email: "Email",
   account_plan: "Current version",
+  account_guest_name: "Guest user",
+  account_email_unset: "No email set",
+  account_email_setup_hint: "Convert to email login to secure your account and continue billing safely.",
+  account_email_setup_cta: "Set up email account",
+  account_manage_billing: "Manage billing",
   account_delete: "Delete account",
   account_delete_confirm: "Delete your account permanently? All logs, reports, profile, and subscription data will be removed.",
   free: "Free",
@@ -235,6 +246,11 @@ const KO_COPY: Copy = {
   account_name: "이름",
   account_email: "이메일",
   account_plan: "현재 버전",
+  account_guest_name: "게스트 사용자",
+  account_email_unset: "이메일 미설정",
+  account_email_setup_hint: "이메일 로그인으로 전환하면 계정 보안과 결제 진행을 안정적으로 이어갈 수 있어요.",
+  account_email_setup_cta: "이메일 계정 설정하기",
+  account_manage_billing: "결제 관리",
   account_delete: "회원탈퇴",
   account_delete_confirm: "정말 회원탈퇴할까요? 기록, 리포트, 개인설정, 구독 정보가 모두 삭제됩니다.",
   free: "일반(Free)",
@@ -408,7 +424,7 @@ function getCopy(locale: Locale): Copy {
 }
 
 function displayName(user: { email?: string | null; user_metadata?: Record<string, unknown> } | null): string {
-  if (!user) return "-";
+  if (!user) return "";
   const meta = user.user_metadata || {};
   const fromMeta =
     (typeof meta.full_name === "string" && meta.full_name.trim()) ||
@@ -416,7 +432,7 @@ function displayName(user: { email?: string | null; user_metadata?: Record<strin
     (typeof meta.user_name === "string" && meta.user_name.trim()) ||
     "";
   if (fromMeta) return fromMeta;
-  if (!user.email) return "-";
+  if (!user.email) return "";
   return user.email.split("@")[0] || user.email;
 }
 
@@ -439,12 +455,11 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
   const [message, setMessage] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
 
-  const [name, setName] = React.useState("-");
-  const [email, setEmail] = React.useState("-");
+  const [name, setName] = React.useState("");
+  const [email, setEmail] = React.useState("");
   const [plan, setPlan] = React.useState<PlanTier>("free");
   const [needsEmailSetup, setNeedsEmailSetup] = React.useState(false);
   const [profile, setProfile] = React.useState<ProfilePreferences>(DEFAULT_PROFILE);
-  const [deletingAccount, setDeletingAccount] = React.useState(false);
 
   const [remindersEnabled, setRemindersEnabled] = React.useState(false);
   const [reminderLogTime, setReminderLogTime] = React.useState("21:30");
@@ -452,6 +467,7 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
   const [notificationPermission, setNotificationPermission] = React.useState<NotificationPermission | "unsupported">(
     "unsupported"
   );
+  const prevPathnameRef = React.useRef(pathname);
 
   const permissionBadge = React.useMemo(() => {
     if (notificationPermission === "unsupported") return { label: t.perm_unsupported, variant: "secondary" as const };
@@ -468,8 +484,7 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
         data: { user },
       } = await supabaseRef.current.auth.getUser();
       setName(displayName(user));
-      setEmail(user?.email || "-");
-      setNeedsEmailSetup(!user?.email);
+      setEmail(user?.email || "");
 
       const reminderMeta = (user?.user_metadata?.routineiq_reminders_v1 || {}) as ReminderMeta;
       setRemindersEnabled(Boolean(reminderMeta.enabled));
@@ -482,21 +497,27 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
         setNotificationPermission(Notification.permission);
       }
 
-      const uid = user?.id || "";
-      if (!uid) {
+      try {
+        const ent = await apiFetchWithSchema(
+          "/me/entitlements",
+          EntitlementsSchema,
+          { timeoutMs: 12_000 },
+          "settings entitlements"
+        );
+        setPlan(ent.is_pro ? "pro" : "free");
+        setNeedsEmailSetup(Boolean(ent.needs_email_setup));
+      } catch {
         setPlan("free");
-      } else {
-        const { data: sub } = await supabaseRef.current
-          .from("subscriptions")
-          .select("plan,status")
-          .eq("user_id", uid)
-          .maybeSingle();
-        const isPro = sub?.plan === "pro" && (sub.status === "active" || sub.status === "trialing");
-        setPlan(isPro ? "pro" : "free");
+        setNeedsEmailSetup(false);
       }
 
       try {
-        const prefs = await apiFetch<ProfilePreferences>("/preferences/profile");
+        const prefs = await apiFetchWithSchema(
+          "/preferences/profile",
+          ProfilePreferencesSchema,
+          undefined,
+          "settings profile"
+        );
         setProfile({
           ...DEFAULT_PROFILE,
           ...prefs,
@@ -528,6 +549,17 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [open]);
+
+  React.useEffect(() => {
+    if (!open) {
+      prevPathnameRef.current = pathname;
+      return;
+    }
+    if (prevPathnameRef.current !== pathname) {
+      setOpen(false);
+    }
+    prevPathnameRef.current = pathname;
+  }, [open, pathname]);
 
   React.useEffect(() => {
     if (searchParams.get("settings") !== "1") return;
@@ -582,21 +614,6 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
     }
   }
 
-  async function deleteData() {
-    if (!window.confirm(t.reset_confirm)) return;
-    setBusy(true);
-    setError(null);
-    setMessage(null);
-    try {
-      await apiFetch<{ ok: boolean }>("/preferences/data", { method: "DELETE" });
-      setMessage(t.reset_done);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : t.delete_failed);
-    } finally {
-      setBusy(false);
-    }
-  }
-
   async function saveProfileSettings() {
     setBusy(true);
     setError(null);
@@ -616,10 +633,15 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
         trend_opt_in: true,
         trend_compare_by: ["age_group", "job_family", "work_mode"],
       };
-      const saved = await apiFetch<ProfilePreferences>("/preferences/profile", {
-        method: "PUT",
-        body: JSON.stringify(payload),
-      });
+      const saved = await apiFetchWithSchema(
+        "/preferences/profile",
+        ProfilePreferencesSchema,
+        {
+          method: "PUT",
+          body: JSON.stringify(payload),
+        },
+        "saved settings profile"
+      );
       setProfile({
         ...DEFAULT_PROFILE,
         ...saved,
@@ -633,30 +655,6 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
       setError(err instanceof Error ? err.message : t.save_failed);
     } finally {
       setBusy(false);
-    }
-  }
-
-  async function deleteAccount() {
-    if (!window.confirm(t.account_delete_confirm)) return;
-    setDeletingAccount(true);
-    setError(null);
-    setMessage(null);
-    try {
-      await apiFetch<{ ok: boolean }>("/preferences/account", {
-        method: "DELETE",
-        timeoutMs: 120_000,
-        retryOnTimeout: true,
-      });
-      // Never block redirect on signOut network latency; account deletion already succeeded.
-      await Promise.race([
-        supabaseRef.current.auth.signOut().catch(() => null),
-        new Promise((resolve) => window.setTimeout(resolve, 1_500)),
-      ]);
-      window.location.assign("/login?deleted=1");
-    } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setError(err instanceof Error ? `${err.message}${hint}` : t.delete_failed);
-      setDeletingAccount(false);
     }
   }
 
@@ -674,11 +672,16 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
       {open ? (
         <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/45 px-4">
           <button type="button" aria-label={t.close} className="absolute inset-0 h-full w-full" onClick={() => setOpen(false)} />
-          <div className="relative z-10 w-[min(92vw,560px)] max-h-[84vh] aspect-square overflow-hidden rounded-2xl border bg-[hsl(var(--card))] shadow-elevated">
-            <div className="flex h-full flex-col">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="quick-settings-title"
+            className="relative z-10 w-[min(92vw,560px)] max-h-[84vh] overflow-hidden rounded-[var(--radius-panel)] border bg-[hsl(var(--card))] shadow-elevated"
+          >
+            <div className="flex flex-col">
               <div className="flex items-start justify-between border-b px-5 py-4">
                 <div>
-                  <h2 className="title-serif text-2xl">{t.title}</h2>
+                  <h2 id="quick-settings-title" className="title-serif text-2xl">{t.title}</h2>
                   <p className="mt-1 text-xs text-mutedFg">{t.subtitle}</p>
                 </div>
                 <Button variant="ghost" size="icon" onClick={() => setOpen(false)} aria-label={t.close}>
@@ -686,7 +689,7 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                 </Button>
               </div>
 
-              <div className="flex-1 overflow-y-auto px-5 py-4">
+              <div className="max-h-[calc(84vh-80px)] overflow-y-auto px-5 py-4">
                 {message ? (
                   <div className="mb-3 rounded-xl border border-emerald-300 bg-emerald-50 p-3 text-sm text-emerald-900">{message}</div>
                 ) : null}
@@ -856,8 +859,8 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                       </ul>
                     </div>
 
-                    <Button variant="outline" onClick={deleteData} disabled={busy} className="border-red-200 text-red-700 hover:bg-red-50">
-                      {t.reset}
+                    <Button asChild variant="outline" className="border-red-200 text-red-700 hover:bg-red-50">
+                      <Link href="/app/settings/privacy" onClick={() => setOpen(false)}>{t.reset}</Link>
                     </Button>
                   </TabsContent>
 
@@ -873,11 +876,15 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                     <div className="space-y-2 rounded-xl border bg-white/50 p-4 text-sm">
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-mutedFg">{t.account_name}</span>
-                        <span className="font-medium">{loadingAccount ? t.loading : name}</span>
+                        <span data-testid="settings-account-name-value" className="font-medium">
+                          {loadingAccount ? t.loading : name || t.account_guest_name}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-mutedFg">{t.account_email}</span>
-                        <span className="font-medium">{loadingAccount ? t.loading : email}</span>
+                        <span data-testid="settings-account-email-value" className="font-medium">
+                          {loadingAccount ? t.loading : email || t.account_email_unset}
+                        </span>
                       </div>
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-mutedFg">{t.account_plan}</span>
@@ -885,28 +892,29 @@ export function AppSettingsPanel({ locale }: { locale: Locale }) {
                       </div>
                     </div>
 
-                    {plan === "free" ? (
-                      <div className="space-y-2 rounded-xl border bg-white/55 p-3">
-                        <div className="flex items-center gap-2 text-xs text-mutedFg">
-                          <Mail className="h-3.5 w-3.5" />
-                          {t.billing_inline}
-                        </div>
-                        <BillingActions plan="free" needsEmailSetup={needsEmailSetup} localeOverride={locale} />
+                    {!loadingAccount && (needsEmailSetup || !email) ? (
+                      <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-3 text-xs text-amber-900">
+                        <p>{t.account_email_setup_hint}</p>
+                        <Link
+                          href="/app/billing?from=settings"
+                          onClick={() => setOpen(false)}
+                          className="mt-2 inline-flex items-center gap-1 font-semibold text-amber-900 underline-offset-2 hover:underline"
+                        >
+                          {t.account_email_setup_cta}
+                        </Link>
                       </div>
-                    ) : (
-                      <div className="rounded-xl border bg-emerald-50 p-3 text-sm text-emerald-900">
-                        {t.pro}
-                      </div>
-                    )}
+                    ) : null}
 
-                    <Button
-                      variant="outline"
-                      onClick={deleteAccount}
-                      disabled={deletingAccount}
-                      className="border-red-200 text-red-700 hover:bg-red-50"
-                    >
-                      {deletingAccount ? t.loading : t.account_delete}
-                    </Button>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      <Button asChild variant="outline">
+                        <Link href="/app/billing?from=settings" onClick={() => setOpen(false)}>
+                          {plan === "pro" ? t.account_manage_billing : t.upgrade}
+                        </Link>
+                      </Button>
+                      <Button asChild variant="outline" className="border-red-200 text-red-700 hover:bg-red-50">
+                        <Link href="/app/settings/account" onClick={() => setOpen(false)}>{t.account_delete}</Link>
+                      </Button>
+                    </div>
                   </TabsContent>
                 </Tabs>
               </div>

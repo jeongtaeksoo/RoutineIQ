@@ -8,6 +8,7 @@ import { ArrowLeft, Globe, Mail } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { getSupabasePublicEnv } from "@/lib/supabase/env";
+import { sanitizeInternalRedirectPath } from "@/lib/safe-redirect";
 import { createClient } from "@/lib/supabase/client";
 
 type LangKey = "ko" | "en" | "ja" | "zh" | "es";
@@ -254,7 +255,7 @@ function resolveAuthOrigin(): string {
 
 function setPostAuthRedirectCookie(nextPath: string): void {
   if (typeof document === "undefined") return;
-  const safeNext = nextPath.startsWith("/") ? nextPath : "/app/insights";
+  const safeNext = sanitizeInternalRedirectPath(nextPath);
   const secure = typeof window !== "undefined" && window.location.protocol === "https:" ? "; Secure" : "";
   document.cookie = `routineiq_post_auth_next=${encodeURIComponent(safeNext)}; Path=/; Max-Age=600; SameSite=Lax${secure}`;
 }
@@ -333,7 +334,7 @@ export default function LoginClient() {
 
   const t = T[lang];
   const redirectedFrom = searchParams.get("redirectedFrom");
-  const afterAuthRedirect = redirectedFrom && redirectedFrom.startsWith("/") ? redirectedFrom : "/app/insights";
+  const afterAuthRedirect = sanitizeInternalRedirectPath(redirectedFrom);
   const supabaseEnv = getSupabasePublicEnv();
 
   React.useEffect(() => {

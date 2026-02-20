@@ -8,7 +8,7 @@ from urllib.parse import parse_qsl, urlencode, urlparse, urlunparse
 import stripe
 
 from app.core.config import settings
-from app.services.supabase_rest import SupabaseRest
+from app.services.supabase_rest import SupabaseRest, SupabaseRestError
 
 
 def stripe_is_configured() -> bool:
@@ -62,7 +62,9 @@ def init_stripe() -> None:
     stripe.api_key = key
 
 
-async def create_pro_checkout_session(*, user_id: str, email: str | None) -> str:
+async def create_pro_checkout_session(
+    *, user_id: str, email: str | None, source: str = "app_checkout"
+) -> str:
     if not settings.is_stripe_configured():
         raise RuntimeError("Stripe is not configured")
     init_stripe()
@@ -86,6 +88,7 @@ async def create_pro_checkout_session(*, user_id: str, email: str | None) -> str
             )
         )
 
+    source_norm = (source or "app_checkout").strip().lower()[:32] or "app_checkout"
     kwargs: dict[str, Any] = {
         "mode": "subscription",
         "line_items": [{"price": settings.stripe_price_id_pro, "quantity": 1}],
@@ -93,8 +96,8 @@ async def create_pro_checkout_session(*, user_id: str, email: str | None) -> str
         "cancel_url": str(settings.stripe_cancel_url),
         "client_reference_id": user_id,
         "allow_promotion_codes": True,
-        "metadata": {"user_id": user_id},
-        "subscription_data": {"metadata": {"user_id": user_id}},
+        "metadata": {"user_id": user_id, "source": source_norm},
+        "subscription_data": {"metadata": {"user_id": user_id, "source": source_norm}},
     }
     if email:
         kwargs["customer_email"] = email
@@ -112,26 +115,43 @@ def _to_iso(ts: int | None) -> str | None:
 
 
 async def upsert_subscription_row(
-    *, user_id: str, sub: dict[str, Any], plan: str
+    *, user_id: str, sub: dict[str, Any], plan: str, source: str = "stripe_webhook"
 ) -> None:
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
 
+    source_norm = (source or "stripe_webhook").strip().lower()[:32] or "stripe_webhook"
     row = {
         "user_id": user_id,
         "stripe_customer_id": sub.get("customer"),
         "stripe_subscription_id": sub.get("id"),
         "status": sub.get("status") or "unknown",
         "plan": plan,
+        "source": source_norm,
         "current_period_end": _to_iso(sub.get("current_period_end")),
         "cancel_at_period_end": bool(sub.get("cancel_at_period_end") or False),
     }
 
-    await sb.upsert_one(
-        "subscriptions",
-        bearer_token=settings.supabase_service_role_key,
-        row=row,
-        on_conflict="user_id",
-    )
+    try:
+        await sb.upsert_one(
+            "subscriptions",
+            bearer_token=settings.supabase_service_role_key,
+            row=row,
+            on_conflict="user_id",
+        )
+    except SupabaseRestError as exc:
+        # Backward compatibility for environments where the subscriptions.source
+        # column has not been migrated yet.
+        if exc.status_code == 400 and "source" in str(exc).lower():
+            fallback = dict(row)
+            fallback.pop("source", None)
+            await sb.upsert_one(
+                "subscriptions",
+                bearer_token=settings.supabase_service_role_key,
+                row=fallback,
+                on_conflict="user_id",
+            )
+            return
+        raise
 
 
 async def set_subscription_free(
@@ -140,19 +160,36 @@ async def set_subscription_free(
     customer_id: str | None,
     subscription_id: str | None,
     status: str | None,
+    source: str = "stripe_webhook",
 ) -> None:
     sb = SupabaseRest(str(settings.supabase_url), settings.supabase_service_role_key)
-    await sb.upsert_one(
-        "subscriptions",
-        bearer_token=settings.supabase_service_role_key,
-        row={
-            "user_id": user_id,
-            "stripe_customer_id": customer_id,
-            "stripe_subscription_id": subscription_id,
-            "status": status or "canceled",
-            "plan": "free",
-            "current_period_end": None,
-            "cancel_at_period_end": False,
-        },
-        on_conflict="user_id",
-    )
+    source_norm = (source or "stripe_webhook").strip().lower()[:32] or "stripe_webhook"
+    row = {
+        "user_id": user_id,
+        "stripe_customer_id": customer_id,
+        "stripe_subscription_id": subscription_id,
+        "status": status or "canceled",
+        "plan": "free",
+        "source": source_norm,
+        "current_period_end": None,
+        "cancel_at_period_end": False,
+    }
+    try:
+        await sb.upsert_one(
+            "subscriptions",
+            bearer_token=settings.supabase_service_role_key,
+            row=row,
+            on_conflict="user_id",
+        )
+    except SupabaseRestError as exc:
+        if exc.status_code == 400 and "source" in str(exc).lower():
+            fallback = dict(row)
+            fallback.pop("source", None)
+            await sb.upsert_one(
+                "subscriptions",
+                bearer_token=settings.supabase_service_role_key,
+                row=fallback,
+                on_conflict="user_id",
+            )
+            return
+        raise

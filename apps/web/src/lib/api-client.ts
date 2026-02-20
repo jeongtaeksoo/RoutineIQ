@@ -7,6 +7,7 @@ export type ApiFetchError = Error & {
   status?: number;
   hint?: string;
   code?: string;
+  correlationId?: string;
 };
 
 export function isApiFetchError(err: unknown): err is ApiFetchError {
@@ -21,7 +22,7 @@ type ApiErrorBody =
   | { detail?: unknown }
   | string;
 
-type ApiFetchInit = RequestInit & {
+export type ApiFetchInit = RequestInit & {
   timeoutMs?: number;
   retryOnTimeout?: boolean;
   _retryAttempt?: number;
@@ -167,6 +168,10 @@ async function fetchServerToken(timeoutMs = 3500): Promise<string | null> {
   }
 }
 
+function isServerTokenFallbackEnabled(): boolean {
+  return process.env.NEXT_PUBLIC_ENABLE_SERVER_TOKEN_FALLBACK === "1";
+}
+
 async function resolveAccessToken(): Promise<string | null> {
   const now = Date.now();
   if (cachedAccessToken && now < cachedAccessTokenExpiresAt) {
@@ -201,11 +206,13 @@ async function resolveAccessToken(): Promise<string | null> {
       return bridgeToken;
     }
 
-    const serverToken = await fetchServerToken();
-    if (serverToken) {
-      cachedAccessToken = serverToken;
-      cachedAccessTokenExpiresAt = now + 60_000;
-      return serverToken;
+    if (isServerTokenFallbackEnabled()) {
+      const serverToken = await fetchServerToken();
+      if (serverToken) {
+        cachedAccessToken = serverToken;
+        cachedAccessTokenExpiresAt = now + 60_000;
+        return serverToken;
+      }
     }
 
     return null;
@@ -216,6 +223,12 @@ async function resolveAccessToken(): Promise<string | null> {
   } finally {
     pendingAccessTokenPromise = null;
   }
+}
+
+function createCorrelationId(): string {
+  const globalCrypto = typeof globalThis !== "undefined" ? (globalThis.crypto as Crypto | undefined) : undefined;
+  if (globalCrypto?.randomUUID) return globalCrypto.randomUUID();
+  return `rq-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
 export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T> {
@@ -236,6 +249,9 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
   const headers = new Headers(init?.headers || {});
   if (!headers.has("content-type")) {
     headers.set("content-type", "application/json");
+  }
+  if (!headers.has("x-correlation-id")) {
+    headers.set("x-correlation-id", createCorrelationId());
   }
 
   if (!isE2EMode) {
@@ -300,12 +316,19 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
       );
       timeoutErr.status = 504;
       timeoutErr.code = "timeout";
+      timeoutErr.correlationId = headers.get("x-correlation-id") || undefined;
       throw timeoutErr;
     }
-    throw err;
+    const networkErr: ApiFetchError =
+      err instanceof Error ? (err as ApiFetchError) : new Error("Network request failed");
+    if (!networkErr.correlationId) {
+      networkErr.correlationId = headers.get("x-correlation-id") || undefined;
+    }
+    throw networkErr;
   } finally {
     clearTimeout(timeoutId);
   }
+  const responseCorrelationId = res.headers.get("x-correlation-id") || headers.get("x-correlation-id") || undefined;
 
   if (!res.ok) {
     let body: ApiErrorBody = "Request failed";
@@ -319,6 +342,7 @@ export async function apiFetch<T>(path: string, init?: ApiFetchInit): Promise<T>
     err.status = res.status;
     if (hint) err.hint = hint;
     if (code) err.code = code;
+    if (responseCorrelationId) err.correlationId = responseCorrelationId;
     throw err;
   }
 

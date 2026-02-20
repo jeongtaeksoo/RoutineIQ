@@ -14,7 +14,7 @@ export default function NotFound() {
             홈으로
           </Link>
           <Link
-            href="/app/insights"
+            href="/app/today"
             className="inline-flex h-10 items-center justify-center rounded-md border bg-white/70 px-4 text-sm font-medium text-fg"
           >
             앱 열기

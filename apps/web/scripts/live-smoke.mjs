@@ -318,7 +318,10 @@ async function main() {
 
   const checkout = await fetchJson(`${apiBase}/api/stripe/create-checkout-session`, {
     method: "POST",
-    headers: { authorization: `Bearer ${billToken}` },
+    headers: {
+      authorization: `Bearer ${billToken}`,
+      "x-routineiq-billing-source": "live_smoke",
+    },
   });
   const checkoutUrl = checkout.json?.url;
   const stripeMode = stripeStatus.json?.mode;
@@ -344,7 +347,7 @@ async function main() {
         status: "active",
         current_period_end: Math.floor(Date.now() / 1000) + 86400 * 30,
         cancel_at_period_end: false,
-        metadata: { user_id: billUserId },
+        metadata: { user_id: billUserId, source: "live_smoke" },
         items: {
           object: "list",
           data: [{ id: "si_smoke_1", object: "subscription_item", price: { id: stripePriceIdPro } }],

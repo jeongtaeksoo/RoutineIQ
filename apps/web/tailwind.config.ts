@@ -12,6 +12,9 @@ const config: Config = {
       spacing: {
         'bottom-nav': 'var(--bottom-nav-height)',
         'bottom-safe': 'var(--space-bottom-safe)',
+        'card-x': 'var(--space-card-x)',
+        'card-y': 'var(--space-card-y)',
+        'card-gap': 'var(--space-card-gap)',
       },
       fontFamily: {
         sans: ["var(--font-sans)", "ui-sans-serif", "system-ui", "sans-serif"],
@@ -43,8 +46,8 @@ const config: Config = {
       },
       borderRadius: {
         lg: "var(--radius)",
-        md: "calc(var(--radius) - 2px)",
-        sm: "calc(var(--radius) - 4px)",
+        md: "calc(var(--radius) - 6px)",
+        sm: "calc(var(--radius) - 8px)",
       },
       boxShadow: {
         soft: "0 10px 30px -12px rgba(0,0,0,0.15)"
@@ -55,4 +58,3 @@ const config: Config = {
 };
 
 export default config;
-

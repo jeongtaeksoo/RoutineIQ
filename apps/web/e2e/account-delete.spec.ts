@@ -5,10 +5,6 @@ import { installRoutineApiMock } from "./helpers/mock-api";
 async function runAccountDeleteFlow(page: import("@playwright/test").Page) {
   await installRoutineApiMock(page);
 
-  page.on("dialog", async (dialog) => {
-    await dialog.accept();
-  });
-
   let deleteCalled = false;
   await page.route("**/api/preferences/account", async (route) => {
     deleteCalled = true;
@@ -19,18 +15,13 @@ async function runAccountDeleteFlow(page: import("@playwright/test").Page) {
     });
   });
 
-  await page.goto("/app/insights");
-  await expect(page).toHaveURL(/\/app\/insights/);
+  await page.goto("/app/settings/account");
+  await expect(page).toHaveURL(/\/app\/settings\/account/);
 
-  await page
-    .getByRole("button", { name: /settings|설정|設定|设置|configuración/i })
-    .click();
-  await page
-    .getByRole("tab", { name: /account|계정|アカウント|账号|cuenta/i })
-    .click();
+  await page.getByPlaceholder("DELETE").fill("DELETE");
   await page
     .getByRole("button", {
-      name: /delete account|회원탈퇴|アカウント削除|删除账号|eliminar cuenta/i,
+      name: /delete account|회원탈퇴|アカウント削除|删除账号/i,
     })
     .click();
 

@@ -5,8 +5,8 @@ import { installRoutineApiMock } from "./helpers/mock-api";
 const e2eMode = process.env.E2E_MODE === "live" ? "live" : "mock";
 
 async function enterMockApp(page: import("@playwright/test").Page) {
-  await page.goto("/app/insights");
-  await expect(page).toHaveURL(/\/app\/insights/);
+  await page.goto("/app/today");
+  await expect(page).toHaveURL(/\/app\/today|\/app\/insights/);
 }
 
 function todayLocal(): string {
@@ -34,7 +34,7 @@ async function signInLive(
   }, accessToken);
   await ensureProfileReady(accessToken);
 
-  await expect(page).toHaveURL(/\/app\/insights/);
+  await expect(page).toHaveURL(/\/app\/today|\/app\/insights|\/app\/onboarding/);
   return { accessToken };
 }
 
@@ -439,15 +439,18 @@ test.describe("RutineIQ core flows", () => {
     await page.getByRole("button", { name: /설정|Settings/i }).click();
     await page.getByRole("tab", { name: /계정|Account/i }).click();
 
+    await page.getByRole("link", { name: /Pro로 업그레이드|Upgrade to Pro/i }).first().click();
+    await expect(page).toHaveURL(/\/app\/billing/);
+    await page.keyboard.press("Escape");
+
     await page.getByLabel(/이메일|Email/i).first().fill("demo-user@routineiq.test");
     await page.getByLabel(/^비밀번호$|^Password$/i).first().fill("RutineIQ123!");
     await page.getByLabel(/비밀번호 확인|Confirm password/i).first().fill("RutineIQ123!");
-    await page.getByRole("button", { name: /계정 만들고 계속하기|Create account to continue/i }).click();
+    await page.getByRole("button", { name: /계정 만들고 계속하기|Create account to continue/i }).first().click();
 
     await expect(page.getByTestId("continue-checkout")).toBeVisible();
     await page.getByTestId("continue-checkout").click();
-
-    await expect(page).toHaveURL(/\/app\/insights\?checkout=ok/);
+    await expect(page).toHaveURL(/\/app\/today\?checkout=ok/);
     expect(mock.checkoutCalls).toBe(1);
   });
 });

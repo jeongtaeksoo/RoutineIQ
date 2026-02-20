@@ -1,94 +1,40 @@
 "use client";
 
 import * as React from "react";
-import { Sparkles, FileText, Clock, AlertTriangle, CheckCircle2, ShieldCheck, RotateCcw, Share2 } from "lucide-react";
+import { Sparkles, FileText, Clock, AlertTriangle, CheckCircle2, RotateCcw, Share2 } from "lucide-react";
 import Link from "next/link";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { BillingValueCta } from "@/components/billing-value-cta";
 import { useLocale } from "@/components/locale-provider";
+import { TrustBadge } from "@/components/trust-badge";
+import {
+  CohortTrendSchema,
+  LogsEnvelopeSchema,
+  ProfileHealthSchema,
+  RecoveryActiveSchema,
+  RecoveryNudgeEnvelopeSchema,
+  ReportEnvelopeSchema,
+  WeeklyInsightsSchema,
+  type CohortTrendShape,
+  type RecoveryActiveShape,
+  type RecoveryNudgePayloadShape,
+} from "@/lib/api/schemas";
+import { apiFetchWithSchema } from "@/lib/api/validated-fetch";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { apiFetch, isApiFetchError } from "@/lib/api-client";
+import { extractErrorReferenceId, formatApiErrorMessage } from "@/lib/api-error";
 import { DAILY_FLOW_TEMPLATES, DEFAULT_TEMPLATE_NAME } from "@/lib/daily-flow-templates";
 import { localYYYYMMDD } from "@/lib/date-utils";
 import { type AIReport, normalizeReport } from "@/lib/report-utils";
 import { isE2ETestMode } from "@/lib/supabase/env";
+import { trackProductEvent } from "@/lib/analytics";
 import { ShareCard } from "./share-card";
 
-type WeeklyInsightsResponse = {
-  from_date: string;
-  to_date: string;
-  weekly: {
-    days_logged: number;
-    days_total: number;
-    total_blocks: number;
-    deep_minutes: number;
-  } & Record<string, unknown>;
-  streak?: {
-    current: number;
-    longest: number;
-  };
-  trend?: Record<string, unknown>;
-};
-
-type CohortTrend = {
-  enabled: boolean;
-  insufficient_sample: boolean;
-  min_sample_size: number;
-  preview_sample_size: number;
-  high_confidence_sample_size: number;
-  threshold_variant: "control" | "candidate" | string;
-  preview_mode: boolean;
-  confidence_level: "low" | "medium" | "high" | string;
-  cohort_size: number;
-  active_users: number;
-  window_days: number;
-  compare_by: string[];
-  filters: Record<string, string>;
-  metrics: {
-    focus_window_rate: number | null;
-    rebound_rate: number | null;
-    recovery_buffer_day_rate: number | null;
-    focus_window_numerator: number;
-    focus_window_denominator: number;
-    rebound_numerator: number;
-    rebound_denominator: number;
-    recovery_day_numerator: number;
-    recovery_day_denominator: number;
-  };
-  message: string;
-  my_focus_rate: number | null;
-  my_rebound_rate: number | null;
-  my_recovery_rate: number | null;
-  my_focus_delta_7d: number | null;
-  my_rebound_delta_7d: number | null;
-  my_recovery_delta_7d: number | null;
-  rank_label: string;
-  actionable_tip: string;
-};
-
-type RecoveryActive = {
-  has_open_session: boolean;
-  session_id?: string;
-  lapse_start_ts?: string;
-  elapsed_min?: number | null;
-  correlation_id?: string;
-};
-
-type RecoveryNudgePayload = {
-  nudge_id: string;
-  session_id: string;
-  message: string;
-  lapse_start_ts: string;
-  created_at: string;
-  correlation_id: string;
-};
-
-type RecoveryNudgeEnvelope = {
-  has_nudge: boolean;
-  nudge?: RecoveryNudgePayload | null;
-  correlation_id?: string;
-};
+type CohortTrend = CohortTrendShape;
+type RecoveryActive = RecoveryActiveShape;
+type RecoveryNudgePayload = RecoveryNudgePayloadShape;
 
 const ROUTINE_ACTIVITY_RENAME_KO: Record<string, string> = {
   "핵심 집중 블록": "집중 작업 시간",
@@ -114,6 +60,7 @@ function normalizeRoutineActivityLabel(activity: string, isKo: boolean): string 
 
 
 const INSIGHTS_REPORT_CACHE_TTL_MS = 1000 * 60 * 5;
+const PROFILE_WARNING_DISMISS_KEY_PREFIX = "routineiq:insights:profile-warning-dismissed";
 
 function insightsReportCacheKey(date: string, locale: string): string {
   return `routineiq:insights-report:v1:${date}:${locale}`;
@@ -157,6 +104,28 @@ function clearCachedInsightsReport(date: string, locale: string): void {
   }
 }
 
+function profileWarningDismissKey(date: string): string {
+  return `${PROFILE_WARNING_DISMISS_KEY_PREFIX}:${date}`;
+}
+
+function isProfileWarningDismissed(date: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem(profileWarningDismissKey(date)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function dismissProfileWarningForDate(date: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(profileWarningDismissKey(date), "1");
+  } catch {
+    // Ignore local persistence failures.
+  }
+}
+
 
 
 export default function InsightsPage() {
@@ -190,6 +159,7 @@ export default function InsightsPage() {
         cta_analyzeNow: "AI로 정리하기",
         cta_viewTomorrow: "내일 준비하기",
         cta_editLog: "기록 열기",
+        cta_manualPrefix: "직접 작성하려면",
         cta_openReport: "리포트 전체보기",
         cta_reload: "새로고침",
         progress: "진행 상황",
@@ -208,6 +178,7 @@ export default function InsightsPage() {
         profileSetupTitle: "프로필을 완성하면 추천이 더 정확해져요",
         profileSetupBody: "연령대·성별·직군·근무 형태를 설정하면 더 맞춤 추천을 받아요.",
         profileSetupCta: "설정 열기",
+        profileSetupDismiss: "오늘 숨기기",
         peakHours: "집중 잘 되는 시간",
         peakHoursDesc: "집중이 자연스럽게 일어나는 시간대입니다.",
         peakHoursEmpty: "분석을 실행하면 집중 잘 되는 시간대가 표시돼요.",
@@ -274,6 +245,7 @@ export default function InsightsPage() {
         errorLoad: "리포트를 불러오지 못했어요",
         errorAnalyze: "분석에 실패했어요",
         errorQuickstart: "퀵스타트에 실패했어요",
+        errorReference: "오류 참조 ID",
         statusDone: "완료",
         labelGoal: "실행 포인트",
         errorCohort: "유사 사용자 트렌드를 불러오지 못했어요.",
@@ -310,6 +282,7 @@ export default function InsightsPage() {
       cta_analyzeNow: "Analyze my day",
       cta_viewTomorrow: "View tomorrow plan",
       cta_editLog: "Open today log",
+      cta_manualPrefix: "Prefer manual input?",
       cta_openReport: "Open report",
       cta_reload: "Reload report",
       progress: "Progress",
@@ -328,6 +301,7 @@ export default function InsightsPage() {
       profileSetupTitle: "Complete your profile to improve personalization",
       profileSetupBody: "Age, gender, job family, and work mode make tomorrow plans more realistic.",
       profileSetupCta: "Open preferences",
+      profileSetupDismiss: "Hide for today",
       peakHours: "Peak Performance Hours",
       peakHoursDesc: "When deep work is most likely to stick.",
       peakHoursEmpty: "Run Analyze to see when your focus is strongest.",
@@ -394,6 +368,7 @@ export default function InsightsPage() {
       errorLoad: "Failed to load report",
       errorAnalyze: "Analyze failed",
       errorQuickstart: "Quickstart failed",
+      errorReference: "Error reference",
       statusDone: "OK",
       labelGoal: "Action guide",
       errorCohort: "Failed to load cohort trend.",
@@ -426,6 +401,7 @@ export default function InsightsPage() {
   const [cohortTrend, setCohortTrend] = React.useState<CohortTrend | null>(null);
   const [cohortLoading, setCohortLoading] = React.useState(true);
   const [profileMissingRequired, setProfileMissingRequired] = React.useState(false);
+  const [profileWarningDismissedToday, setProfileWarningDismissedToday] = React.useState(false);
   const [recoveryActive, setRecoveryActive] = React.useState<RecoveryActive | null>(null);
   const [recoveryNudge, setRecoveryNudge] = React.useState<RecoveryNudgePayload | null>(null);
   const [nudgeAcking, setNudgeAcking] = React.useState(false);
@@ -433,9 +409,12 @@ export default function InsightsPage() {
 
   async function loadTodayLog(): Promise<boolean> {
     try {
-      const res = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`, {
-        timeoutMs: 15_000,
-      });
+      const res = await apiFetchWithSchema(
+        `/logs?date=${today}`,
+        LogsEnvelopeSchema,
+        { timeoutMs: 15_000 },
+        "today logs"
+      );
       const count = Array.isArray(res.entries) ? res.entries.length : 0;
       setTodayLogBlocks(count);
       return count > 0;
@@ -451,9 +430,12 @@ export default function InsightsPage() {
       setReportLoading(true);
     }
     try {
-      const res = await apiFetch<{ date: string; report: AIReport; model?: string }>(`/reports?date=${today}`, {
-        timeoutMs: 15_000,
-      });
+      const res = await apiFetchWithSchema(
+        `/reports?date=${today}`,
+        ReportEnvelopeSchema,
+        { timeoutMs: 15_000 },
+        "insights report"
+      );
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
       if (normalized) {
@@ -466,10 +448,14 @@ export default function InsightsPage() {
         setReport(null);
         clearCachedInsightsReport(today, locale);
       } else {
-        const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
         // Keep stale data visible when background refresh fails.
         if (!opts?.background || !report) {
-          setReportError(err instanceof Error ? `${err.message}${hint}` : t.errorLoad);
+          setReportError(
+            formatApiErrorMessage(err, {
+              fallbackMessage: t.errorLoad,
+              referenceLabel: t.errorReference,
+            })
+          );
         }
       }
     } finally {
@@ -484,11 +470,16 @@ export default function InsightsPage() {
     setReportError(null);
     setInfoMessage(null);
     try {
-      const res = await apiFetch<{ date: string; report: AIReport; cached: boolean }>(`/analyze`, {
-        method: "POST",
-        timeoutMs: 45_000,
-        body: JSON.stringify({ date: today, force: true })
-      });
+      const res = await apiFetchWithSchema(
+        `/analyze`,
+        ReportEnvelopeSchema,
+        {
+          method: "POST",
+          timeoutMs: 45_000,
+          body: JSON.stringify({ date: today, force: true })
+        },
+        "insights analyze"
+      );
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
       if (normalized) {
@@ -496,8 +487,12 @@ export default function InsightsPage() {
       }
       void loadConsistency();
     } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setReportError(err instanceof Error ? `${err.message}${hint}` : t.errorAnalyze);
+      setReportError(
+        formatApiErrorMessage(err, {
+          fallbackMessage: t.errorAnalyze,
+          referenceLabel: t.errorReference,
+        })
+      );
     } finally {
       setAnalyzing(false);
     }
@@ -508,9 +503,12 @@ export default function InsightsPage() {
     setReportError(null);
     setInfoMessage(null);
     try {
-      const log = await apiFetch<{ date: string; entries: unknown[]; note: string | null }>(`/logs?date=${today}`, {
-        timeoutMs: 15_000,
-      });
+      const log = await apiFetchWithSchema(
+        `/logs?date=${today}`,
+        LogsEnvelopeSchema,
+        { timeoutMs: 15_000 },
+        "quickstart logs"
+      );
       const hasLog = Array.isArray(log.entries) && log.entries.length > 0;
       if (!hasLog) {
         const tmpl = DAILY_FLOW_TEMPLATES[DEFAULT_TEMPLATE_NAME] || [];
@@ -524,11 +522,16 @@ export default function InsightsPage() {
         setTodayLogBlocks((log.entries as unknown[]).length);
       }
 
-      const res = await apiFetch<{ date: string; report: AIReport; cached: boolean }>(`/analyze`, {
-        method: "POST",
-        timeoutMs: 45_000,
-        body: JSON.stringify({ date: today, force: true })
-      });
+      const res = await apiFetchWithSchema(
+        `/analyze`,
+        ReportEnvelopeSchema,
+        {
+          method: "POST",
+          timeoutMs: 45_000,
+          body: JSON.stringify({ date: today, force: true })
+        },
+        "quickstart analyze"
+      );
       const normalized = normalizeReport(res.report, isKo);
       setReport(normalized);
       if (normalized) {
@@ -536,8 +539,12 @@ export default function InsightsPage() {
       }
       void loadConsistency();
     } catch (err) {
-      const hint = isApiFetchError(err) && err.hint ? `\n${err.hint}` : "";
-      setReportError(err instanceof Error ? `${err.message}${hint}` : t.errorQuickstart);
+      setReportError(
+        formatApiErrorMessage(err, {
+          fallbackMessage: t.errorQuickstart,
+          referenceLabel: t.errorReference,
+        })
+      );
     } finally {
       setAnalyzing(false);
     }
@@ -556,9 +563,12 @@ export default function InsightsPage() {
       start.setDate(start.getDate() - 6);
       const from = localYYYYMMDD(start);
 
-      const res = await apiFetch<WeeklyInsightsResponse>(`/insights/weekly?from=${from}&to=${today}`, {
-        timeoutMs: 15_000,
-      });
+      const res = await apiFetchWithSchema(
+        `/insights/weekly?from=${from}&to=${today}`,
+        WeeklyInsightsSchema,
+        { timeoutMs: 15_000 },
+        "weekly insights"
+      );
       setWeekly({
         daysLogged: Number.isFinite(Number(res.weekly.days_logged)) ? Number(res.weekly.days_logged) : 0,
         daysTotal: Number.isFinite(Number(res.weekly.days_total)) ? Number(res.weekly.days_total) : 0,
@@ -582,9 +592,12 @@ export default function InsightsPage() {
   async function loadCohortTrend() {
     setCohortLoading(true);
     try {
-      const res = await apiFetch<CohortTrend>("/trends/cohort", {
-        timeoutMs: 12_000,
-      });
+      const res = await apiFetchWithSchema(
+        "/trends/cohort",
+        CohortTrendSchema,
+        { timeoutMs: 12_000 },
+        "cohort trend"
+      );
       setCohortTrend(res);
     } catch {
       setCohortTrend(null);
@@ -595,14 +608,12 @@ export default function InsightsPage() {
 
   async function loadProfileHealth() {
     try {
-      const profile = await apiFetch<{
-        age_group?: string;
-        gender?: string;
-        job_family?: string;
-        work_mode?: string;
-      }>("/preferences/profile", {
-        timeoutMs: 12_000,
-      });
+      const profile = await apiFetchWithSchema(
+        "/preferences/profile",
+        ProfileHealthSchema,
+        { timeoutMs: 12_000 },
+        "profile health"
+      );
       const required = [
         profile.age_group,
         profile.gender,
@@ -611,16 +622,21 @@ export default function InsightsPage() {
       ];
       const missing = required.some((v) => !v || v === "unknown");
       setProfileMissingRequired(missing);
+      setProfileWarningDismissedToday(missing ? isProfileWarningDismissed(today) : false);
     } catch {
       setProfileMissingRequired(false);
+      setProfileWarningDismissedToday(false);
     }
   }
 
   async function loadRecoveryActive() {
     try {
-      const res = await apiFetch<RecoveryActive>("/recovery/active", {
-        timeoutMs: 10_000,
-      });
+      const res = await apiFetchWithSchema(
+        "/recovery/active",
+        RecoveryActiveSchema,
+        { timeoutMs: 10_000 },
+        "recovery active"
+      );
       setRecoveryActive(res);
     } catch {
       setRecoveryActive(null);
@@ -629,9 +645,12 @@ export default function InsightsPage() {
 
   async function loadRecoveryNudge() {
     try {
-      const res = await apiFetch<RecoveryNudgeEnvelope>("/recovery/nudge", {
-        timeoutMs: 10_000,
-      });
+      const res = await apiFetchWithSchema(
+        "/recovery/nudge",
+        RecoveryNudgeEnvelopeSchema,
+        { timeoutMs: 10_000 },
+        "recovery nudge"
+      );
       if (res.has_nudge && res.nudge) {
         setRecoveryNudge(res.nudge);
       } else {
@@ -761,6 +780,22 @@ export default function InsightsPage() {
     });
   }, [cohortTrend, trackCohortEvent]);
 
+  const dismissProfileSetupWarning = React.useCallback(() => {
+    dismissProfileWarningForDate(today);
+    setProfileWarningDismissedToday(true);
+  }, [today]);
+
+  React.useEffect(() => {
+    if (!reportError) return;
+    trackProductEvent("ui_error_banner_shown", {
+      source: "insights",
+      date: today,
+      meta: {
+        reference_id: extractErrorReferenceId(reportError),
+      },
+    });
+  }, [reportError, today]);
+
   const hasReport = Boolean(report);
   const hasLog = todayLogBlocks > 0 || hasReport;
   const topPeak = report?.productivity_peaks?.[0] ?? null;
@@ -816,6 +851,101 @@ export default function InsightsPage() {
       : cohortTrend?.confidence_level === "medium"
         ? "border-amber-200 bg-amber-50 text-amber-800"
         : "border-rose-200 bg-rose-50 text-rose-800";
+  const trustMetrics = React.useMemo(() => {
+    const metrics: Array<{ label: string; value: string; tone?: "neutral" | "good" | "warn" }> = [];
+    const inputQuality = report?.analysis_meta?.input_quality_score;
+    if (typeof inputQuality === "number") {
+      metrics.push({
+        label: isKo ? "입력 품질" : "Input quality",
+        value: `${Math.round(inputQuality)}/100`,
+        tone: inputQuality >= 70 ? "good" : inputQuality >= 40 ? "neutral" : "warn",
+      });
+    }
+
+    metrics.push({
+      label: isKo ? "최근 7일 기록" : "Logged days (7d)",
+      value: `${weekly.daysLogged}/7`,
+      tone: weekly.daysLogged >= 4 ? "good" : weekly.daysLogged >= 2 ? "neutral" : "warn",
+    });
+
+    if (cohortTrend?.enabled) {
+      const cohortSize = Number(cohortTrend.cohort_size || 0);
+      metrics.push({
+        label: isKo ? "비교 표본" : "Cohort sample",
+        value: `${cohortSize}`,
+        tone:
+          cohortSize >= Number(cohortTrend.high_confidence_sample_size || 100)
+            ? "good"
+            : cohortSize >= Number(cohortTrend.preview_sample_size || 20)
+              ? "neutral"
+              : "warn",
+      });
+      metrics.push({
+        label: isKo ? "비교 윈도우" : "Comparison window",
+        value: isKo ? `${cohortTrend.window_days}일` : `${cohortTrend.window_days} days`,
+        tone: "neutral",
+      });
+    }
+
+    return metrics.slice(0, 4);
+  }, [
+    cohortTrend?.cohort_size,
+    cohortTrend?.enabled,
+    cohortTrend?.high_confidence_sample_size,
+    cohortTrend?.preview_sample_size,
+    cohortTrend?.window_days,
+    isKo,
+    report?.analysis_meta?.input_quality_score,
+    weekly.daysLogged,
+  ]);
+  const trustHint = React.useMemo(() => {
+    if (profileMissingRequired) {
+      return isKo
+        ? "프로필 필수값이 비어 있어 추천 정밀도가 낮아질 수 있습니다."
+        : "Profile essentials are missing, so recommendation precision may be lower.";
+    }
+    if (!hasLog) {
+      return isKo
+        ? "오늘 기록이 없으면 개인화 문구가 보수적으로 표시됩니다."
+        : "Without a log for today, personalization copy stays conservative.";
+    }
+    if (cohortTrend?.preview_mode || cohortTrend?.insufficient_sample) {
+      return isKo
+        ? "표본이 충분해지면 랭크/실행 팁이 자동으로 확장됩니다."
+        : "Rank and actionable tips expand automatically when sample size is sufficient.";
+    }
+    return isKo
+      ? "기록과 표본이 늘수록 비교 신뢰도와 행동 추천 품질이 함께 올라갑니다."
+      : "As logs and cohort samples grow, both comparison confidence and action quality improve.";
+  }, [cohortTrend?.insufficient_sample, cohortTrend?.preview_mode, hasLog, isKo, profileMissingRequired]);
+  const trustActions = React.useMemo(() => {
+    const actions: Array<{ label: string; href: string }> = [];
+    if (profileMissingRequired) {
+      actions.push({
+        label: isKo ? "프로필 완성" : "Complete profile",
+        href: "/app/settings/profile",
+      });
+    }
+    if (!hasLog) {
+      actions.push({
+        label: isKo ? "오늘 기록하기" : "Log today",
+        href: "/app/log",
+      });
+    }
+    if (!hasReport) {
+      actions.push({
+        label: isKo ? "리포트 생성" : "Create report",
+        href: "/app/reports",
+      });
+    }
+    if (cohortTrend?.enabled && (cohortTrend.preview_mode || cohortTrend.insufficient_sample)) {
+      actions.push({
+        label: isKo ? "비교 기준 조정" : "Adjust compare filters",
+        href: "/app/settings/profile",
+      });
+    }
+    return actions.slice(0, 2);
+  }, [cohortTrend?.enabled, cohortTrend?.insufficient_sample, cohortTrend?.preview_mode, hasLog, hasReport, isKo, profileMissingRequired]);
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-5">
@@ -837,13 +967,18 @@ export default function InsightsPage() {
           {infoMessage}
         </div>
       ) : null}
-      {profileMissingRequired ? (
+      {profileMissingRequired && !profileWarningDismissedToday ? (
         <div className="rounded-xl border border-amber-300 bg-amber-50/90 p-4">
           <p className="text-sm font-semibold">{t.profileSetupTitle}</p>
           <p className="mt-1 text-sm text-mutedFg">{t.profileSetupBody}</p>
-          <Button asChild size="sm" variant="outline" className="mt-3">
-            <Link href="/app/insights?settings=1&settingsTab=profile">{t.profileSetupCta}</Link>
-          </Button>
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <Button asChild size="sm" variant="outline">
+              <Link href="/app/settings/profile">{t.profileSetupCta}</Link>
+            </Button>
+            <Button size="sm" variant="ghost" onClick={dismissProfileSetupWarning}>
+              {t.profileSetupDismiss}
+            </Button>
+          </div>
         </div>
       ) : null}
       {recoveryNudge ? (
@@ -852,7 +987,7 @@ export default function InsightsPage() {
           <p className="mt-1 text-sm text-mutedFg">{recoveryNudge.message}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <Button asChild size="sm">
-              <Link href="/app/daily-flow">{t.recoveryCta}</Link>
+              <Link href="/app/log">{t.recoveryCta}</Link>
             </Button>
             <Button size="sm" variant="outline" onClick={acknowledgeRecoveryNudge} disabled={nudgeAcking}>
               {t.nudgeDismiss}
@@ -869,7 +1004,7 @@ export default function InsightsPage() {
               : t.recoveryBody}
           </p>
           <Button asChild size="sm" className="mt-3">
-            <Link href="/app/daily-flow">{t.recoveryCta}</Link>
+            <Link href="/app/log">{t.recoveryCta}</Link>
           </Button>
         </div>
       ) : null}
@@ -925,8 +1060,9 @@ export default function InsightsPage() {
                     <Link href={`/app/reports/${today}`}>{t.cta_openReport}</Link>
                   </Button>
                   <Button asChild variant="secondary" size="sm">
-                    <Link href="/app/daily-flow">{t.cta_editLog}</Link>
+                    <Link href="/app/log">{t.cta_editLog}</Link>
                   </Button>
+                  <BillingValueCta source="today" />
                 </div>
               </div>
             ) : (
@@ -943,13 +1079,14 @@ export default function InsightsPage() {
         </Card>
 
         {/* ─── AI Trust Badge (UX-C06) ─── */}
-        <div className="lg:col-span-12 flex items-start gap-2 rounded-xl border border-blue-200 bg-blue-50/60 px-4 py-3">
-          <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0 text-blue-600" />
-          <div>
-            <p className="text-xs font-semibold text-blue-900">{t.trustBadge}</p>
-            <p className="mt-0.5 text-xs text-blue-800">{t.trustBadgeBody}</p>
-          </div>
-        </div>
+        <TrustBadge
+          className="lg:col-span-12"
+          title={t.trustBadge}
+          body={t.trustBadgeBody}
+          metrics={trustMetrics}
+          hint={trustHint}
+          actions={trustActions}
+        />
 
         <Card className="lg:col-span-12 border-brand/30 bg-white/70 shadow-elevated">
           <CardHeader>
@@ -990,11 +1127,15 @@ export default function InsightsPage() {
                     <Sparkles className="h-4 w-4" />
                     {analyzing ? t.analyzing : t.cta_start3min}
                   </Button>
-                  <Button asChild variant="outline">
-                    <Link href={`/app/daily-flow?template=${encodeURIComponent(DEFAULT_TEMPLATE_NAME)}&quickstart=1`}>
+                  <p className="text-xs text-mutedFg">
+                    {t.cta_manualPrefix}{" "}
+                    <Link
+                      href={`/app/log?template=${encodeURIComponent(DEFAULT_TEMPLATE_NAME)}&quickstart=1`}
+                      className="font-medium text-foreground underline underline-offset-2"
+                    >
                       {t.cta_editLog}
                     </Link>
-                  </Button>
+                  </p>
                 </div>
               ) : !hasReport ? (
                 <div className="flex flex-col gap-2">
@@ -1003,7 +1144,7 @@ export default function InsightsPage() {
                     {analyzing ? t.analyzing : t.cta_analyzeNow}
                   </Button>
                   <Button asChild variant="outline">
-                    <Link href="/app/daily-flow">{t.cta_editLog}</Link>
+                    <Link href="/app/log">{t.cta_editLog}</Link>
                   </Button>
                 </div>
               ) : (
@@ -1038,7 +1179,7 @@ export default function InsightsPage() {
                 <p className="mt-0.5 text-sm text-amber-800">{t.recoveryBody}</p>
               </div>
               <Button asChild size="sm">
-                <Link href="/app/daily-flow">{t.recoveryCta}</Link>
+                <Link href="/app/log">{t.recoveryCta}</Link>
               </Button>
             </CardContent>
           </Card>
@@ -1113,7 +1254,7 @@ export default function InsightsPage() {
               <div className="inset-block p-4">
                 <p className="text-sm">{cohortTrend.message}</p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
-                  <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
+                  <Link href="/app/settings/profile" onClick={onCohortPreferencesClick}>
                     {t.openSettings}
                   </Link>
                 </Button>
@@ -1127,7 +1268,7 @@ export default function InsightsPage() {
                     : `Current sample ${cohortTrend.cohort_size} / preview minimum ${cohortTrend.preview_sample_size}`}
                 </p>
                 <Button asChild variant="outline" size="sm" className="mt-3">
-                  <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
+                  <Link href="/app/settings/profile" onClick={onCohortPreferencesClick}>
                     {t.adjustCompare}
                   </Link>
                 </Button>
@@ -1229,7 +1370,7 @@ export default function InsightsPage() {
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <Button asChild variant="outline" size="sm">
-                    <Link href="/app/insights?settings=1&settingsTab=profile" onClick={onCohortPreferencesClick}>
+                    <Link href="/app/settings/profile" onClick={onCohortPreferencesClick}>
                       {t.changeCompare}
                     </Link>
                   </Button>

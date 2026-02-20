@@ -6,6 +6,9 @@ WEB_DIR="$ROOT_DIR/apps/web"
 API_DIR="$ROOT_DIR/apps/api"
 API_PYTHON_BIN="${API_PYTHON_BIN:-python3.12}"
 
+# Avoid Node warning noise: NO_COLOR and FORCE_COLOR should not be set together.
+unset NO_COLOR || true
+
 read_env_value() {
   local file="$1"
   local key="$2"

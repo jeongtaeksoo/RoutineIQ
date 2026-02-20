@@ -7,12 +7,15 @@ import * as React from "react";
 import {
   BarChart3,
   NotebookPen,
+  CalendarCheck2,
+  CreditCard,
   Shield,
   Sparkles,
   LogOut
 } from "lucide-react";
 
 import { AppSettingsPanel } from "@/components/app-settings-panel";
+import { OnboardingGate } from "@/components/onboarding-gate";
 import { Button } from "@/components/ui/button";
 import { StreakIndicator } from "@/components/streak-indicator";
 import { LocaleProvider } from "@/components/locale-provider";
@@ -20,13 +23,27 @@ import { getStrings, type Locale, normalizeLocale } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 import { createClient } from "@/lib/supabase/client";
 
-type NavItem = { key: "insights" | "daily_flow" | "reports"; href: string; icon: React.ElementType };
+type NavItem = {
+  key: "today" | "log" | "reports" | "plan" | "billing";
+  href: string;
+  icon: React.ElementType;
+  aliases?: string[];
+  mobile?: boolean;
+};
 
 const navItems: NavItem[] = [
-  { key: "insights", href: "/app/insights", icon: BarChart3 },
-  { key: "daily_flow", href: "/app/daily-flow", icon: NotebookPen },
-  { key: "reports", href: "/app/reports", icon: Sparkles }
+  { key: "today", href: "/app/today", aliases: ["/app/insights"], icon: BarChart3, mobile: true },
+  { key: "log", href: "/app/log", aliases: ["/app/daily-flow"], icon: NotebookPen, mobile: true },
+  { key: "reports", href: "/app/reports", icon: Sparkles, mobile: true },
+  { key: "plan", href: "/app/plan", icon: CalendarCheck2, mobile: true },
+  { key: "billing", href: "/app/billing", icon: CreditCard, mobile: false },
 ];
+
+function isNavActive(pathname: string, item: NavItem): boolean {
+  if (pathname === item.href || pathname.startsWith(`${item.href}/`)) return true;
+  if (!item.aliases?.length) return false;
+  return item.aliases.some((alias) => pathname === alias || pathname.startsWith(`${alias}/`));
+}
 
 const ReminderScheduler = dynamic(
   () => import("@/components/reminder-scheduler").then((m) => m.ReminderScheduler),
@@ -73,17 +90,36 @@ export function AppShell({
   }
   const strings = React.useMemo(() => getStrings(locale), [locale]);
 
-  const navLabels = React.useMemo(() => ({
-    insights: strings.nav_insights,
-    daily_flow: strings.nav_daily_flow,
-    reports: strings.nav_reports,
-  }), [strings]);
+  const navLabels = React.useMemo(() => {
+    return {
+      today: strings.nav_insights,
+      log: strings.nav_daily_flow,
+      reports: strings.nav_reports,
+      plan: strings.nav_plan,
+      billing: strings.nav_billing,
+    };
+  }, [strings.nav_billing, strings.nav_daily_flow, strings.nav_insights, strings.nav_plan, strings.nav_reports]);
 
-  const navShortLabels = React.useMemo(() => ({
-    insights: strings.nav_short_insights,
-    daily_flow: strings.nav_short_daily_flow,
-    reports: strings.nav_short_reports,
-  }), [strings]);
+  const navShortLabels = React.useMemo(() => {
+    return {
+      today: strings.nav_short_insights,
+      log: strings.nav_short_daily_flow,
+      reports: strings.nav_short_reports,
+      plan: strings.nav_short_plan,
+      billing: strings.nav_short_billing,
+    };
+  }, [
+    strings.nav_short_billing,
+    strings.nav_short_daily_flow,
+    strings.nav_short_insights,
+    strings.nav_short_plan,
+    strings.nav_short_reports,
+  ]);
+
+  const mobileNavItems = React.useMemo(
+    () => navItems.filter((item) => item.mobile),
+    []
+  );
 
   async function signOut() {
     setSigningOut(true);
@@ -108,7 +144,7 @@ export function AppShell({
         }
         const meta = (user.user_metadata as any) || {};
         const loc = meta["routineiq_locale"];
-        if (!cancelled) setLocale(loc ? normalizeLocale(loc) : "ko");
+        if (!cancelled) setLocale(loc ? normalizeLocale(loc) : initialLocale);
 
         const { data: profile } = await supabaseRef.current
           .from("profiles")
@@ -126,13 +162,13 @@ export function AppShell({
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [initialLocale]);
 
   React.useEffect(() => {
     const { data } = supabaseRef.current.auth.onAuthStateChange((event, session) => {
       if (event === "USER_UPDATED" || event === "SIGNED_IN") {
         const loc = (session?.user?.user_metadata as any)?.routineiq_locale;
-        setLocale(loc ? normalizeLocale(loc) : "ko");
+        setLocale(loc ? normalizeLocale(loc) : initialLocale);
         setUserMetaVersion((v) => v + 1);
       }
       if (event === "SIGNED_OUT") {
@@ -142,13 +178,14 @@ export function AppShell({
     return () => {
       data.subscription.unsubscribe();
     };
-  }, []);
+  }, [initialLocale]);
 
   return (
     <div
       className="min-h-screen md:flex"
       style={{ background: "linear-gradient(180deg, hsl(var(--bg)) 0%, hsl(var(--bg-soft)) 100%)" }}
     >
+      <OnboardingGate />
       <ReminderScheduler
         userMetaVersion={userMetaVersion}
         reminderLogTitle={strings.reminder_log_title}
@@ -158,7 +195,7 @@ export function AppShell({
       />
       <aside className="hidden w-72 shrink-0 p-5 md:flex">
         <div
-          className="flex w-full flex-col gap-4 rounded-2xl border p-4 backdrop-blur"
+          className="flex w-full flex-col gap-card-gap rounded-[var(--radius-card)] border p-card-y backdrop-blur"
           style={{ background: "hsl(var(--card) / 0.7)", boxShadow: "0 8px 32px -8px hsl(var(--fg) / 0.12)" }}
         >
           <div className="flex items-center justify-between">
@@ -182,7 +219,7 @@ export function AppShell({
 
           <nav className="flex flex-col gap-1">
             {navItems.map((it) => {
-              const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
+              const active = isNavActive(pathname, it);
               const Icon = it.icon;
               const label = navLabels[it.key];
               return (
@@ -236,9 +273,9 @@ export function AppShell({
         className="fixed bottom-0 left-0 right-0 z-20 border-t backdrop-blur md:hidden"
         style={{ background: "hsl(var(--bg) / 0.9)" }}
       >
-        <div className="mx-auto grid max-w-2xl grid-cols-4">
-          {navItems.map((it) => {
-            const active = pathname === it.href || pathname.startsWith(`${it.href}/`);
+        <div className="mx-auto grid max-w-2xl grid-cols-5">
+          {mobileNavItems.map((it) => {
+            const active = isNavActive(pathname, it);
             const Icon = it.icon;
             const short = navShortLabels[it.key];
             return (

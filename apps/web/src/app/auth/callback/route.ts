@@ -1,12 +1,7 @@
 import { NextResponse } from "next/server";
+import { sanitizeInternalRedirectPath } from "@/lib/safe-redirect";
 import { isSupabaseConfigured } from "@/lib/supabase/env";
 import { createClient } from "@/lib/supabase/server";
-
-function sanitizeNextPath(path: string | null): string {
-  if (!path || !path.startsWith("/")) return "/app/insights";
-  if (path.startsWith("//")) return "/app/insights";
-  return path;
-}
 
 function readNextFromCookie(request: Request): string | null {
   const cookie = request.headers.get("cookie");
@@ -28,7 +23,7 @@ function readNextFromCookie(request: Request): string | null {
 export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
-  const next = sanitizeNextPath(searchParams.get("next") ?? readNextFromCookie(request));
+  const next = sanitizeInternalRedirectPath(searchParams.get("next") ?? readNextFromCookie(request));
 
   if (!isSupabaseConfigured()) {
     const fallback = NextResponse.redirect(`${origin}/login?error=supabase_env`);

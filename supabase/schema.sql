@@ -374,6 +374,7 @@ create table if not exists public.subscriptions (
   stripe_subscription_id text unique,
   status text not null,
   plan text not null check (plan in ('free', 'pro')),
+  source text not null default 'unknown',
   current_period_end timestamptz,
   cancel_at_period_end boolean not null default false,
   created_at timestamptz not null default now(),
