@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 
 import { AppSettingsPanel } from "@/components/app-settings-panel";
-import { OnboardingGate, isAllowedForIncompletePath } from "@/components/onboarding-gate";
+import { OnboardingGate } from "@/components/onboarding-gate";
 import { Button } from "@/components/ui/button";
 import { StreakIndicator } from "@/components/streak-indicator";
 import { LocaleProvider } from "@/components/locale-provider";
@@ -39,6 +39,19 @@ const navItems: NavItem[] = [
   { key: "plan", href: "/app/plan", icon: CalendarCheck2, mobile: true },
   { key: "billing", href: "/app/billing", icon: CreditCard, mobile: false },
 ];
+
+const INCOMPLETE_ALLOWED_NAV_PREFIXES = [
+  "/app/onboarding",
+  "/app/log",
+  "/app/reports",
+  "/app/settings",
+] as const;
+
+function isAllowedForIncompleteNavPath(pathname: string): boolean {
+  return INCOMPLETE_ALLOWED_NAV_PREFIXES.some(
+    (prefix) => pathname === prefix || pathname.startsWith(`${prefix}/`)
+  );
+}
 
 function isNavActive(pathname: string, item: NavItem): boolean {
   if (pathname === item.href || pathname.startsWith(`${item.href}/`)) return true;
@@ -126,7 +139,7 @@ export function AppShell({
   const resolveNavHref = React.useCallback(
     (href: string): string => {
       if (!activationIncomplete) return href;
-      if (isAllowedForIncompletePath(href)) return href;
+      if (isAllowedForIncompleteNavPath(href)) return href;
       return "/app/onboarding";
     },
     [activationIncomplete]
@@ -234,7 +247,10 @@ export function AppShell({
               const Icon = it.icon;
               const label = navLabels[it.key];
               const targetHref = resolveNavHref(it.href);
-              const isLocked = activationIncomplete && targetHref === "/app/onboarding" && !isAllowedForIncompletePath(it.href);
+              const isLocked =
+                activationIncomplete &&
+                targetHref === "/app/onboarding" &&
+                !isAllowedForIncompleteNavPath(it.href);
               return (
                 <Link
                   key={it.href}
@@ -294,7 +310,10 @@ export function AppShell({
             const Icon = it.icon;
             const short = navShortLabels[it.key];
             const targetHref = resolveNavHref(it.href);
-            const isLocked = activationIncomplete && targetHref === "/app/onboarding" && !isAllowedForIncompletePath(it.href);
+            const isLocked =
+              activationIncomplete &&
+              targetHref === "/app/onboarding" &&
+              !isAllowedForIncompleteNavPath(it.href);
             return (
               <Link
                 key={it.href}
